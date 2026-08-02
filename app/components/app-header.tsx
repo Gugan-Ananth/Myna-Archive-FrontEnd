@@ -1,42 +1,114 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { SearchBar } from "./search-bar";
+
+/**
+ * Top bar: logo (left) · search (center) · Add (far right).
+ * Tag filtering lives above the home grid.
+ */
 export function AppHeader() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  /** Local draft while typing; falls back to URL when null. */
+  const [draftQuery, setDraftQuery] = useState<string | null>(null);
+  const query = draftQuery ?? searchParams.get("q") ?? "";
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const urlQuery = searchParams.get("q") ?? "";
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  function pushParams(next: URLSearchParams) {
+    const qs = next.toString();
+    const href = qs ? `/?${qs}` : "/";
+    if (pathname === "/") {
+      router.replace(href, { scroll: false });
+    } else {
+      router.push(href);
+    }
+  }
+
+  function commitSearch(raw: string) {
+    const next = new URLSearchParams(searchParams.toString());
+    const trimmed = raw.trim();
+    if (trimmed) next.set("q", trimmed);
+    else next.delete("q");
+    setDraftQuery(null);
+    pushParams(next);
+  }
+
+  function handleSearchChange(value: string) {
+    setDraftQuery(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const next = new URLSearchParams(searchParams.toString());
+      const trimmed = value.trim();
+      if (trimmed) next.set("q", trimmed);
+      else next.delete("q");
+      if (trimmed !== urlQuery) {
+        pushParams(next);
+      }
+    }, 280);
+  }
+
+  function handleSearchSubmit(value: string) {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    commitSearch(value);
+  }
+
+  function handleSearchClear() {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setDraftQuery("");
+    commitSearch("");
+  }
+
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-surface/90 backdrop-blur-md">
-      <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-        <div className="flex items-center gap-2.5">
-          <span
+    <header className="sticky top-0 z-40 border-b border-border bg-surface/95 backdrop-blur-md">
+      <div className="grid h-14 w-full grid-cols-[1fr_minmax(0,40rem)_1fr] items-center gap-3 px-3 sm:gap-4 sm:px-6">
+        <Link
+          href="/"
+          className="flex min-w-0 shrink-0 items-center gap-2 justify-self-start rounded-lg outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- brand SVG mark */}
+          <img
+            src="/myna-mark.svg"
+            alt=""
+            width={32}
+            height={32}
+            className="h-8 w-8 rounded-xl shadow-sm ring-1 ring-border"
             aria-hidden
-            className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent-soft text-primary shadow-sm ring-1 ring-border"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="3" y="3" width="18" height="18" rx="3" />
-              <circle cx="9" cy="9" r="1.5" />
-              <path d="m21 15-4.5-4.5L7 20" />
-            </svg>
+          />
+          <span className="hidden text-sm font-semibold tracking-tight text-foreground sm:inline">
+            Myna Archive
           </span>
-          <div className="leading-tight">
-            <p className="text-sm font-semibold tracking-tight text-foreground">
-              My Collection
-            </p>
-            <p className="text-xs text-foreground-muted">Personal image archive</p>
+        </Link>
+
+        <div className="flex min-w-0 w-full justify-center">
+          <div className="w-full max-w-2xl">
+            <SearchBar
+              value={query}
+              onChange={handleSearchChange}
+              onSubmit={handleSearchSubmit}
+              onClear={handleSearchClear}
+            />
           </div>
         </div>
 
-        <nav
-          aria-label="Primary"
-          className="flex items-center gap-2 text-sm font-medium"
-        >
-          <span className="hidden rounded-full bg-accent-soft px-3 py-1 text-xs font-medium text-primary sm:inline">
-            Theme ready
-          </span>
-        </nav>
+        <div className="justify-self-end">
+          <Link
+            href="/create"
+            className="inline-flex h-10 shrink-0 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground shadow-sm transition-all duration-200 hover:bg-primary-hover hover:shadow-md active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            Add
+          </Link>
+        </div>
       </div>
     </header>
   );
