@@ -4,6 +4,7 @@ import type { ArchiveItem } from "./types";
  * Placeholder archive items for the YouTube-style home grid.
  * Sorted by rating (high → low) when consumed via `getArchiveItems()`.
  * Images use picsum seeds so low-res vs high-res stay the same photo.
+ * Videos use public sample files + still-frame style thumbnails.
  */
 const PLACEHOLDER_ITEMS: ArchiveItem[] = [
   {
@@ -13,8 +14,21 @@ const PLACEHOLDER_ITEMS: ArchiveItem[] = [
       "Soft fog rolling across still water just after sunrise. Placeholder entry for layout review.",
     tags: ["landscape", "fog", "water"],
     rating: 9.5,
+    mediaType: "image",
     thumbnailUrl: "https://picsum.photos/seed/myna1/480/270",
-    imageUrl: "https://picsum.photos/seed/myna1/1600/900",
+    mediaUrl: "https://picsum.photos/seed/myna1/1600/900",
+  },
+  {
+    id: "v1",
+    name: "Big Buck Bunny — trailer cut",
+    description:
+      "Open movie sample used to exercise the video player and grid thumbnail. Soft morning light, gentle pace.",
+    tags: ["video", "animation", "sample"],
+    rating: 9.2,
+    mediaType: "video",
+    thumbnailUrl: "https://picsum.photos/seed/mynav1/480/270",
+    mediaUrl:
+      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
   },
   {
     id: "2",
@@ -23,8 +37,9 @@ const PLACEHOLDER_ITEMS: ArchiveItem[] = [
       "Purple and teal neon reflections on wet pavement. Good test for dark subjects.",
     tags: ["urban", "night", "neon"],
     rating: 9.5,
+    mediaType: "image",
     thumbnailUrl: "https://picsum.photos/seed/myna2/480/270",
-    imageUrl: "https://picsum.photos/seed/myna2/1600/900",
+    mediaUrl: "https://picsum.photos/seed/myna2/1600/900",
   },
   {
     id: "3",
@@ -32,8 +47,21 @@ const PLACEHOLDER_ITEMS: ArchiveItem[] = [
     description: "Handmade bowls on linen. Warm side light, shallow depth of field.",
     tags: ["still-life", "ceramics"],
     rating: 8.0,
+    mediaType: "image",
     thumbnailUrl: "https://picsum.photos/seed/myna3/480/270",
-    imageUrl: "https://picsum.photos/seed/myna3/1600/900",
+    mediaUrl: "https://picsum.photos/seed/myna3/1600/900",
+  },
+  {
+    id: "v2",
+    name: "Elephants Dream — reel",
+    description:
+      "Short sample reel for fullscreen video UX: progress, mute, and fullscreen controls.",
+    tags: ["video", "animation", "sample"],
+    rating: 8.4,
+    mediaType: "video",
+    thumbnailUrl: "https://picsum.photos/seed/mynav2/480/270",
+    mediaUrl:
+      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
   },
   {
     id: "4",
@@ -41,8 +69,9 @@ const PLACEHOLDER_ITEMS: ArchiveItem[] = [
     description: "Pale trunks and leaf litter — cool greens and whites.",
     tags: ["forest", "trail", "green"],
     rating: 8.0,
+    mediaType: "image",
     thumbnailUrl: "https://picsum.photos/seed/myna4/480/270",
-    imageUrl: "https://picsum.photos/seed/myna4/1600/900",
+    mediaUrl: "https://picsum.photos/seed/myna4/1600/900",
   },
   {
     id: "5",
@@ -50,8 +79,21 @@ const PLACEHOLDER_ITEMS: ArchiveItem[] = [
     description: "Soft natural light from the left; quiet expression study.",
     tags: ["portrait", "light"],
     rating: 8.0,
+    mediaType: "image",
     thumbnailUrl: "https://picsum.photos/seed/myna5/480/270",
-    imageUrl: "https://picsum.photos/seed/myna5/1600/900",
+    mediaUrl: "https://picsum.photos/seed/myna5/1600/900",
+  },
+  {
+    id: "v3",
+    name: "Sintel — landscape pass",
+    description:
+      "Cinematic sample for testing poster/thumbnail treatment on the home grid.",
+    tags: ["video", "cinematic", "sample"],
+    rating: 7.6,
+    mediaType: "video",
+    thumbnailUrl: "https://picsum.photos/seed/mynav3/480/270",
+    mediaUrl:
+      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
   },
   {
     id: "6",
@@ -59,8 +101,9 @@ const PLACEHOLDER_ITEMS: ArchiveItem[] = [
     description: "Hard shadows and mineral color. Placeholder for arid palette.",
     tags: ["desert", "landscape"],
     rating: 6.5,
+    mediaType: "image",
     thumbnailUrl: "https://picsum.photos/seed/myna6/480/270",
-    imageUrl: "https://picsum.photos/seed/myna6/1600/900",
+    mediaUrl: "https://picsum.photos/seed/myna6/1600/900",
   },
   {
     id: "7",
@@ -68,8 +111,9 @@ const PLACEHOLDER_ITEMS: ArchiveItem[] = [
     description: "Loose ink work of three birds on a wire. High contrast.",
     tags: ["art", "ink", "birds"],
     rating: 6.5,
+    mediaType: "image",
     thumbnailUrl: "https://picsum.photos/seed/myna7/480/270",
-    imageUrl: "https://picsum.photos/seed/myna7/1600/900",
+    mediaUrl: "https://picsum.photos/seed/myna7/1600/900",
   },
   {
     id: "8",
@@ -77,8 +121,9 @@ const PLACEHOLDER_ITEMS: ArchiveItem[] = [
     description: "Saturated oranges and greens under canvas shade.",
     tags: ["market", "color", "food"],
     rating: 6.5,
+    mediaType: "image",
     thumbnailUrl: "https://picsum.photos/seed/myna8/480/270",
-    imageUrl: "https://picsum.photos/seed/myna8/1600/900",
+    mediaUrl: "https://picsum.photos/seed/myna8/1600/900",
   },
   {
     id: "9",
@@ -86,8 +131,9 @@ const PLACEHOLDER_ITEMS: ArchiveItem[] = [
     description: "Bokeh city lights through a rainy window. Soft abstraction.",
     tags: ["abstract", "rain", "city"],
     rating: 4.5,
+    mediaType: "image",
     thumbnailUrl: "https://picsum.photos/seed/myna9/480/270",
-    imageUrl: "https://picsum.photos/seed/myna9/1600/900",
+    mediaUrl: "https://picsum.photos/seed/myna9/1600/900",
   },
   {
     id: "10",
@@ -95,8 +141,9 @@ const PLACEHOLDER_ITEMS: ArchiveItem[] = [
     description: "Hand tools arranged on a scarred workbench. Texture study.",
     tags: ["workshop", "texture"],
     rating: 4.5,
+    mediaType: "image",
     thumbnailUrl: "https://picsum.photos/seed/myna10/480/270",
-    imageUrl: "https://picsum.photos/seed/myna10/1600/900",
+    mediaUrl: "https://picsum.photos/seed/myna10/1600/900",
   },
   {
     id: "11",
@@ -104,8 +151,9 @@ const PLACEHOLDER_ITEMS: ArchiveItem[] = [
     description: "Windswept grass and a thin trail along the edge.",
     tags: ["coast", "landscape", "path"],
     rating: 4.5,
+    mediaType: "image",
     thumbnailUrl: "https://picsum.photos/seed/myna11/480/270",
-    imageUrl: "https://picsum.photos/seed/myna11/1600/900",
+    mediaUrl: "https://picsum.photos/seed/myna11/1600/900",
   },
   {
     id: "12",
@@ -113,8 +161,9 @@ const PLACEHOLDER_ITEMS: ArchiveItem[] = [
     description: "Origami detail with hard studio light. Simple subject.",
     tags: ["macro", "paper", "art"],
     rating: 2.5,
+    mediaType: "image",
     thumbnailUrl: "https://picsum.photos/seed/myna12/480/270",
-    imageUrl: "https://picsum.photos/seed/myna12/1600/900",
+    mediaUrl: "https://picsum.photos/seed/myna12/1600/900",
   },
 ];
 
