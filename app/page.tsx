@@ -1,15 +1,12 @@
-import { Suspense } from "react";
-import { ArchiveGrid } from "./components/archive-grid";
-import { HomeFiltersNotice } from "./components/home-filters-notice";
-import { TagChipBar } from "./components/tag-chip-bar";
-import { filterArchiveItems } from "./lib/filter-items";
-import { getAllTags, getArchiveItems } from "./lib/placeholder-data";
+import { HomeView } from "./components/home-view";
+import { ApiError, getAllTags, listArchiveItems } from "./lib/api";
 
 type HomeProps = {
   searchParams: Promise<{
     q?: string;
     tag?: string | string[];
     created?: string;
+    video?: string;
   }>;
 };
 
@@ -17,30 +14,48 @@ export default async function Home({ searchParams }: HomeProps) {
   const params = await searchParams;
   const query = typeof params.q === "string" ? params.q : "";
   const tags = normalizeTags(params.tag);
-  const items = filterArchiveItems(getArchiveItems(), { query, tags });
-  const availableTags = getAllTags();
+
+  let items: Awaited<ReturnType<typeof listArchiveItems>>["data"] = [];
+  let availableTags: string[] = [];
+  let total = 0;
+  let loadError: string | null = null;
+  let usedFallbackError = false;
+
+  try {
+    const [listResult, tagsResult] = await Promise.all([
+      listArchiveItems({
+        q: query || undefined,
+        tag: tags.length > 0 ? tags : undefined,
+        page: 1,
+        pageSize: 40,
+      }),
+      getAllTags(),
+    ]);
+    items = listResult.data;
+    total = listResult.meta.total;
+    availableTags = tagsResult;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      loadError = error.message;
+      usedFallbackError = false;
+    } else {
+      loadError = "fallback";
+      usedFallbackError = true;
+    }
+  }
 
   return (
-    <main className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col px-4 pt-3 pb-6 sm:px-6">
-      <Suspense fallback={null}>
-        <HomeFiltersNotice
-          query={query}
-          tags={tags}
-          created={params.created === "1"}
-        />
-      </Suspense>
-
-      {/* Filters sit with the gallery content, not as a sticky page chrome */}
-      <div className="mb-3">
-        <Suspense
-          fallback={<div className="h-8 animate-pulse rounded-lg bg-surface-muted" />}
-        >
-          <TagChipBar availableTags={availableTags} />
-        </Suspense>
-      </div>
-
-      <ArchiveGrid items={items} />
-    </main>
+    <HomeView
+      items={items}
+      availableTags={availableTags}
+      total={total}
+      query={query}
+      tags={tags}
+      created={params.created === "1"}
+      createdVideo={params.created === "1" && params.video === "1"}
+      loadError={loadError}
+      usedFallbackError={usedFallbackError}
+    />
   );
 }
 

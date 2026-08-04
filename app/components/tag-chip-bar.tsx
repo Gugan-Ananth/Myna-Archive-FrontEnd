@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useI18n } from "../lib/i18n";
 
 type TagChipBarProps = {
   availableTags: string[];
@@ -11,10 +12,11 @@ type TagChipBarProps = {
 const MAX_PRIMARY_CHIPS = 8;
 
 /**
- * Homepage filter section above the image grid.
+ * Homepage filter section above the media grid.
  * Multi-select chips with overflow (+N more) and “More tags” search.
  */
 export function TagChipBar({ availableTags }: TagChipBarProps) {
+  const { t } = useI18n();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -53,25 +55,36 @@ export function TagChipBar({ availableTags }: TagChipBarProps) {
   function pushParams(next: URLSearchParams) {
     const qs = next.toString();
     const href = qs ? `/?${qs}` : "/";
+    // Soft-nav updates useSearchParams immediately; refresh keeps RSC props in sync.
     if (pathname === "/") {
       router.replace(href, { scroll: false });
+      router.refresh();
     } else {
       router.push(href);
     }
   }
 
-  function setTags(tags: string[]) {
+  function setTags(nextTags: string[]) {
+    // Rebuild params from the live URL so rapid multi-toggles don't drop sibling tags.
     const next = new URLSearchParams(searchParams.toString());
     next.delete("tag");
-    for (const t of tags) next.append("tag", t);
+    // De-dupe while preserving selection order.
+    const unique: string[] = [];
+    for (const tag of nextTags) {
+      const cleaned = tag.trim();
+      if (cleaned && !unique.includes(cleaned)) unique.push(cleaned);
+    }
+    for (const tag of unique) next.append("tag", tag);
     pushParams(next);
   }
 
   function toggleTag(tag: string) {
-    if (selectedSet.has(tag)) {
-      setTags(selectedTags.filter((t) => t !== tag));
+    // Read selection from the live URL at click time (avoids stale closure races).
+    const current = searchParams.getAll("tag");
+    if (current.includes(tag)) {
+      setTags(current.filter((t) => t !== tag));
     } else {
-      setTags([...selectedTags, tag]);
+      setTags([...current, tag]);
     }
   }
 
@@ -116,14 +129,14 @@ export function TagChipBar({ availableTags }: TagChipBarProps) {
   );
 
   return (
-    <section aria-label="Filter by tags" className="flex flex-col">
+    <section aria-label={t("filterByTags")} className="flex flex-col">
       <div className="flex flex-wrap items-center gap-2">
         <Chip
           pressed={allActive}
           onClick={clearTags}
-          ariaLabel="Show all images"
+          ariaLabel={t("showAllItems")}
         >
-          All
+          {t("all")}
         </Chip>
 
         {visibleSelected.map((tag) => (
@@ -131,7 +144,7 @@ export function TagChipBar({ availableTags }: TagChipBarProps) {
             key={`sel-${tag}`}
             pressed
             onClick={() => toggleTag(tag)}
-            ariaLabel={`Remove filter ${tag}`}
+            ariaLabel={t("removeFilter", { tag })}
           >
             {tag}
           </Chip>
@@ -150,11 +163,11 @@ export function TagChipBar({ availableTags }: TagChipBarProps) {
                 setOverflowOpen((v) => !v);
                 setMoreOpen(false);
               }}
-              ariaLabel={`${overflowCount} more selected tags`}
+              ariaLabel={t("moreSelected", { count: overflowCount })}
               ariaExpanded={overflowOpen}
               ariaControls={overflowPanelId}
             >
-              +{overflowCount} more
+              {t("moreSelected", { count: overflowCount })}
             </Chip>
 
             {overflowHover && !overflowOpen && (
@@ -163,7 +176,7 @@ export function TagChipBar({ availableTags }: TagChipBarProps) {
                 className="absolute left-0 top-[calc(100%+0.4rem)] z-50 w-max max-w-[16rem] animate-[search-panel-in_120ms_ease-out] rounded-xl border border-border bg-surface px-3 py-2 text-sm text-foreground shadow-lg"
               >
                 <p className="mb-1 text-xs font-medium text-foreground-muted">
-                  Also selected
+                  {t("alsoSelected")}
                 </p>
                 <ul className="flex flex-col gap-0.5">
                   {hiddenSelected.map((tag) => (
@@ -179,19 +192,19 @@ export function TagChipBar({ availableTags }: TagChipBarProps) {
               <div
                 id={overflowPanelId}
                 role="dialog"
-                aria-label="Selected tags"
+                aria-label={t("selectedTags")}
                 className="absolute left-0 top-[calc(100%+0.45rem)] z-50 w-64 origin-top-left animate-[search-panel-in_160ms_ease-out] overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_12px_40px_-12px_rgba(30,27,46,0.28)]"
               >
                 <div className="flex items-center justify-between border-b border-border px-4 py-3">
                   <p className="text-base font-semibold text-foreground">
-                    Selected
+                    {t("selected")}
                   </p>
                   <button
                     type="button"
                     onClick={clearTags}
                     className="rounded-lg px-2 py-1 text-sm font-medium text-primary hover:bg-accent-soft"
                   >
-                    Clear all
+                    {t("clearAll")}
                   </button>
                 </div>
                 <ul className="max-h-60 overflow-y-auto p-2">
@@ -220,7 +233,7 @@ export function TagChipBar({ availableTags }: TagChipBarProps) {
             key={`sug-${tag}`}
             pressed={false}
             onClick={() => toggleTag(tag)}
-            ariaLabel={`Filter by ${tag}`}
+            ariaLabel={t("filterBy", { tag })}
           >
             {tag}
           </Chip>
@@ -233,12 +246,12 @@ export function TagChipBar({ availableTags }: TagChipBarProps) {
               setMoreOpen((v) => !v);
               setOverflowOpen(false);
             }}
-            ariaLabel="Search more tags"
+            ariaLabel={t("searchMoreTags")}
             ariaExpanded={moreOpen}
             ariaControls={morePanelId}
             subtle
           >
-            More tags
+            {t("moreTags")}
             <ChevronIcon
               className={[
                 "ml-1 h-3.5 w-3.5 opacity-70 transition-transform duration-200",
@@ -251,12 +264,12 @@ export function TagChipBar({ availableTags }: TagChipBarProps) {
             <div
               id={morePanelId}
               role="dialog"
-              aria-label="Search tags"
+              aria-label={t("searchTags")}
               className="absolute left-0 top-[calc(100%+0.45rem)] z-50 w-[min(20rem,calc(100vw-2rem))] origin-top-left animate-[search-panel-in_160ms_ease-out] overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_12px_40px_-12px_rgba(30,27,46,0.28)]"
             >
               <div className="border-b border-border px-3 py-3">
                 <label className="sr-only" htmlFor={`${morePanelId}-q`}>
-                  Find a tag
+                  {t("findATag")}
                 </label>
                 <input
                   id={`${morePanelId}-q`}
@@ -264,18 +277,18 @@ export function TagChipBar({ availableTags }: TagChipBarProps) {
                   autoFocus
                   value={moreQuery}
                   onChange={(e) => setMoreQuery(e.target.value)}
-                  placeholder="Find a tag"
+                  placeholder={t("findATag")}
                   className="h-10 w-full rounded-xl border border-border bg-background px-3 text-base text-foreground outline-none placeholder:text-foreground-subtle focus:border-primary focus:ring-2 focus:ring-ring/25"
                 />
               </div>
 
               {availableTags.length === 0 ? (
                 <p className="px-4 py-6 text-base text-foreground-muted">
-                  No tags yet. Add some when you create an image.
+                  {t("noTagsYet")}
                 </p>
               ) : moreFiltered.length === 0 ? (
                 <p className="px-4 py-6 text-base text-foreground-muted">
-                  No tags match “{moreQuery.trim()}”.
+                  {t("noTagsMatch", { query: moreQuery.trim() })}
                 </p>
               ) : (
                 <ul className="max-h-72 overflow-y-auto p-2">
@@ -329,17 +342,14 @@ export function TagChipBar({ availableTags }: TagChipBarProps) {
               {selectedTags.length > 0 && (
                 <div className="flex items-center justify-between border-t border-border bg-surface-muted/50 px-4 py-2.5">
                   <p className="text-sm text-foreground-muted">
-                    <span className="font-semibold text-foreground">
-                      {selectedTags.length}
-                    </span>{" "}
-                    selected
+                    {t("nSelected", { count: selectedTags.length })}
                   </p>
                   <button
                     type="button"
                     onClick={clearTags}
                     className="text-sm font-medium text-primary hover:underline"
                   >
-                    Clear all
+                    {t("clearAll")}
                   </button>
                 </div>
               )}

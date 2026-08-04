@@ -10,6 +10,7 @@ import {
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import { useI18n } from "../lib/i18n";
 
 type SearchBarProps = {
   /** Current search text (draft or URL-synced). */
@@ -30,8 +31,10 @@ export function SearchBar({
   onChange,
   onSubmit,
   onClear,
-  placeholder = "Search your archive",
+  placeholder,
 }: SearchBarProps) {
+  const { t } = useI18n();
+  const resolvedPlaceholder = placeholder ?? t("searchPlaceholder");
   const inputRef = useRef<HTMLInputElement>(null);
   const [focused, setFocused] = useState(false);
   const [pressed, setPressed] = useState(false);
@@ -122,7 +125,7 @@ export function SearchBar({
         />
 
         <label htmlFor={inputId} className="sr-only">
-          Search archive
+          {t("searchArchive")}
         </label>
 
         {/* Leading icon */}
@@ -145,7 +148,7 @@ export function SearchBar({
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder}
+          placeholder={resolvedPlaceholder}
           autoComplete="off"
           spellCheck={false}
           enterKeyHint="search"
@@ -174,7 +177,7 @@ export function SearchBar({
               focusInput();
             }}
             className="flex h-7 w-7 items-center justify-center rounded-full text-foreground-muted transition-colors duration-150 hover:bg-accent-soft hover:text-primary active:scale-95"
-            aria-label="Clear search"
+            aria-label={t("clearSearch")}
           >
             <ClearIcon className="h-3.5 w-3.5" />
           </button>
@@ -207,7 +210,7 @@ export function SearchBar({
               : "bg-surface-muted",
             pressed ? "scale-95" : "",
           ].join(" ")}
-          aria-label="Search"
+          aria-label={t("search")}
         >
           <SearchIcon className="h-4 w-4" />
         </button>

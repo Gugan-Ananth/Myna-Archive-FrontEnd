@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ItemDetail } from "../../components/item-detail";
-import { getArchiveItemById } from "../../lib/placeholder-data";
+import { ApiError, getArchiveItem } from "../../lib/api";
+import type { ArchiveItem } from "../../lib/types";
 
 type ItemPageProps = {
   params: Promise<{ id: string }>;
@@ -11,15 +12,26 @@ export async function generateMetadata({
   params,
 }: ItemPageProps): Promise<Metadata> {
   const { id } = await params;
-  const item = getArchiveItemById(id);
-  if (!item) return { title: "Not found" };
-  return { title: item.name };
+  try {
+    const item = await getArchiveItem(id);
+    return { title: item.name };
+  } catch {
+    return { title: "Not found" };
+  }
 }
 
 export default async function ItemPage({ params }: ItemPageProps) {
   const { id } = await params;
-  const item = getArchiveItemById(id);
-  if (!item) notFound();
+
+  let item: ArchiveItem;
+  try {
+    item = await getArchiveItem(id);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      notFound();
+    }
+    throw error;
+  }
 
   return <ItemDetail item={item} />;
 }

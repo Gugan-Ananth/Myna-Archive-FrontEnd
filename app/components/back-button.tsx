@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useI18n } from "../lib/i18n";
 
 type BackButtonProps = {
   /** Fallback when history is empty (e.g. direct link). */
@@ -11,6 +12,7 @@ type BackButtonProps = {
 /** Single back arrow for fullscreen pages (Add / image detail). */
 export function BackButton({ href = "/", className = "" }: BackButtonProps) {
   const router = useRouter();
+  const { t } = useI18n();
 
   function onClick() {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -24,7 +26,7 @@ export function BackButton({ href = "/", className = "" }: BackButtonProps) {
     <button
       type="button"
       onClick={onClick}
-      aria-label="Go back"
+      aria-label={t("goBack")}
       className={[
         "inline-flex h-10 w-10 items-center justify-center rounded-full",
         "bg-surface/90 text-foreground shadow-sm ring-1 ring-border backdrop-blur-md",

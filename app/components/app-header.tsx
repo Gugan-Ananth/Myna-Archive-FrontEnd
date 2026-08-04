@@ -3,13 +3,16 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useI18n } from "../lib/i18n";
+import { LanguageSwitcher } from "./language-switcher";
 import { SearchBar } from "./search-bar";
 
 /**
- * Top bar: logo (left) · search (center) · Add (far right).
+ * Top bar: logo (left) · search (center) · Add + language (far right).
  * Tag filtering lives above the home grid.
  */
 export function AppHeader() {
+  const { t } = useI18n();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -30,6 +33,8 @@ export function AppHeader() {
     const href = qs ? `/?${qs}` : "/";
     if (pathname === "/") {
       router.replace(href, { scroll: false });
+      // Keep the server home payload aligned with the search query.
+      router.refresh();
     } else {
       router.push(href);
     }
@@ -86,7 +91,7 @@ export function AppHeader() {
             aria-hidden
           />
           <span className="hidden text-sm font-semibold tracking-tight text-foreground sm:inline">
-            Myna Archive
+            {t("brandName")}
           </span>
         </Link>
 
@@ -101,13 +106,14 @@ export function AppHeader() {
           </div>
         </div>
 
-        <div className="justify-self-end">
+        <div className="flex items-center gap-2 justify-self-end">
           <Link
             href="/create"
             className="inline-flex h-10 shrink-0 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground shadow-sm transition-all duration-200 hover:bg-primary-hover hover:shadow-md active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            Add
+            {t("add")}
           </Link>
+          <LanguageSwitcher />
         </div>
       </div>
     </header>

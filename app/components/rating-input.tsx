@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { useI18n } from "../lib/i18n";
 
 type RatingInputProps = {
   value: number;
@@ -13,31 +14,6 @@ type RatingInputProps = {
   readOnly?: boolean;
   id?: string;
 };
-
-function parseRating(
-  text: string,
-  min: number,
-  max: number,
-): { ok: true; value: number } | { ok: false; message: string } {
-  const trimmed = text.trim();
-  if (trimmed === "" || trimmed === "-" || trimmed === "." || trimmed === "-.") {
-    return { ok: false, message: "Enter a rating" };
-  }
-  if (!/^-?\d*\.?\d+$/.test(trimmed)) {
-    return { ok: false, message: "Enter a valid number" };
-  }
-  const num = Number(trimmed);
-  if (!Number.isFinite(num)) {
-    return { ok: false, message: "Enter a valid number" };
-  }
-  if (num > max) {
-    return { ok: false, message: `Can't be more than ${max}` };
-  }
-  if (num < min) {
-    return { ok: false, message: `Can't be less than ${min}` };
-  }
-  return { ok: true, value: num };
-}
 
 /**
  * Decimal rating input with inline red errors (no side range hint).
@@ -52,6 +28,7 @@ export function RatingInput({
   readOnly = false,
   id,
 }: RatingInputProps) {
+  const { t } = useI18n();
   const autoId = useId();
   const inputId = id ?? autoId;
   const errorId = `${inputId}-error`;
@@ -60,7 +37,7 @@ export function RatingInput({
   );
   const [showErrors, setShowErrors] = useState(false);
 
-  const result = parseRating(text, min, max);
+  const result = parseRating(text, min, max, t);
   const error = result.ok ? null : result.message;
   const showError = showErrors && Boolean(error);
 
@@ -69,7 +46,7 @@ export function RatingInput({
     return (
       <p
         className="text-2xl font-semibold tabular-nums tracking-tight text-foreground"
-        aria-label={`Rating ${display}`}
+        aria-label={t("ratingAria", { value: display })}
       >
         {display}
       </p>
@@ -91,7 +68,7 @@ export function RatingInput({
           const next = e.target.value;
           setText(next);
           setShowErrors(true);
-          const parsed = parseRating(next, min, max);
+          const parsed = parseRating(next, min, max, t);
           onValidityChange?.(parsed.ok);
           if (parsed.ok) {
             onChange(parsed.value);
@@ -99,7 +76,7 @@ export function RatingInput({
         }}
         onBlur={() => {
           setShowErrors(true);
-          const parsed = parseRating(text, min, max);
+          const parsed = parseRating(text, min, max, t);
           onValidityChange?.(parsed.ok);
           if (parsed.ok) {
             setText(formatDisplay(parsed.value));
@@ -112,7 +89,7 @@ export function RatingInput({
             ? "border-danger focus:border-danger focus:ring-2 focus:ring-danger/20"
             : "border-border focus:border-primary focus:ring-2 focus:ring-ring/25",
         ].join(" ")}
-        aria-label="Rating"
+        aria-label={t("rating")}
       />
       {showError && (
         <p id={errorId} role="alert" className="text-sm font-medium text-danger">
@@ -121,6 +98,32 @@ export function RatingInput({
       )}
     </div>
   );
+}
+
+function parseRating(
+  text: string,
+  min: number,
+  max: number,
+  t: (key: "enterRating" | "enterValidNumber" | "cantBeMoreThan" | "cantBeLessThan", vars?: Record<string, string | number>) => string,
+): { ok: true; value: number } | { ok: false; message: string } {
+  const trimmed = text.trim();
+  if (trimmed === "" || trimmed === "-" || trimmed === "." || trimmed === "-.") {
+    return { ok: false, message: t("enterRating") };
+  }
+  if (!/^-?\d*\.?\d+$/.test(trimmed)) {
+    return { ok: false, message: t("enterValidNumber") };
+  }
+  const num = Number(trimmed);
+  if (!Number.isFinite(num)) {
+    return { ok: false, message: t("enterValidNumber") };
+  }
+  if (num > max) {
+    return { ok: false, message: t("cantBeMoreThan", { max }) };
+  }
+  if (num < min) {
+    return { ok: false, message: t("cantBeLessThan", { min }) };
+  }
+  return { ok: true, value: num };
 }
 
 function formatDisplay(value: number): string {
