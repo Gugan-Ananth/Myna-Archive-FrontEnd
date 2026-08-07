@@ -1,4 +1,26 @@
-import type { ArchiveItem } from "./types";
+import type { ArchiveItem, MediaAsset } from "./types";
+
+/** Ensure mediaAssets always has at least the cover (legacy-safe). */
+export function itemMediaAssets(item: ArchiveItem): MediaAsset[] {
+  if (item.mediaAssets && item.mediaAssets.length > 0) {
+    return item.mediaAssets;
+  }
+  return [
+    {
+      publicId: "",
+      resourceType: item.mediaType,
+      mediaUrl: item.mediaUrl,
+      thumbnailUrl: item.thumbnailUrl,
+      width: item.width,
+      height: item.height,
+      blurHash: item.blurHash,
+    },
+  ];
+}
+
+export function isImageGroup(item: ArchiveItem): boolean {
+  return item.mediaType === "image" && itemMediaAssets(item).length > 1;
+}
 
 /** Strip CDN/optimizer query string so we get the original asset URL. */
 export function originalMediaUrl(url: string): string {
@@ -13,18 +35,61 @@ export function originalMediaUrl(url: string): string {
   }
 }
 
+/** Default Bunny Optimizer params for grid pins (~column width). */
+export const GRID_THUMB_WIDTH = 480;
+export const GRID_THUMB_QUALITY = 72;
+
 /**
- * Homepage grid source.
- * Feed this to `next/image` so the Next optimizer can serve **WebP** (fast).
- * Do not use on the detail page — that must stay the original file format.
+ * Homepage grid source — prefer CDN-optimized thumbnails (Pinterest-style).
+ * Small edge-resized bytes beat full originals through any optimizer.
+ * Detail page still uses `detailMediaSrc` (original file).
  */
 export function gridMediaSrc(item: ArchiveItem): string {
   if (item.mediaType === "video") {
     return item.thumbnailUrl || item.mediaUrl;
   }
-  // Original URL as input; Next/Image re-encodes to WebP/AVIF at display size.
-  return originalMediaUrl(item.mediaUrl || item.thumbnailUrl);
+
+  // Backend already stamps thumbnailUrl with Bunny Optimizer query params.
+  if (item.thumbnailUrl) {
+    return item.thumbnailUrl;
+  }
+
+  const original = originalMediaUrl(item.mediaUrl);
+  return withBunnyResize(original, {
+    width: GRID_THUMB_WIDTH,
+    quality: GRID_THUMB_QUALITY,
+  });
 }
+
+/**
+ * Apply Bunny Optimizer resize params when the host is a Pull Zone.
+ * No-ops for non-Bunny URLs.
+ */
+export function withBunnyResize(
+  url: string,
+  opts: { width: number; quality?: number },
+): string {
+  if (!url) return url;
+  try {
+    const parsed = new URL(url);
+    if (!/(^|\.)b-cdn\.net$/i.test(parsed.hostname)) return url;
+    parsed.searchParams.set("width", String(opts.width));
+    parsed.searchParams.set("quality", String(opts.quality ?? GRID_THUMB_QUALITY));
+    parsed.searchParams.set("format", "webp");
+    parsed.searchParams.delete("height");
+    parsed.searchParams.delete("aspect_ratio");
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+/** Tiny solid purple blur used as next/image blur placeholder. */
+export const GRID_BLUR_DATA_URL =
+  "data:image/svg+xml;charset=utf-8," +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="20"><rect width="100%" height="100%" fill="#ede9fe"/></svg>`,
+  );
 
 /**
  * Detail / zoom: original uploaded file (jpg/png/…), no Next optimizer, no WebP.
@@ -32,6 +97,10 @@ export function gridMediaSrc(item: ArchiveItem): string {
  */
 export function detailMediaSrc(item: ArchiveItem): string {
   return originalMediaUrl(item.mediaUrl);
+}
+
+export function detailAssetSrc(asset: MediaAsset): string {
+  return originalMediaUrl(asset.mediaUrl);
 }
 
 /**

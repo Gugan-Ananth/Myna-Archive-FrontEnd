@@ -1,6 +1,20 @@
-import type { ArchiveItem, MediaType } from "../types";
+import type {
+  ArchiveItem,
+  MediaAsset,
+  MediaType,
+  TagSummary,
+  TaxonomyCategoryDto,
+  TaxonomyTagDto,
+} from "../types";
 
-export type { ArchiveItem, MediaType };
+export type {
+  ArchiveItem,
+  MediaAsset,
+  MediaType,
+  TagSummary,
+  TaxonomyCategoryDto,
+  TaxonomyTagDto,
+};
 
 export type PaginatedArchiveItems = {
   data: ArchiveItem[];
@@ -12,6 +26,25 @@ export type PaginatedArchiveItems = {
   };
 };
 
+export type TagsListResponse = {
+  data: TagSummary[];
+};
+
+export type TaxonomyListResponse = {
+  data: TaxonomyCategoryDto[];
+};
+
+export type TaxonomyCategoryResponse = {
+  data: TaxonomyCategoryDto;
+};
+
+export type TaxonomyTagResponse = {
+  data: {
+    categorySlug: string;
+    tag: TaxonomyTagDto;
+  };
+};
+
 export type ListArchiveItemsParams = {
   q?: string;
   tag?: string[];
@@ -20,14 +53,32 @@ export type ListArchiveItemsParams = {
   pageSize?: number;
 };
 
-export type CreateArchiveItemInput = {
+/** One asset on create finalize (URLs derived by Nest). */
+export type CreateMediaAssetInput = {
   publicId: string;
   resourceType: "image" | "video";
+  width?: number;
+  height?: number;
+  blurHash?: string;
+};
+
+export type CreateArchiveItemInput = {
   mediaType: MediaType;
   name: string;
   tags: string[];
   rating: number;
   description?: string;
+  /**
+   * Preferred: ordered assets (image 1–10, video exactly 1).
+   * When set, top-level publicId/resourceType/dims are not required.
+   */
+  assets?: CreateMediaAssetInput[];
+  /** Legacy single-asset finalize (when `assets` omitted). */
+  publicId?: string;
+  resourceType?: "image" | "video";
+  width?: number;
+  height?: number;
+  blurHash?: string;
 };
 
 export type UpdateArchiveItemInput = {

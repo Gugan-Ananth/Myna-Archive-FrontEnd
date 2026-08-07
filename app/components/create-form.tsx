@@ -1,14 +1,26 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { type DragEvent, type FormEvent, useEffect, useRef, useState } from "react";
+import {
+  type DragEvent,
+  type FormEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   ApiError,
   createArchiveItem,
   createUploadSignature,
+  type CreateMediaAssetInput,
 } from "../lib/api";
 import { isUploadAborted, uploadToBunny } from "../lib/bunny-upload";
 import { captureVideoPoster } from "../lib/capture-video-poster";
+import {
+  captureImageDisplayMetadata,
+  captureVideoDisplayMetadata,
+  type DisplayMetadata,
+} from "../lib/display-metadata";
 import { useI18n } from "../lib/i18n";
 import {
   detectMediaType,
@@ -16,8 +28,9 @@ import {
   maxBytesFor,
   normalizeMime,
 } from "../lib/media-constraints";
-import type { MediaType } from "../lib/types";
+import { MAX_IMAGE_ASSETS, type MediaType } from "../lib/types";
 import { BackButton } from "./back-button";
+import { CategoryTagPicker } from "./category-tag-picker";
 import { RatingInput } from "./rating-input";
 import { VideoPlayer } from "./video-player";
 
@@ -29,43 +42,57 @@ type SubmitPhase =
   | "done"
   | "error";
 
+type PendingMedia = {
+  id: string;
+  file: File;
+  previewUrl: string;
+  mediaType: MediaType;
+  meta: DisplayMetadata | null;
+  /** Video poster data URL for create preview. */
+  posterUrl?: string | null;
+};
+
 /**
- * Fullscreen Add flow: pick image/video → metadata → direct Bunny upload → Nest finalize.
- * Supports cancel mid-upload and warns before leaving while busy.
+ * Fullscreen Add flow: pick image(s) or one video → metadata →
+ * direct Bunny upload(s) → Nest finalize (image groups via assets[]).
  */
 export function CreateForm() {
   const { t } = useI18n();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  /** Still frame for video create preview (data URL); helps when codecs won't play. */
-  const [posterUrl, setPosterUrl] = useState<string | null>(null);
-  const [posterCapturing, setPosterCapturing] = useState(false);
-  const [mediaType, setMediaType] = useState<MediaType | null>(null);
+  const metaJobRef = useRef(0);
+
+  const [pending, setPending] = useState<PendingMedia[]>([]);
+  const [previewIndex, setPreviewIndex] = useState(0);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [rating, setRating] = useState(5.0);
   const [ratingValid, setRatingValid] = useState(true);
   const [tags, setTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState("");
   const [phase, setPhase] = useState<SubmitPhase>("idle");
   const [uploadPercent, setUploadPercent] = useState(0);
+  const [uploadLabel, setUploadLabel] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const posterJobRef = useRef(0);
+
+  const mediaType: MediaType | null =
+    pending.length === 0 ? null : pending[0]!.mediaType;
+  const isVideo = mediaType === "video";
+  const isGroup = mediaType === "image" && pending.length > 1;
+  const active = pending[Math.min(previewIndex, Math.max(0, pending.length - 1))];
 
   useEffect(() => {
     return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      for (const item of pending) URL.revokeObjectURL(item.previewUrl);
     };
-  }, [previewUrl]);
+    // Only on unmount — pending cleanup when items removed is explicit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const busy =
     phase === "signing" || phase === "uploading" || phase === "saving";
 
-  // Warn before tab close / refresh while a transfer is in flight.
   useEffect(() => {
     if (!busy) return;
     function onBeforeUnload(event: BeforeUnloadEvent) {
@@ -77,81 +104,184 @@ export function CreateForm() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [busy, t]);
 
-  // Abort any in-flight transfer if the form unmounts.
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
     };
   }, []);
 
-  function onFileChange(next: File | undefined) {
-    if (!next) return;
+  function revokeAll(items: PendingMedia[]) {
+    for (const item of items) URL.revokeObjectURL(item.previewUrl);
+  }
 
-    const type = detectMediaType(next);
-    if (!type) {
-      setError(t("unsupportedFileType"));
+  function clearPending() {
+    setPending((prev) => {
+      revokeAll(prev);
+      return [];
+    });
+    setPreviewIndex(0);
+    metaJobRef.current += 1;
+  }
+
+  function addFiles(fileList: FileList | File[]) {
+    const files = Array.from(fileList);
+    if (files.length === 0 || busy) return;
+
+    const typed: { file: File; type: MediaType }[] = [];
+    for (const file of files) {
+      const type = detectMediaType(file);
+      if (!type) {
+        setError(t("unsupportedFileType"));
+        return;
+      }
+      const limit = maxBytesFor(type);
+      if (file.size > limit) {
+        setError(
+          t("fileTooLarge", {
+            size: formatBytes(file.size),
+            type:
+              type === "image"
+                ? t("image").toLowerCase()
+                : t("video").toLowerCase(),
+            limit: formatBytes(limit),
+          }),
+        );
+        return;
+      }
+      typed.push({ file, type });
+    }
+
+    const hasVideo = typed.some((x) => x.type === "video");
+    const hasImage = typed.some((x) => x.type === "image");
+    if (hasVideo && hasImage) {
+      setError(t("cannotMixImageVideo"));
+      return;
+    }
+    if (hasVideo && typed.length > 1) {
+      setError(t("videoMustBeSingle"));
+      return;
+    }
+    if (hasVideo && pending.length > 0 && pending[0]?.mediaType === "image") {
+      setError(t("cannotMixImageVideo"));
+      return;
+    }
+    if (hasImage && pending.length > 0 && pending[0]?.mediaType === "video") {
+      setError(t("cannotMixImageVideo"));
       return;
     }
 
-    const limit = maxBytesFor(type);
-    if (next.size > limit) {
-      setError(
-        t("fileTooLarge", {
-          size: formatBytes(next.size),
-          type:
-            type === "image"
-              ? t("image").toLowerCase()
-              : t("video").toLowerCase(),
-          limit: formatBytes(limit),
-        }),
-      );
+    // Replace path: video or single re-pick when currently video
+    if (hasVideo || (pending.length === 1 && pending[0]?.mediaType === "video")) {
+      clearPending();
+      const { file, type } = typed[0]!;
+      void pushItems([{ file, type }], true);
       return;
     }
 
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    const url = URL.createObjectURL(next);
-    setPreviewUrl(url);
-    setFile(next);
-    setMediaType(type);
-    setError(null);
-    setPhase("idle");
-    setUploadPercent(0);
-    setPosterUrl(null);
-
-    if (!name) {
-      setName(next.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " "));
+    // Image group: append up to MAX_IMAGE_ASSETS
+    const room = MAX_IMAGE_ASSETS - pending.length;
+    if (room <= 0) {
+      setError(t("maxImagesReached", { max: MAX_IMAGE_ASSETS }));
+      return;
     }
-
-    // Grab a still frame for the create preview (and as VideoPlayer poster).
-    if (type === "video") {
-      const jobId = ++posterJobRef.current;
-      setPosterCapturing(true);
-      void captureVideoPoster(next)
-        .then((dataUrl) => {
-          if (posterJobRef.current !== jobId) return;
-          setPosterUrl(dataUrl);
-        })
-        .finally(() => {
-          if (posterJobRef.current === jobId) setPosterCapturing(false);
-        });
+    const slice = typed.slice(0, room);
+    if (typed.length > room) {
+      setError(t("maxImagesReached", { max: MAX_IMAGE_ASSETS }));
     } else {
-      posterJobRef.current += 1;
-      setPosterCapturing(false);
+      setError(null);
+    }
+    void pushItems(slice, pending.length === 0);
+  }
+
+  async function pushItems(
+    items: { file: File; type: MediaType }[],
+    seedName: boolean,
+  ) {
+    const jobId = ++metaJobRef.current;
+    const next: PendingMedia[] = items.map(({ file, type }) => ({
+      id: `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2, 8)}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+      mediaType: type,
+      meta: null,
+      posterUrl: null,
+    }));
+
+    setPending((prev) => {
+      const merged = seedName && prev.length === 0 ? next : [...prev, ...next];
+      return merged;
+    });
+
+    if (seedName) {
+      const first = items[0]!.file;
+      setName((n) =>
+        n
+          ? n
+          : first.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " "),
+      );
+      setPreviewIndex(0);
+    }
+
+    // Capture display metadata (+ video poster) in background.
+    for (const item of next) {
+      if (item.mediaType === "video") {
+        const [poster, meta] = await Promise.all([
+          captureVideoPoster(item.file),
+          captureVideoDisplayMetadata(item.file),
+        ]);
+        if (metaJobRef.current !== jobId) return;
+        setPending((prev) =>
+          prev.map((p) =>
+            p.id === item.id
+              ? {
+                  ...p,
+                  posterUrl: poster,
+                  meta:
+                    meta?.width && meta?.height
+                      ? {
+                          width: meta.width,
+                          height: meta.height,
+                          blurHash: meta.blurHash || "",
+                        }
+                      : null,
+                }
+              : p,
+          ),
+        );
+      } else {
+        const meta = await captureImageDisplayMetadata(item.file);
+        if (metaJobRef.current !== jobId) return;
+        setPending((prev) =>
+          prev.map((p) =>
+            p.id === item.id
+              ? {
+                  ...p,
+                  meta:
+                    meta?.width && meta?.height
+                      ? {
+                          width: meta.width,
+                          height: meta.height,
+                          blurHash: meta.blurHash || "",
+                        }
+                      : null,
+                }
+              : p,
+          ),
+        );
+      }
     }
   }
 
-  function addTag() {
-    const cleaned = tagInput.trim().replace(/^#/, "").toLowerCase();
-    if (!cleaned || tags.includes(cleaned)) {
-      setTagInput("");
-      return;
-    }
-    setTags((t) => [...t, cleaned]);
-    setTagInput("");
-  }
-
-  function removeTag(tag: string) {
-    setTags((t) => t.filter((x) => x !== tag));
+  function removePending(id: string) {
+    if (busy) return;
+    setPending((prev) => {
+      const target = prev.find((p) => p.id === id);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      const next = prev.filter((p) => p.id !== id);
+      return next;
+    });
+    setPreviewIndex((i) => Math.max(0, i - (i > 0 ? 0 : 0)));
+    setError(null);
   }
 
   function cancelUpload() {
@@ -160,7 +290,7 @@ export function CreateForm() {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!file || !mediaType || !ratingValid) return;
+    if (pending.length === 0 || !mediaType || !ratingValid) return;
 
     if (tags.length === 0) {
       setError(t("addAtLeastOneTag"));
@@ -173,7 +303,6 @@ export function CreateForm() {
       return;
     }
 
-    // Cancel any previous attempt before starting a new one.
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -181,49 +310,84 @@ export function CreateForm() {
     setError(null);
     setPhase("signing");
     setUploadPercent(0);
+    setUploadLabel("");
 
     try {
-      const mimeType = normalizeMime(file.type, file.name);
-      const signature = await createUploadSignature(
-        {
-          mediaType,
-          mimeType,
-          byteSize: file.size,
-          fileName: file.name,
-        },
-        { signal: controller.signal },
-      );
+      const assets: CreateMediaAssetInput[] = [];
+      const total = pending.length;
 
-      setPhase("uploading");
-      const uploaded = await uploadToBunny(file, signature, {
-        signal: controller.signal,
-        onProgress: (p) => setUploadPercent(p.percent),
-      });
+      for (let i = 0; i < pending.length; i += 1) {
+        if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
+        const item = pending[i]!;
+        setUploadLabel(
+          total > 1
+            ? t("uploadingImageOf", { n: i + 1, total })
+            : t("uploadingMedia"),
+        );
+        setPhase("signing");
+        setUploadPercent(0);
 
-      setPhase("saving");
-      // publicId is assigned by Nest in the signature (Storage path or Stream GUID).
-      await createArchiveItem(
-        {
+        const mimeType = normalizeMime(item.file.type, item.file.name);
+        const signature = await createUploadSignature(
+          {
+            mediaType: item.mediaType,
+            mimeType,
+            byteSize: item.file.size,
+            fileName: item.file.name,
+          },
+          { signal: controller.signal },
+        );
+
+        setPhase("uploading");
+        const uploaded = await uploadToBunny(item.file, signature, {
+          signal: controller.signal,
+          onProgress: (p) => setUploadPercent(p.percent),
+        });
+
+        let meta = item.meta;
+        if (!meta?.width || !meta?.height) {
+          meta =
+            item.mediaType === "video"
+              ? await captureVideoDisplayMetadata(item.file)
+              : await captureImageDisplayMetadata(item.file);
+        }
+
+        assets.push({
           publicId: uploaded.publicId,
           resourceType: signature.resourceType,
+          ...(meta?.width && meta?.height
+            ? {
+                width: meta.width,
+                height: meta.height,
+                ...(meta.blurHash ? { blurHash: meta.blurHash } : {}),
+              }
+            : {}),
+        });
+      }
+
+      setPhase("saving");
+      setUploadLabel(t("savingToArchive"));
+      await createArchiveItem(
+        {
           mediaType,
           name: trimmedName,
           tags,
           rating,
           description: description.trim() || undefined,
+          assets,
         },
         { signal: controller.signal },
       );
 
       setPhase("done");
       abortRef.current = null;
-      // Flag videos so the home toast can set expectations about Stream encoding.
       router.push(mediaType === "video" ? "/?created=1&video=1" : "/?created=1");
       router.refresh();
     } catch (err) {
       if (isUploadAborted(err) || controller.signal.aborted) {
         setPhase("idle");
         setUploadPercent(0);
+        setUploadLabel("");
         setError(t("uploadCancelled"));
         abortRef.current = null;
         return;
@@ -231,9 +395,7 @@ export function CreateForm() {
       setPhase("error");
       if (err instanceof ApiError) {
         setError(
-          err.details.length > 1
-            ? err.details.join(" · ")
-            : err.message,
+          err.details.length > 1 ? err.details.join(" · ") : err.message,
         );
       } else if (err instanceof Error) {
         setError(err.message);
@@ -244,19 +406,35 @@ export function CreateForm() {
     }
   }
 
-  const isVideo = mediaType === "video";
-  const mediaLabel = isVideo ? t("video").toLowerCase() : t("image").toLowerCase();
+  const mediaLabel = isVideo
+    ? t("video").toLowerCase()
+    : isGroup
+      ? t("imageGroup").toLowerCase()
+      : t("image").toLowerCase();
+
   const canSubmit =
-    Boolean(file && mediaType && name.trim() && tags.length > 0 && ratingValid) &&
-    !busy;
+    Boolean(
+      pending.length > 0 &&
+        mediaType &&
+        name.trim() &&
+        tags.length > 0 &&
+        ratingValid,
+    ) && !busy;
 
   function onDropFile(event: DragEvent) {
     event.preventDefault();
     setDragOver(false);
     if (busy) return;
-    const dropped = event.dataTransfer.files?.[0];
-    if (dropped) onFileChange(dropped);
+    if (event.dataTransfer.files?.length) {
+      addFiles(event.dataTransfer.files);
+    }
   }
+
+  const acceptAttr = isVideo
+    ? "video/mp4,video/webm,video/quicktime"
+    : pending.length > 0 && mediaType === "image"
+      ? "image/jpeg,image/png,image/webp,image/gif"
+      : "image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime";
 
   return (
     <div className="relative flex min-h-full flex-1 flex-col bg-background">
@@ -267,12 +445,16 @@ export function CreateForm() {
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+        accept={acceptAttr}
+        multiple={mediaType !== "video"}
         className="sr-only"
-        onChange={(e) => onFileChange(e.target.files?.[0])}
+        onChange={(e) => {
+          if (e.target.files?.length) addFiles(e.target.files);
+          e.target.value = "";
+        }}
       />
 
-      {!previewUrl ? (
+      {pending.length === 0 ? (
         <div className="flex min-h-full flex-1 flex-col items-center justify-center px-4 py-16">
           <button
             type="button"
@@ -316,6 +498,9 @@ export function CreateForm() {
               {t("acceptedFormats")}
             </span>
             <span className="text-xs text-foreground-subtle">
+              {t("groupUploadHint", { max: MAX_IMAGE_ASSETS })}
+            </span>
+            <span className="text-xs text-foreground-subtle">
               {t("sizeLimits", {
                 imageMax: formatBytes(MAX_IMAGE_HINT),
                 videoMax: formatBytes(MAX_VIDEO_HINT),
@@ -336,57 +521,100 @@ export function CreateForm() {
           onSubmit={onSubmit}
           className="flex min-h-full flex-1 flex-col lg:min-h-0 lg:flex-row lg:overflow-hidden"
         >
-          {/*
-            Media stage fills remaining space; preview is absolute so intrinsic
-            image size never stretches the form or the details pane.
-          */}
           <div className="relative min-h-[min(42vh,22rem)] min-w-0 flex-1 bg-surface-muted lg:min-h-full">
-            {isVideo ? (
+            {isVideo && active ? (
               <div className="absolute inset-0 pt-14 sm:pt-16">
                 <VideoPlayer
-                  key={previewUrl}
-                  src={previewUrl}
-                  poster={posterUrl ?? undefined}
+                  key={active.previewUrl}
+                  src={active.previewUrl}
+                  poster={active.posterUrl ?? undefined}
                   title={name || "Upload preview"}
                   compact
                   className="h-full w-full"
                 />
-                {posterCapturing && !posterUrl ? (
-                  <div className="pointer-events-none absolute inset-x-0 top-16 flex justify-center px-4">
-                    <span className="rounded-full bg-surface/90 px-3 py-1 text-xs font-medium text-foreground-muted shadow-sm ring-1 ring-border backdrop-blur">
-                      {t("preparingPreview")}
-                    </span>
-                  </div>
-                ) : null}
               </div>
-            ) : (
+            ) : active ? (
               <div className="absolute inset-0 flex items-center justify-center p-4 pt-16 sm:p-8 sm:pt-16">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={previewUrl}
-                  alt="Upload preview"
+                  src={active.previewUrl}
+                  alt=""
                   className="max-h-full max-w-full rounded-lg object-contain shadow-sm ring-1 ring-black/5"
                 />
               </div>
-            )}
+            ) : null}
+
+            {/* Thumbnail strip for image groups */}
+            {!isVideo && pending.length > 1 ? (
+              <div className="pointer-events-auto absolute inset-x-0 bottom-14 z-20 flex justify-center gap-2 overflow-x-auto px-4">
+                {pending.map((item, i) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setPreviewIndex(i)}
+                    className={[
+                      "relative h-14 w-14 shrink-0 overflow-hidden rounded-lg ring-2 transition",
+                      i === previewIndex
+                        ? "ring-primary"
+                        : "ring-border hover:ring-border-strong",
+                    ].join(" ")}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={item.previewUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                    {i === 0 ? (
+                      <span className="absolute bottom-0 inset-x-0 bg-primary/90 py-0.5 text-[9px] font-medium text-primary-foreground">
+                        {t("cover")}
+                      </span>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
             <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-end justify-between gap-3 bg-gradient-to-t from-black/25 to-transparent p-4 pt-12">
-              {file && (
-                <span className="pointer-events-none max-w-[60%] truncate rounded-full bg-surface/90 px-2.5 py-1 text-xs text-foreground-muted shadow-sm ring-1 ring-border backdrop-blur">
-                  {file.name}
-                </span>
-              )}
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => fileInputRef.current?.click()}
-                className="pointer-events-auto ml-auto rounded-full border border-border bg-surface/95 px-3.5 py-2 text-sm font-medium text-foreground shadow-sm backdrop-blur transition-colors hover:bg-accent-soft hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {t("changeMedia", { media: mediaLabel })}
-              </button>
+              <span className="pointer-events-none max-w-[50%] truncate rounded-full bg-surface/90 px-2.5 py-1 text-xs text-foreground-muted shadow-sm ring-1 ring-border backdrop-blur">
+                {isGroup
+                  ? t("photoCount", { count: pending.length })
+                  : active?.file.name}
+              </span>
+              <div className="pointer-events-auto flex flex-wrap justify-end gap-2">
+                {!isVideo && pending.length < MAX_IMAGE_ASSETS ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="rounded-full border border-border bg-surface/95 px-3.5 py-2 text-sm font-medium text-foreground shadow-sm backdrop-blur transition-colors hover:bg-accent-soft hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {t("addMoreImages")}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    if (isVideo || pending.length === 1) {
+                      clearPending();
+                      fileInputRef.current?.click();
+                    } else if (active) {
+                      removePending(active.id);
+                      setPreviewIndex(0);
+                    }
+                  }}
+                  className="rounded-full border border-border bg-surface/95 px-3.5 py-2 text-sm font-medium text-foreground shadow-sm backdrop-blur transition-colors hover:bg-accent-soft hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isVideo || pending.length === 1
+                    ? t("changeMedia", { media: mediaLabel })
+                    : t("removeImage")}
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Details pane — fixed width on desktop; scrolls independently */}
           <aside className="flex w-full shrink-0 flex-col border-t border-border bg-surface lg:h-full lg:w-[min(26rem,40%)] lg:border-l lg:border-t-0">
             <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5 pt-6 sm:p-8 lg:pt-16">
               <div className="flex flex-wrap items-center gap-2">
@@ -403,14 +631,27 @@ export function CreateForm() {
                   ) : (
                     <ImageIcon className="h-3.5 w-3.5" />
                   )}
-                  {isVideo ? t("video") : t("image")}
+                  {isVideo
+                    ? t("video")
+                    : isGroup
+                      ? t("imageGroup")
+                      : t("image")}
                 </span>
-                {file && (
-                  <span className="text-xs text-foreground-subtle">
-                    {formatBytes(file.size)}
-                  </span>
-                )}
+                <span className="text-xs text-foreground-subtle">
+                  {formatBytes(
+                    pending.reduce((sum, p) => sum + p.file.size, 0),
+                  )}
+                  {isGroup
+                    ? ` · ${t("photoCount", { count: pending.length })}`
+                    : ""}
+                </span>
               </div>
+
+              {isGroup ? (
+                <p className="text-xs leading-relaxed text-foreground-subtle">
+                  {t("imageGroupCreateHint")}
+                </p>
+              ) : null}
 
               <label className="flex flex-col gap-1.5">
                 <span className="text-xs font-medium uppercase tracking-wide text-foreground-muted">
@@ -433,53 +674,11 @@ export function CreateForm() {
                     {t("required")}
                   </span>
                 </p>
-                <div className="mb-2 flex min-h-[2rem] flex-wrap gap-1.5">
-                  {tags.length === 0 && (
-                    <span className="text-xs text-foreground-subtle">
-                      {t("addAtLeastOneTagHint")}
-                    </span>
-                  )}
-                  {tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2.5 py-1 text-sm font-medium text-primary"
-                    >
-                      {tag}
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => removeTag(tag)}
-                        aria-label={t("removeTag", { tag })}
-                        className="rounded-full hover:bg-primary/15 disabled:opacity-50"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    value={tagInput}
-                    disabled={busy}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addTag();
-                      }
-                    }}
-                    placeholder={t("addTag")}
-                    className="min-w-0 flex-1 rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
-                  />
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={addTag}
-                    className="rounded-xl border border-border px-3 text-sm font-medium hover:bg-surface-muted disabled:opacity-50"
-                  >
-                    {t("addTagButton")}
-                  </button>
-                </div>
+                <CategoryTagPicker
+                  value={tags}
+                  onChange={setTags}
+                  disabled={busy}
+                />
               </div>
 
               <div>
@@ -521,8 +720,10 @@ export function CreateForm() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs font-medium text-foreground-muted">
                     <span>
-                      {phase === "signing" && t("preparingUpload")}
-                      {phase === "uploading" && t("uploadingMedia")}
+                      {phase === "signing" &&
+                        (uploadLabel || t("preparingUpload"))}
+                      {phase === "uploading" &&
+                        (uploadLabel || t("uploadingMedia"))}
                       {phase === "saving" && t("savingToArchive")}
                     </span>
                     {phase === "uploading" && (
@@ -638,8 +839,8 @@ function ImageIcon({ className }: { className?: string }) {
       aria-hidden
     >
       <rect x="3" y="4" width="18" height="16" rx="2" />
-      <circle cx="9" cy="10" r="1.5" />
-      <path d="m21 15-4.5-4.5L8 19" />
+      <circle cx="9" cy="9" r="1.5" />
+      <path d="m21 15-4.5-4.5L9 18" />
     </svg>
   );
 }

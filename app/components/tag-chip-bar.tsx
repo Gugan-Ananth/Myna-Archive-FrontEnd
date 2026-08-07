@@ -1,74 +1,149 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { listTagSummaries, listTaxonomy } from "../lib/api";
 import { useI18n } from "../lib/i18n";
+import {
+  buildTaxonomyFromApi,
+  tagStorageValue,
+  type TaxonomyCategory,
+} from "../lib/taxonomy";
+import type { TagSummary, TaxonomyCategoryDto } from "../lib/types";
 
 type TagChipBarProps = {
-  availableTags: string[];
+  /** Optional SSR seed; otherwise loads from the API. */
+  taxonomy?: TaxonomyCategoryDto[];
+  tagSummaries?: TagSummary[];
+  /** Compact icon control for the app header (beside search). */
+  variant?: "header" | "default";
 };
 
-/** How many tag chips (excluding All / overflow / More) to show in the row. */
-const MAX_PRIMARY_CHIPS = 8;
-
 /**
- * Homepage filter section above the media grid.
- * Multi-select chips with overflow (+N more) and “More tags” search.
+ * Tag filter control for the header.
+ * Discord-style collapsible categories + search; only tags are selectable.
  */
-export function TagChipBar({ availableTags }: TagChipBarProps) {
+export function TagChipBar({
+  taxonomy: initialTaxonomy = [],
+  tagSummaries: initialSummaries = [],
+  variant = "default",
+}: TagChipBarProps) {
   const { t } = useI18n();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const selectedTags = searchParams.getAll("tag");
 
-  const [moreOpen, setMoreOpen] = useState(false);
-  const [overflowOpen, setOverflowOpen] = useState(false);
-  const [overflowHover, setOverflowHover] = useState(false);
-  const [moreQuery, setMoreQuery] = useState("");
-  const morePanelId = useId();
-  const overflowPanelId = useId();
-  const moreRef = useRef<HTMLDivElement>(null);
-  const overflowRef = useRef<HTMLDivElement>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [filterQuery, setFilterQuery] = useState("");
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [fetched, setFetched] = useState<{
+    taxonomy: TaxonomyCategoryDto[];
+    summaries: TagSummary[];
+  } | null>(null);
+  const panelId = useId();
+  const searchInputId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
 
-  const allActive = selectedTags.length === 0;
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [tax, summaries] = await Promise.all([
+          listTaxonomy(),
+          listTagSummaries(),
+        ]);
+        if (!cancelled) {
+          setFetched({ taxonomy: tax, summaries });
+        }
+      } catch {
+        /* seed fallback */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const selectedSet = new Set(selectedTags);
-  const unselected = availableTags.filter((t) => !selectedSet.has(t));
+  const apiTaxonomy = fetched?.taxonomy ?? initialTaxonomy;
+  const tagSummaries = fetched?.summaries ?? initialSummaries;
 
-  const selectedInRowBudget = Math.min(
-    selectedTags.length,
-    selectedTags.length > MAX_PRIMARY_CHIPS
-      ? MAX_PRIMARY_CHIPS - 1
-      : selectedTags.length,
+  const taxonomy = useMemo(
+    () =>
+      buildTaxonomyFromApi(apiTaxonomy, tagSummaries, {
+        includeUnused: true,
+      }),
+    [apiTaxonomy, tagSummaries],
   );
-  const visibleSelected = selectedTags.slice(0, selectedInRowBudget);
-  const hiddenSelected = selectedTags.slice(selectedInRowBudget);
-  const overflowCount = hiddenSelected.length;
 
-  const remainingSlots = Math.max(
-    0,
-    MAX_PRIMARY_CHIPS - visibleSelected.length - (overflowCount > 0 ? 1 : 0),
-  );
-  const suggestionTags = unselected.slice(0, remainingSlots);
+  const filteredTaxonomy = useMemo(() => {
+    const q = filterQuery.trim().toLowerCase();
+    if (!q) return taxonomy;
+    return taxonomy
+      .map((cat) => {
+        const catMatch = cat.label.toLowerCase().includes(q);
+        const tags = cat.tags.filter(
+          (tag) =>
+            catMatch ||
+            tag.label.toLowerCase().includes(q) ||
+            tag.slug.includes(q),
+        );
+        if (!catMatch && tags.length === 0) return null;
+        return {
+          ...cat,
+          // When category name matches, show all its tags; else only matches.
+          tags: catMatch ? cat.tags : tags,
+        };
+      })
+      .filter((c): c is TaxonomyCategory => c !== null);
+  }, [taxonomy, filterQuery]);
+
+  const selectedSet = useMemo(() => new Set(selectedTags), [selectedTags]);
+  const hasSelection = selectedTags.length > 0;
+  const isHeader = variant === "header";
+
+  useEffect(() => {
+    if (!panelOpen) return;
+
+    function onPointerDown(event: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setPanelOpen(false);
+        setFilterQuery("");
+      }
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setPanelOpen(false);
+        setFilterQuery("");
+      }
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [panelOpen]);
 
   function pushParams(next: URLSearchParams) {
     const qs = next.toString();
     const href = qs ? `/?${qs}` : "/";
-    // Soft-nav updates useSearchParams immediately; refresh keeps RSC props in sync.
     if (pathname === "/") {
       router.replace(href, { scroll: false });
-      router.refresh();
     } else {
       router.push(href);
     }
   }
 
   function setTags(nextTags: string[]) {
-    // Rebuild params from the live URL so rapid multi-toggles don't drop sibling tags.
     const next = new URLSearchParams(searchParams.toString());
     next.delete("tag");
-    // De-dupe while preserving selection order.
     const unique: string[] = [];
     for (const tag of nextTags) {
       const cleaned = tag.trim();
@@ -79,10 +154,9 @@ export function TagChipBar({ availableTags }: TagChipBarProps) {
   }
 
   function toggleTag(tag: string) {
-    // Read selection from the live URL at click time (avoids stale closure races).
     const current = searchParams.getAll("tag");
     if (current.includes(tag)) {
-      setTags(current.filter((t) => t !== tag));
+      setTags(current.filter((x) => x !== tag));
     } else {
       setTags([...current, tag]);
     }
@@ -92,314 +166,239 @@ export function TagChipBar({ availableTags }: TagChipBarProps) {
     setTags([]);
   }
 
-  useEffect(() => {
-    if (!moreOpen && !overflowOpen) return;
+  function toggleCategory(slug: string) {
+    setCollapsed((prev) => ({
+      ...prev,
+      [slug]: !isCollapsed(slug, prev),
+    }));
+  }
 
-    function onPointerDown(event: MouseEvent) {
-      const target = event.target as Node;
-      if (moreOpen && moreRef.current && !moreRef.current.contains(target)) {
-        setMoreOpen(false);
-        setMoreQuery("");
-      }
-      if (
-        overflowOpen &&
-        overflowRef.current &&
-        !overflowRef.current.contains(target)
-      ) {
-        setOverflowOpen(false);
-      }
-    }
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setMoreOpen(false);
-        setOverflowOpen(false);
-        setMoreQuery("");
-      }
-    }
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [moreOpen, overflowOpen]);
+  function isCollapsed(
+    slug: string,
+    state: Record<string, boolean> = collapsed,
+  ): boolean {
+    return state[slug] === true;
+  }
 
-  const moreFiltered = availableTags.filter((tag) =>
-    tag.toLowerCase().includes(moreQuery.trim().toLowerCase()),
-  );
+  // While searching, force-expand matching categories.
+  const searching = filterQuery.trim().length > 0;
 
   return (
-    <section aria-label={t("filterByTags")} className="flex flex-col">
-      <div className="flex flex-wrap items-center gap-2">
-        <Chip
-          pressed={allActive}
-          onClick={clearTags}
-          ariaLabel={t("showAllItems")}
+    <div
+      ref={rootRef}
+      className={
+        isHeader ? "relative shrink-0" : "relative flex flex-col gap-2"
+      }
+      aria-label={t("filterByTags")}
+    >
+      <button
+        type="button"
+        onClick={() => {
+          setPanelOpen((v) => !v);
+          if (panelOpen) setFilterQuery("");
+        }}
+        aria-label={t("filterByTags")}
+        aria-expanded={panelOpen}
+        aria-controls={panelId}
+        title={t("filterByTags")}
+        className={[
+          "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full border font-medium shadow-sm transition-all",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          isHeader
+            ? "h-10 w-10 border-border bg-surface text-foreground hover:border-border-strong hover:bg-accent-soft hover:text-primary sm:w-auto sm:px-3.5 sm:text-sm"
+            : "h-9 gap-1.5 border-border bg-surface px-3.5 text-sm text-foreground hover:border-border-strong hover:bg-accent-soft hover:text-primary",
+          panelOpen ? "border-primary bg-accent-soft text-primary" : "",
+        ].join(" ")}
+      >
+        <TagIcon className="h-5 w-5 opacity-90 sm:h-4 sm:w-4" />
+        <span className={isHeader ? "hidden sm:inline" : undefined}>
+          {t("tags")}
+        </span>
+      </button>
+
+      {panelOpen && (
+        <div
+          id={panelId}
+          role="dialog"
+          aria-label={t("filterByTags")}
+          className={[
+            "absolute z-50 w-[min(18rem,calc(100vw-2rem))] origin-top animate-[search-panel-in_160ms_ease-out] overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_12px_40px_-12px_rgba(30,27,46,0.28)]",
+            isHeader
+              ? "right-0 top-[calc(100%+0.4rem)] origin-top-right sm:left-0 sm:right-auto sm:origin-top-left"
+              : "left-0 top-[calc(100%+0.4rem)] origin-top-left",
+          ].join(" ")}
         >
-          {t("all")}
-        </Chip>
-
-        {visibleSelected.map((tag) => (
-          <Chip
-            key={`sel-${tag}`}
-            pressed
-            onClick={() => toggleTag(tag)}
-            ariaLabel={t("removeFilter", { tag })}
-          >
-            {tag}
-          </Chip>
-        ))}
-
-        {overflowCount > 0 && (
-          <div
-            className="relative"
-            ref={overflowRef}
-            onMouseEnter={() => setOverflowHover(true)}
-            onMouseLeave={() => setOverflowHover(false)}
-          >
-            <Chip
-              pressed
-              onClick={() => {
-                setOverflowOpen((v) => !v);
-                setMoreOpen(false);
-              }}
-              ariaLabel={t("moreSelected", { count: overflowCount })}
-              ariaExpanded={overflowOpen}
-              ariaControls={overflowPanelId}
-            >
-              {t("moreSelected", { count: overflowCount })}
-            </Chip>
-
-            {overflowHover && !overflowOpen && (
-              <div
-                role="tooltip"
-                className="absolute left-0 top-[calc(100%+0.4rem)] z-50 w-max max-w-[16rem] animate-[search-panel-in_120ms_ease-out] rounded-xl border border-border bg-surface px-3 py-2 text-sm text-foreground shadow-lg"
-              >
-                <p className="mb-1 text-xs font-medium text-foreground-muted">
-                  {t("alsoSelected")}
-                </p>
-                <ul className="flex flex-col gap-0.5">
-                  {hiddenSelected.map((tag) => (
-                    <li key={tag} className="font-medium text-foreground">
-                      {tag}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {overflowOpen && (
-              <div
-                id={overflowPanelId}
-                role="dialog"
-                aria-label={t("selectedTags")}
-                className="absolute left-0 top-[calc(100%+0.45rem)] z-50 w-64 origin-top-left animate-[search-panel-in_160ms_ease-out] overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_12px_40px_-12px_rgba(30,27,46,0.28)]"
-              >
-                <div className="flex items-center justify-between border-b border-border px-4 py-3">
-                  <p className="text-base font-semibold text-foreground">
-                    {t("selected")}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={clearTags}
-                    className="rounded-lg px-2 py-1 text-sm font-medium text-primary hover:bg-accent-soft"
-                  >
-                    {t("clearAll")}
-                  </button>
-                </div>
-                <ul className="max-h-60 overflow-y-auto p-2">
-                  {selectedTags.map((tag) => (
-                    <li key={tag}>
-                      <button
-                        type="button"
-                        onClick={() => toggleTag(tag)}
-                        className="flex w-full items-center justify-between gap-2 rounded-xl bg-accent-soft px-3 py-2.5 text-left text-base font-medium text-primary transition-colors hover:bg-accent-muted/40"
-                      >
-                        <span className="truncate">{tag}</span>
-                        <span className="text-sm opacity-70" aria-hidden>
-                          ×
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-
-        {suggestionTags.map((tag) => (
-          <Chip
-            key={`sug-${tag}`}
-            pressed={false}
-            onClick={() => toggleTag(tag)}
-            ariaLabel={t("filterBy", { tag })}
-          >
-            {tag}
-          </Chip>
-        ))}
-
-        <div className="relative" ref={moreRef}>
-          <Chip
-            pressed={moreOpen}
-            onClick={() => {
-              setMoreOpen((v) => !v);
-              setOverflowOpen(false);
-            }}
-            ariaLabel={t("searchMoreTags")}
-            ariaExpanded={moreOpen}
-            ariaControls={morePanelId}
-            subtle
-          >
-            {t("moreTags")}
-            <ChevronIcon
-              className={[
-                "ml-1 h-3.5 w-3.5 opacity-70 transition-transform duration-200",
-                moreOpen ? "rotate-180" : "",
-              ].join(" ")}
+          <div className="border-b border-border px-3 py-2.5">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-foreground">
+                {t("filterByTags")}
+              </p>
+              {hasSelection ? (
+                <button
+                  type="button"
+                  onClick={clearTags}
+                  className="rounded-lg px-2 py-1 text-xs font-medium text-primary hover:bg-accent-soft"
+                >
+                  {t("clearAll")}
+                </button>
+              ) : null}
+            </div>
+            <label className="sr-only" htmlFor={searchInputId}>
+              {t("findATag")}
+            </label>
+            <input
+              id={searchInputId}
+              type="search"
+              value={filterQuery}
+              autoFocus
+              onChange={(e) => setFilterQuery(e.target.value)}
+              placeholder={t("findATag")}
+              className="h-9 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none placeholder:text-foreground-subtle focus:border-primary focus:ring-2 focus:ring-ring/25"
             />
-          </Chip>
+          </div>
 
-          {moreOpen && (
-            <div
-              id={morePanelId}
-              role="dialog"
-              aria-label={t("searchTags")}
-              className="absolute left-0 top-[calc(100%+0.45rem)] z-50 w-[min(20rem,calc(100vw-2rem))] origin-top-left animate-[search-panel-in_160ms_ease-out] overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_12px_40px_-12px_rgba(30,27,46,0.28)]"
-            >
-              <div className="border-b border-border px-3 py-3">
-                <label className="sr-only" htmlFor={`${morePanelId}-q`}>
-                  {t("findATag")}
-                </label>
-                <input
-                  id={`${morePanelId}-q`}
-                  type="search"
-                  autoFocus
-                  value={moreQuery}
-                  onChange={(e) => setMoreQuery(e.target.value)}
-                  placeholder={t("findATag")}
-                  className="h-10 w-full rounded-xl border border-border bg-background px-3 text-base text-foreground outline-none placeholder:text-foreground-subtle focus:border-primary focus:ring-2 focus:ring-ring/25"
+          {taxonomy.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-foreground-muted">
+              {t("noTagsYet")}
+            </p>
+          ) : filteredTaxonomy.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-foreground-muted">
+              {t("noTagsMatch", { query: filterQuery.trim() })}
+            </p>
+          ) : (
+            <div className="max-h-[min(22rem,55vh)] overflow-y-auto py-1.5">
+              {filteredTaxonomy.map((category) => (
+                <CategoryGroup
+                  key={category.slug}
+                  category={category}
+                  collapsed={searching ? false : isCollapsed(category.slug)}
+                  selectedSet={selectedSet}
+                  onToggleCategory={() => toggleCategory(category.slug)}
+                  onToggleTag={toggleTag}
+                  t={t}
                 />
-              </div>
-
-              {availableTags.length === 0 ? (
-                <p className="px-4 py-6 text-base text-foreground-muted">
-                  {t("noTagsYet")}
-                </p>
-              ) : moreFiltered.length === 0 ? (
-                <p className="px-4 py-6 text-base text-foreground-muted">
-                  {t("noTagsMatch", { query: moreQuery.trim() })}
-                </p>
-              ) : (
-                <ul className="max-h-72 overflow-y-auto p-2">
-                  {moreFiltered.map((tag) => {
-                    const active = selectedSet.has(tag);
-                    return (
-                      <li key={tag}>
-                        <button
-                          type="button"
-                          role="option"
-                          aria-selected={active}
-                          onClick={() => toggleTag(tag)}
-                          className={[
-                            "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-base transition-colors",
-                            active
-                              ? "bg-accent-soft font-semibold text-primary"
-                              : "font-medium text-foreground hover:bg-surface-muted",
-                          ].join(" ")}
-                        >
-                          <span
-                            className={[
-                              "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2",
-                              active
-                                ? "border-primary bg-primary text-primary-foreground"
-                                : "border-border-strong bg-surface",
-                            ].join(" ")}
-                            aria-hidden
-                          >
-                            {active && (
-                              <svg
-                                viewBox="0 0 16 16"
-                                className="h-3 w-3"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2.25"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <path d="M3.5 8.5 6.5 11.5 12.5 4.5" />
-                              </svg>
-                            )}
-                          </span>
-                          <span className="truncate">{tag}</span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-
-              {selectedTags.length > 0 && (
-                <div className="flex items-center justify-between border-t border-border bg-surface-muted/50 px-4 py-2.5">
-                  <p className="text-sm text-foreground-muted">
-                    {t("nSelected", { count: selectedTags.length })}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={clearTags}
-                    className="text-sm font-medium text-primary hover:underline"
-                  >
-                    {t("clearAll")}
-                  </button>
-                </div>
-              )}
+              ))}
             </div>
           )}
         </div>
-      </div>
-    </section>
+      )}
+    </div>
   );
 }
 
-type ChipProps = {
-  children: ReactNode;
-  pressed: boolean;
-  onClick: () => void;
-  ariaLabel: string;
-  ariaExpanded?: boolean;
-  ariaControls?: string;
-  subtle?: boolean;
+type CategoryGroupProps = {
+  category: TaxonomyCategory;
+  collapsed: boolean;
+  selectedSet: Set<string>;
+  onToggleCategory: () => void;
+  onToggleTag: (encoded: string) => void;
+  t: ReturnType<typeof useI18n>["t"];
 };
 
-function Chip({
-  children,
-  pressed,
-  onClick,
-  ariaLabel,
-  ariaExpanded,
-  ariaControls,
-  subtle,
-}: ChipProps) {
+function CategoryGroup({
+  category,
+  collapsed,
+  selectedSet,
+  onToggleCategory,
+  onToggleTag,
+  t,
+}: CategoryGroupProps) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={pressed}
-      aria-label={ariaLabel}
-      aria-expanded={ariaExpanded}
-      aria-controls={ariaControls}
-      className={[
-        "inline-flex h-8 items-center rounded-lg px-3 text-sm font-medium whitespace-nowrap",
-        "transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-        pressed
-          ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover"
-          : subtle
-            ? "border border-dashed border-border-strong bg-surface text-foreground-muted hover:border-primary hover:bg-accent-soft hover:text-primary"
-            : "bg-surface-muted text-foreground hover:bg-border-strong/60",
-      ].join(" ")}
+    <div className="px-1.5">
+      <button
+        type="button"
+        onClick={onToggleCategory}
+        aria-expanded={!collapsed}
+        className="flex w-full items-center gap-1 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-surface-muted"
+      >
+        <ChevronIcon
+          className={[
+            "h-3 w-3 shrink-0 text-foreground-subtle transition-transform duration-150",
+            collapsed ? "-rotate-90" : "rotate-0",
+          ].join(" ")}
+        />
+        <span className="min-w-0 flex-1 truncate text-[11px] font-semibold tracking-wide text-foreground-muted uppercase">
+          {category.label}
+        </span>
+      </button>
+
+      {!collapsed && (
+        <ul className="mb-1 space-y-0.5 pl-5">
+          {category.tags.length === 0 ? (
+            <li className="px-2 py-1 text-xs text-foreground-subtle">—</li>
+          ) : (
+            category.tags.map((tag) => {
+              const encoded = tagStorageValue(category.slug, tag.slug);
+              const active = selectedSet.has(encoded);
+              return (
+                <li key={encoded}>
+                  <button
+                    type="button"
+                    onClick={() => onToggleTag(encoded)}
+                    aria-pressed={active}
+                    aria-label={
+                      active
+                        ? t("removeFilter", { tag: tag.label })
+                        : t("filterBy", { tag: tag.label })
+                    }
+                    className={[
+                      "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-surface",
+                      active
+                        ? "bg-accent-soft font-medium text-primary"
+                        : "text-foreground-muted hover:bg-surface-muted hover:text-foreground",
+                    ].join(" ")}
+                  >
+                    <span
+                      className={[
+                        "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                        active
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border-strong bg-surface",
+                      ].join(" ")}
+                      aria-hidden
+                    >
+                      {active ? (
+                        <svg
+                          viewBox="0 0 16 16"
+                          className="h-2.5 w-2.5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M3.5 8.5 6.5 11.5 12.5 4.5" />
+                        </svg>
+                      ) : null}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">{tag.label}</span>
+                  </button>
+                </li>
+              );
+            })
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function TagIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
     >
-      {children}
-    </button>
+      <path d="M20.59 13.41 11 3H4v7l9.59 9.59a2 2 0 0 0 2.82 0l4.18-4.18a2 2 0 0 0 0-2.82Z" />
+      <circle cx="7.5" cy="7.5" r="1" fill="currentColor" stroke="none" />
+    </svg>
   );
 }
 
