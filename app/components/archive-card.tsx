@@ -2,21 +2,47 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import bunnyImageLoader from "../lib/bunny-image-loader";
+import {
+  blurHashPlaceholderFallback,
+  blurHashToDataURL,
+} from "../lib/display-metadata";
 import { useI18n } from "../lib/i18n";
 import {
+  isImageGroup,
+  itemMediaAssets,
   gridMediaSrc,
   videoThumbnailCandidates,
   withCacheBust,
 } from "../lib/media-display";
 import type { ArchiveItem } from "../lib/types";
 
+/** True only after client hydration — avoids BlurHash canvas SSR mismatch. */
+function useIsClient() {
+  return useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+}
+
 type ArchiveCardProps = {
   item: ArchiveItem;
+  /** First viewport pins: preload + high fetch priority (Pinterest above-the-fold). */
+  priority?: boolean;
 };
 
 /** Default portrait-leaning frame until natural size is known. */
 const PLACEHOLDER = { w: 800, h: 1000 };
+
+function initialDims(item: ArchiveItem): { w: number; h: number } {
+  if (item.width && item.height && item.width > 0 && item.height > 0) {
+    return { w: item.width, h: item.height };
+  }
+  if (item.mediaType === "video") return { w: 16, h: 9 };
+  return PLACEHOLDER;
+}
 
 /** How long we keep auto-retrying a Stream thumbnail before soft-fail. */
 const VIDEO_THUMB_MAX_ATTEMPTS = 18;
@@ -26,23 +52,34 @@ type VideoThumbState = "loading" | "ready" | "processing" | "failed";
 
 /**
  * Pinterest-style pin: full-width media at natural aspect ratio, tight caption.
- * Images use next/image (WebP). Videos use a native img so we can cache-bust
- * and recover once Bunny Stream finishes encoding the still frame.
+ * Images use next/image + Bunny edge resize (WebP). Videos use a native img
+ * so we can cache-bust and recover once Bunny Stream finishes the still frame.
  */
-export function ArchiveCard({ item }: ArchiveCardProps) {
+export function ArchiveCard({ item, priority = false }: ArchiveCardProps) {
   const { t } = useI18n();
   const isVideo = item.mediaType === "video";
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [dims, setDims] = useState(PLACEHOLDER);
+  const hasStoredDims = Boolean(item.width && item.height);
+  const [dims, setDims] = useState(() => initialDims(item));
+  const isClient = useIsClient();
+  // Same placeholder on server + first client paint; decode BlurHash only after mount.
+  const blurDataUrl = useMemo(() => {
+    if (isClient && item.blurHash) {
+      const url = blurHashToDataURL(item.blurHash);
+      if (url) return url;
+    }
+    return blurHashPlaceholderFallback();
+  }, [isClient, item.blurHash]);
   const imageSrc = gridMediaSrc(item);
 
   return (
     <Link
       href={`/item/${item.id}`}
+      prefetch
       className="group block w-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
-      <article className="overflow-hidden rounded-2xl bg-surface ring-1 ring-border transition-[box-shadow,transform] duration-200 group-hover:shadow-md group-hover:ring-border-strong">
+      <article className="overflow-hidden rounded-2xl bg-surface ring-1 ring-border transition-[box-shadow,transform] duration-200 group-hover:shadow-md group-hover:ring-border-strong [content-visibility:auto] [contain-intrinsic-size:auto_280px]">
         <div
           className={[
             "relative w-full overflow-hidden bg-surface-muted",
@@ -70,21 +107,34 @@ export function ArchiveCard({ item }: ArchiveCardProps) {
             <VideoThumb
               key={`${item.id}:${item.thumbnailUrl}:${item.mediaUrl}`}
               item={item}
+              priority={priority}
             />
           ) : (
             <Image
               src={imageSrc}
               alt=""
               fill
-              sizes="(max-width: 420px) 100vw, (max-width: 720px) 50vw, (max-width: 1100px) 33vw, (max-width: 1400px) 25vw, 20vw"
+              loader={bunnyImageLoader}
+              sizes="(max-width: 380px) 100vw, (max-width: 620px) 50vw, (max-width: 860px) 33vw, (max-width: 1100px) 25vw, (max-width: 1400px) 20vw, (max-width: 1680px) 16vw, 14vw"
               quality={72}
+              // Next 16: `preload` replaces deprecated `priority`.
+              preload={priority}
+              fetchPriority={priority ? "high" : "auto"}
+              decoding="async"
+              placeholder="blur"
+              blurDataURL={blurDataUrl}
               className={[
                 "object-cover object-center transition-[transform,opacity] duration-300 ease-out will-change-transform group-hover:scale-[1.03]",
                 loaded ? "opacity-100" : "opacity-0",
               ].join(" ")}
               onLoad={(event) => {
                 const img = event.currentTarget;
-                if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                // Prefer stored API dims for layout; only measure when missing.
+                if (
+                  !hasStoredDims &&
+                  img.naturalWidth > 0 &&
+                  img.naturalHeight > 0
+                ) {
                   setDims({ w: img.naturalWidth, h: img.naturalHeight });
                 }
                 setLoaded(true);
@@ -101,6 +151,17 @@ export function ArchiveCard({ item }: ArchiveCardProps) {
               {t("previewUnavailable")}
             </div>
           )}
+
+          {/* Image group: homepage shows cover only + photo count badge */}
+          {!isVideo && isImageGroup(item) ? (
+            <span
+              className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-full bg-surface/95 px-2 py-1 text-[11px] font-medium text-primary shadow-sm ring-1 ring-border backdrop-blur-sm"
+              aria-hidden
+            >
+              <StackBadgeIcon className="h-3 w-3" />
+              {itemMediaAssets(item).length}
+            </span>
+          ) : null}
         </div>
 
         <div className="px-2.5 py-2">
@@ -109,7 +170,13 @@ export function ArchiveCard({ item }: ArchiveCardProps) {
           </h2>
         </div>
       </article>
-      <span className="sr-only">{isVideo ? t("video") : t("image")}</span>
+      <span className="sr-only">
+        {isVideo
+          ? t("video")
+          : isImageGroup(item)
+            ? t("photoCount", { count: itemMediaAssets(item).length })
+            : t("image")}
+      </span>
     </Link>
   );
 }
@@ -117,7 +184,13 @@ export function ArchiveCard({ item }: ArchiveCardProps) {
 /**
  * Isolated so remounting via `key` resets retry state when Stream URLs change.
  */
-function VideoThumb({ item }: { item: ArchiveItem }) {
+function VideoThumb({
+  item,
+  priority = false,
+}: {
+  item: ArchiveItem;
+  priority?: boolean;
+}) {
   const { t } = useI18n();
   const [state, setState] = useState<VideoThumbState>(
     () => (videoThumbnailCandidates(item).length === 0 ? "failed" : "loading"),
@@ -200,6 +273,9 @@ function VideoThumb({ item }: { item: ArchiveItem }) {
           key={videoSrc}
           src={videoSrc}
           alt=""
+          loading={priority ? "eager" : "lazy"}
+          decoding="async"
+          fetchPriority={priority ? "high" : "auto"}
           className={[
             "absolute inset-0 h-full w-full object-cover object-center transition-[transform,opacity] duration-300 ease-out will-change-transform group-hover:scale-[1.03]",
             ready ? "opacity-100" : "opacity-0",
@@ -285,6 +361,24 @@ function SpinnerIcon({ className }: { className?: string }) {
         strokeWidth="2"
         strokeLinecap="round"
       />
+    </svg>
+  );
+}
+
+function StackBadgeIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="6" y="6" width="12" height="12" rx="1.5" />
+      <path d="M9 3h9a2 2 0 0 1 2 2v9" />
     </svg>
   );
 }

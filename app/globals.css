@@ -1,11 +1,13 @@
 @import "tailwindcss";
 
 /*
-  My Collection — white + light purple design tokens.
-  Light theme only: personal archive brand, not system dark mode.
+  My Collection — purple brand design tokens.
+  Light: soft white + lavender. Dark: deep purple surfaces + violet accents.
 */
 
 :root {
+  color-scheme: light;
+
   /* Surfaces */
   --background: #faf8ff;
   --surface: #ffffff;
@@ -34,6 +36,40 @@
   --success: #059669;
   --danger: #dc2626;
   --warning: #d97706;
+}
+
+/* Deep purple dark theme — violet atmosphere, not near-black */
+.dark {
+  color-scheme: dark;
+
+  /* Surfaces: richer purple wash (homepage reads purple, not black) */
+  --background: #1a1030;
+  --surface: #24163d;
+  --surface-muted: #2e1c4d;
+  --surface-elevated: #38245c;
+
+  /* Brand purple — brighter for contrast on dark */
+  --primary: #b8a0ff;
+  --primary-hover: #cfc0ff;
+  --primary-foreground: #1a0b2e;
+  --accent: #9b7ef0;
+  --accent-soft: #3a2460;
+  --accent-muted: #8b5cf6;
+
+  /* Text */
+  --foreground: #f5f0ff;
+  --foreground-muted: #c4b5e0;
+  --foreground-subtle: #9a88c4;
+
+  /* Lines & focus */
+  --border: #4a3470;
+  --border-strong: #6b4fa0;
+  --ring: #b8a0ff;
+
+  /* Feedback — slightly lifted for dark surfaces */
+  --success: #34d399;
+  --danger: #f87171;
+  --warning: #fbbf24;
 }
 
 @theme inline {
@@ -65,10 +101,18 @@
   --font-mono: var(--font-geist-mono);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+/* Full-bleed root: no default browser margin/padding */
+@layer base {
+  html,
+  body {
+    @apply m-0 p-0;
+  }
+
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-geist-sans), system-ui, sans-serif;
+  }
 }
 
 /* Soft purple selection to match brand */

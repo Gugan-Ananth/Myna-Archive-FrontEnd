@@ -1,92 +1,247 @@
 import { apiFetch } from "./client";
+import {
+  buildQueryCacheKey,
+  cachedQuery,
+  invalidateQueryCache,
+  isBrowser,
+  setQueryCache,
+} from "./query-cache";
+import { revalidateArchiveDataCache } from "./revalidate-archive";
 import type {
   ArchiveItem,
   CreateArchiveItemInput,
   ListArchiveItemsParams,
   PaginatedArchiveItems,
+  TagSummary,
+  TagsListResponse,
   UpdateArchiveItemInput,
 } from "./types";
 
-/** List archive items with optional search, tag AND-filters, media type, pagination. */
-export function listArchiveItems(
-  params: ListArchiveItemsParams = {},
-  options?: { cache?: RequestCache; next?: NextFetchRequestConfig },
-): Promise<PaginatedArchiveItems> {
-  return apiFetch<PaginatedArchiveItems>("/archive-items", {
-    query: {
-      q: params.q,
-      tag: params.tag,
-      mediaType: params.mediaType,
-      page: params.page,
-      pageSize: params.pageSize,
-    },
-    cache: options?.cache ?? "no-store",
-    next: options?.next,
-  });
-}
+/** List results stay hot briefly; tags change less often. */
+const LIST_TTL_MS = 45_000;
+const LIST_STALE_MS = 5 * 60_000;
+const TAGS_TTL_MS = 2 * 60_000;
+const TAGS_STALE_MS = 15 * 60_000;
 
-export function getArchiveItem(
-  id: string,
-  options?: { cache?: RequestCache; next?: NextFetchRequestConfig },
-): Promise<ArchiveItem> {
-  return apiFetch<ArchiveItem>(`/archive-items/${id}`, {
-    cache: options?.cache ?? "no-store",
-    next: options?.next,
-  });
-}
+const TAGS_CACHE_KEY = buildQueryCacheKey("tags");
 
-export function createArchiveItem(
-  input: CreateArchiveItemInput,
-  options?: { signal?: AbortSignal },
-): Promise<ArchiveItem> {
-  return apiFetch<ArchiveItem>("/archive-items", {
-    method: "POST",
-    body: input,
-    signal: options?.signal,
-  });
-}
+/** Server fetch defaults: short revalidate instead of always no-store. */
+const SERVER_LIST_REVALIDATE = 30;
+const SERVER_TAGS_REVALIDATE = 120;
 
-export function updateArchiveItem(
-  id: string,
-  input: UpdateArchiveItemInput,
-): Promise<ArchiveItem> {
-  return apiFetch<ArchiveItem>(`/archive-items/${id}`, {
-    method: "PATCH",
-    body: input,
-  });
-}
+/** Next.js Data Cache tags — purged via `revalidateArchiveDataCache` on mutations. */
+const ARCHIVE_ITEMS_TAG = "archive-items";
+const TAGS_TAG = "tags";
 
-export function deleteArchiveItem(id: string): Promise<void> {
-  return apiFetch<void>(`/archive-items/${id}`, {
-    method: "DELETE",
-    empty: true,
+function listCacheKey(params: ListArchiveItemsParams): string {
+  return buildQueryCacheKey("list", {
+    q: params.q,
+    tag: params.tag,
+    mediaType: params.mediaType,
+    page: params.page ?? 1,
+    pageSize: params.pageSize ?? 20,
   });
 }
 
 /**
- * Unique tags across the collection (for filter chips).
- * Backend has no dedicated tags route — derived from list pages.
+ * List archive items with optional search, tag AND-filters, media type, pagination.
+ * Browser: memory cache + stale-while-revalidate.
+ * Server: fetch with short revalidate (overrideable).
  */
+export async function listArchiveItems(
+  params: ListArchiveItemsParams = {},
+  options?: { cache?: RequestCache; next?: NextFetchRequestConfig },
+): Promise<PaginatedArchiveItems> {
+  const key = listCacheKey(params);
+
+  const fetchList = () =>
+    apiFetch<PaginatedArchiveItems>("/archive-items", {
+      query: {
+        q: params.q,
+        tag: params.tag,
+        mediaType: params.mediaType,
+        page: params.page,
+        pageSize: params.pageSize,
+      },
+      cache:
+        options?.cache ??
+        (isBrowser() ? "no-store" : undefined),
+      next:
+        options?.next ??
+        (isBrowser()
+          ? undefined
+          : {
+              revalidate: SERVER_LIST_REVALIDATE,
+              tags: [ARCHIVE_ITEMS_TAG],
+            }),
+    });
+
+  if (isBrowser()) {
+    return cachedQuery(key, fetchList, {
+      ttlMs: LIST_TTL_MS,
+      staleMs: LIST_STALE_MS,
+      revalidateInBackground: true,
+    });
+  }
+
+  return fetchList();
+}
+
+export async function getArchiveItem(
+  id: string,
+  options?: { cache?: RequestCache; next?: NextFetchRequestConfig },
+): Promise<ArchiveItem> {
+  const key = buildQueryCacheKey("item", { id });
+
+  const fetchItem = () =>
+    apiFetch<ArchiveItem>(`/archive-items/${id}`, {
+      cache:
+        options?.cache ??
+        (isBrowser() ? "no-store" : undefined),
+      next:
+        options?.next ??
+        (isBrowser()
+          ? undefined
+          : {
+              revalidate: SERVER_LIST_REVALIDATE,
+              tags: [ARCHIVE_ITEMS_TAG],
+            }),
+    });
+
+  if (isBrowser()) {
+    return cachedQuery(key, fetchItem, {
+      ttlMs: LIST_TTL_MS,
+      staleMs: LIST_STALE_MS,
+    });
+  }
+
+  return fetchItem();
+}
+
+export async function createArchiveItem(
+  input: CreateArchiveItemInput,
+  options?: { signal?: AbortSignal },
+): Promise<ArchiveItem> {
+  const item = await apiFetch<ArchiveItem>("/archive-items", {
+    method: "POST",
+    body: input,
+    signal: options?.signal,
+  });
+  await invalidateArchiveCaches();
+  return item;
+}
+
+export async function updateArchiveItem(
+  id: string,
+  input: UpdateArchiveItemInput,
+): Promise<ArchiveItem> {
+  const item = await apiFetch<ArchiveItem>(`/archive-items/${id}`, {
+    method: "PATCH",
+    body: input,
+  });
+  await invalidateArchiveCaches();
+  if (isBrowser()) {
+    setQueryCache(buildQueryCacheKey("item", { id }), item, {
+      ttlMs: LIST_TTL_MS,
+      staleMs: LIST_STALE_MS,
+    });
+  }
+  return item;
+}
+
+export async function deleteArchiveItem(id: string): Promise<void> {
+  await apiFetch<void>(`/archive-items/${id}`, {
+    method: "DELETE",
+    empty: true,
+  });
+  // Nest already deleted Bunny Storage/Stream assets; drop every local cache
+  // so list/detail cannot resurrect deleted media URLs.
+  await invalidateArchiveCaches();
+}
+
+/**
+ * Collection tag vocabulary with usage counts (`GET /api/v1/tags` — ADR 0008).
+ * Cached aggressively; one round-trip replaces paging the whole archive.
+ */
+export async function listTagSummaries(
+  options?: { cache?: RequestCache; next?: NextFetchRequestConfig },
+): Promise<TagSummary[]> {
+  const fetchTags = async (): Promise<TagSummary[]> => {
+    const result = await apiFetch<TagsListResponse>("/tags", {
+      cache:
+        options?.cache ??
+        (isBrowser() ? "no-store" : undefined),
+      next:
+        options?.next ??
+        (isBrowser()
+          ? undefined
+          : {
+              revalidate: SERVER_TAGS_REVALIDATE,
+              tags: [TAGS_TAG],
+            }),
+    });
+    return result.data ?? [];
+  };
+
+  if (isBrowser()) {
+    return cachedQuery(TAGS_CACHE_KEY, fetchTags, {
+      ttlMs: TAGS_TTL_MS,
+      staleMs: TAGS_STALE_MS,
+      revalidateInBackground: true,
+    });
+  }
+
+  return fetchTags();
+}
+
+/** Tag strings only (ordered as returned by the API: count DESC, tag ASC). */
 export async function getAllTags(
   options?: { cache?: RequestCache; next?: NextFetchRequestConfig },
 ): Promise<string[]> {
-  const tags = new Set<string>();
-  let page = 1;
-  let totalPages = 1;
-  const maxPages = 20;
+  const summaries = await listTagSummaries(options);
+  return summaries.map((entry) => entry.tag);
+}
 
-  while (page <= totalPages && page <= maxPages) {
-    const result = await listArchiveItems(
-      { page, pageSize: 100 },
-      options,
-    );
-    for (const item of result.data) {
-      for (const tag of item.tags) tags.add(tag);
-    }
-    totalPages = result.meta.totalPages || 0;
-    if (totalPages === 0) break;
-    page += 1;
+/**
+ * Call after create / update / delete so home filters and SSR stay correct.
+ * - Browser: clear in-memory list/tag/item query cache.
+ * - Next: expire Data Cache tags so `router.refresh()` cannot re-seed deleted items.
+ */
+export async function invalidateArchiveCaches(): Promise<void> {
+  if (isBrowser()) {
+    invalidateQueryCache("list");
+    invalidateQueryCache("tags");
+    invalidateQueryCache("taxonomy");
+    invalidateQueryCache("item");
   }
 
-  return [...tags].sort((a, b) => a.localeCompare(b));
+  try {
+    await revalidateArchiveDataCache();
+  } catch {
+    // Server Action may be unavailable outside the Next request path; browser
+    // cache clear above is still enough for the active session.
+  }
+}
+
+/**
+ * Seed the client list cache from SSR payload so the first client filter
+ * can re-use data without an immediate network round-trip.
+ */
+export function seedListCache(
+  params: ListArchiveItemsParams,
+  data: PaginatedArchiveItems,
+): void {
+  if (!isBrowser()) return;
+  setQueryCache(listCacheKey(params), data, {
+    ttlMs: LIST_TTL_MS,
+    staleMs: LIST_STALE_MS,
+  });
+}
+
+export function seedTagsCache(summaries: TagSummary[]): void {
+  if (!isBrowser()) return;
+  setQueryCache(TAGS_CACHE_KEY, summaries, {
+    ttlMs: TAGS_TTL_MS,
+    staleMs: TAGS_STALE_MS,
+  });
 }

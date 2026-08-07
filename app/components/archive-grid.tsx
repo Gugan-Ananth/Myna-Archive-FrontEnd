@@ -11,6 +11,8 @@ type ArchiveGridProps = {
   emptyMessage?: string;
   /** Override the secondary empty-state line; null hides it. */
   emptyHint?: string | null;
+  /** How many pins to preload (above-the-fold). */
+  priorityCount?: number;
 };
 
 /**
@@ -22,15 +24,21 @@ export function ArchiveGrid({
   items,
   emptyMessage,
   emptyHint,
+  priorityCount = 8,
 }: ArchiveGridProps) {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const columnCount = useColumnCount(containerRef);
 
-  const columns = useMemo(
-    () => distributeIntoColumns(items, columnCount),
-    [items, columnCount],
-  );
+  const { columns, priorityIds } = useMemo(() => {
+    const priority = new Set(
+      items.slice(0, Math.max(0, priorityCount)).map((item) => item.id),
+    );
+    return {
+      columns: distributeIntoColumns(items, columnCount),
+      priorityIds: priority,
+    };
+  }, [items, columnCount, priorityCount]);
 
   if (items.length === 0) {
     if (emptyMessage === " ") {
@@ -56,16 +64,19 @@ export function ArchiveGrid({
   return (
     <div
       ref={containerRef}
-      className="flex w-full items-start gap-3 sm:gap-3.5"
+      className="flex w-full items-start gap-2 sm:gap-2.5 lg:gap-3"
     >
       {columns.map((column, columnIndex) => (
         <ul
           key={columnIndex}
-          className="flex min-w-0 flex-1 list-none flex-col gap-3 sm:gap-3.5"
+          className="flex min-w-0 flex-1 list-none flex-col gap-2 sm:gap-2.5 lg:gap-3"
         >
           {column.map((item) => (
             <li key={item.id} className="w-full">
-              <ArchiveCard item={item} />
+              <ArchiveCard
+                item={item}
+                priority={priorityIds.has(item.id)}
+              />
             </li>
           ))}
         </ul>
@@ -83,11 +94,14 @@ function useColumnCount(containerRef: React.RefObject<HTMLDivElement | null>) {
     if (!el) return;
 
     function update(width: number) {
-      // Denser than a fixed 4-col grid; still readable on large screens.
-      if (width >= 1400) setCount(5);
-      else if (width >= 1100) setCount(4);
-      else if (width >= 720) setCount(3);
-      else if (width >= 420) setCount(2);
+      // Full-bleed pinboard: more columns earlier so the wall fills the viewport
+      // instead of a narrow centered strip.
+      if (width >= 1680) setCount(7);
+      else if (width >= 1400) setCount(6);
+      else if (width >= 1100) setCount(5);
+      else if (width >= 860) setCount(4);
+      else if (width >= 620) setCount(3);
+      else if (width >= 380) setCount(2);
       else setCount(1);
     }
 
@@ -122,8 +136,14 @@ function distributeIntoColumns(
       if (heights[i] < heights[shortest]) shortest = i;
     }
     columns[shortest].push(item);
-    // Relative units: videos ~16:9, images default portrait-ish until load.
-    heights[shortest] += item.mediaType === "video" ? 0.62 : 1.15;
+    // Prefer stored display dimensions (ADR 0008) for tight masonry packing.
+    if (item.width && item.height && item.width > 0 && item.height > 0) {
+      heights[shortest] += item.height / item.width;
+    } else if (item.mediaType === "video") {
+      heights[shortest] += 9 / 16;
+    } else {
+      heights[shortest] += 1.15; // portrait-ish default until measured
+    }
     // Title row under the media.
     heights[shortest] += 0.18;
   }

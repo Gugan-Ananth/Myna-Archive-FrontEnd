@@ -1,13 +1,15 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { ApiError, deleteArchiveItem, updateArchiveItem } from "../lib/api";
 import { useI18n } from "../lib/i18n";
-import { detailMediaSrc } from "../lib/media-display";
+import { itemMediaAssets } from "../lib/media-display";
+import { formatTagLabel } from "../lib/taxonomy";
 import type { ArchiveItem } from "../lib/types";
 import { BackButton } from "./back-button";
-import { ImageZoomViewer } from "./image-zoom-viewer";
+import { CategoryTagPicker } from "./category-tag-picker";
+import { ImageGroupCarousel } from "./image-group-carousel";
 import { RatingInput } from "./rating-input";
 import { VideoPlayer } from "./video-player";
 
@@ -27,19 +29,27 @@ export function ItemDetail({ item }: ItemDetailProps) {
   const [saved, setSaved] = useState(item);
   const [draft, setDraft] = useState(item);
   const [editing, setEditing] = useState(false);
-  const [tagInput, setTagInput] = useState("");
   const [panelOpen, setPanelOpen] = useState(true);
   const [ratingValid, setRatingValid] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Active slide in an image group (1-based label uses +1). */
+  const [groupSlide, setGroupSlide] = useState({ index: 0, total: 0 });
+
+  const handleGroupIndexChange = useCallback((index: number, total: number) => {
+    setGroupSlide((prev) =>
+      prev.index === index && prev.total === total
+        ? prev
+        : { index, total },
+    );
+  }, []);
 
   const isVideo = draft.mediaType === "video";
   const busy = saving || deleting;
 
   function startEdit() {
     setDraft(saved);
-    setTagInput("");
     setEditing(true);
     setRatingValid(true);
     setError(null);
@@ -119,40 +129,27 @@ export function ItemDetail({ item }: ItemDetailProps) {
     }
   }
 
-  function addTag() {
-    const cleaned = tagInput.trim().replace(/^#/, "").toLowerCase();
-    if (!cleaned || draft.tags.includes(cleaned)) {
-      setTagInput("");
-      return;
-    }
-    setDraft((d) => ({ ...d, tags: [...d.tags, cleaned] }));
-    setTagInput("");
-  }
-
-  function removeTag(tag: string) {
-    setDraft((d) => ({ ...d, tags: d.tags.filter((t) => t !== tag) }));
-  }
-
-  // Images: original CDN file (jpg/png/…), no optimizer / WebP re-encode.
-  const imageSrc = detailMediaSrc(draft);
+  const mediaAssets = itemMediaAssets(draft);
+  const isGroup = !isVideo && mediaAssets.length > 1;
 
   return (
-    <div className="relative flex min-h-full flex-1 flex-col bg-neutral-950 lg:flex-row">
-      {/* Media stage — full bleed; portrait letterboxes, landscape fills width */}
-      <div className="relative min-h-[min(70vh,100%)] min-w-0 flex-1 lg:min-h-full">
+    <div className="relative flex min-h-0 flex-1 flex-col bg-neutral-950 lg:flex-row">
+      {/* Media stage — must establish a real height box for absolute children */}
+      <div className="relative min-h-[70vh] min-w-0 flex-1 lg:min-h-0">
         {isVideo ? (
           <VideoPlayer
             key={draft.mediaUrl}
             src={draft.mediaUrl}
             poster={draft.thumbnailUrl}
             title={draft.name}
-            className="absolute inset-0"
+            className="absolute inset-0 h-full w-full"
           />
         ) : (
-          <ImageZoomViewer
-            src={imageSrc}
-            alt={draft.name}
-            className="absolute inset-0"
+          <ImageGroupCarousel
+            assets={mediaAssets}
+            title={draft.name}
+            className="absolute inset-0 h-full w-full"
+            onIndexChange={handleGroupIndexChange}
           />
         )}
 
@@ -168,6 +165,22 @@ export function ItemDetail({ item }: ItemDetailProps) {
                 {t("video")}
               </span>
             )}
+            {isGroup && (
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full bg-surface/90 px-2.5 py-1.5 text-xs font-medium text-primary shadow-sm ring-1 ring-border backdrop-blur-md"
+                title={t("photoCount", { count: mediaAssets.length })}
+              >
+                <StackIcon className="h-3.5 w-3.5 shrink-0" />
+                <span className="tabular-nums">
+                  {t("imagePosition", {
+                    n: groupSlide.total
+                      ? groupSlide.index + 1
+                      : 1,
+                    total: groupSlide.total || mediaAssets.length,
+                  })}
+                </span>
+              </span>
+            )}
             <button
               type="button"
               onClick={() => setPanelOpen((open) => !open)}
@@ -180,12 +193,11 @@ export function ItemDetail({ item }: ItemDetailProps) {
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               ].join(" ")}
             >
-              <ChevronIcon
-                className={[
-                  "h-5 w-5 transition-transform duration-200",
-                  panelOpen ? "" : "rotate-180",
-                ].join(" ")}
-              />
+              {panelOpen ? (
+                <PanelCloseIcon className="h-5 w-5" />
+              ) : (
+                <PanelOpenIcon className="h-5 w-5" />
+              )}
             </button>
           </div>
         </div>
@@ -257,55 +269,29 @@ export function ItemDetail({ item }: ItemDetailProps) {
             <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-foreground-muted">
               {t("tags")}
             </p>
-            <div className="flex flex-wrap gap-1.5">
-              {draft.tags.length === 0 && !editing && (
-                <span className="text-sm text-foreground-subtle">
-                  {t("noTags")}
-                </span>
-              )}
-              {draft.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2.5 py-1 text-sm font-medium text-primary"
-                >
-                  {tag}
-                  {editing && (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => removeTag(tag)}
-                      className="rounded-full hover:bg-primary/15 disabled:opacity-50"
-                      aria-label={t("removeTag", { tag })}
+            {editing ? (
+              <CategoryTagPicker
+                value={draft.tags}
+                onChange={(tags) => setDraft((d) => ({ ...d, tags }))}
+                disabled={busy}
+              />
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {draft.tags.length === 0 ? (
+                  <span className="text-sm text-foreground-subtle">
+                    {t("noTags")}
+                  </span>
+                ) : (
+                  draft.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center rounded-full bg-accent-soft px-2.5 py-1 text-sm font-medium text-primary"
+                      title={tag}
                     >
-                      ×
-                    </button>
-                  )}
-                </span>
-              ))}
-            </div>
-            {editing && (
-              <div className="mt-2 flex gap-2">
-                <input
-                  value={tagInput}
-                  disabled={busy}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addTag();
-                    }
-                  }}
-                  placeholder={t("addTagEllipsis")}
-                  className="min-w-0 flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
-                />
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={addTag}
-                  className="rounded-xl bg-surface-muted px-3 text-sm font-medium text-foreground hover:bg-accent-soft disabled:opacity-50"
-                >
-                  {t("addTagButton")}
-                </button>
+                      {formatTagLabel(tag)}
+                    </span>
+                  ))
+                )}
               </div>
             )}
           </div>
@@ -385,19 +371,42 @@ export function ItemDetail({ item }: ItemDetailProps) {
   );
 }
 
-function ChevronIcon({ className }: { className?: string }) {
+/** Sidebar open — distinct from carousel / back chevrons. */
+function PanelOpenIcon({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 24 24"
       className={className}
       fill="none"
       stroke="currentColor"
-      strokeWidth="2.25"
+      strokeWidth="1.75"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden
     >
-      <path d="m9 18 6-6-6-6" />
+      <rect x="3" y="4" width="18" height="16" rx="2.5" />
+      <path d="M14 4v16" />
+      <path d="m9.5 10 2 2-2 2" />
+    </svg>
+  );
+}
+
+/** Sidebar close — same family as open, not a lone left/right chevron. */
+function PanelCloseIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2.5" />
+      <path d="M14 4v16" />
+      <path d="m11.5 10-2 2 2 2" />
     </svg>
   );
 }
@@ -434,6 +443,25 @@ function FilmIcon({ className }: { className?: string }) {
     >
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <path d="M7 5v14M17 5v14M3 9.5h4M3 14.5h4M17 9.5h4M17 14.5h4" />
+    </svg>
+  );
+}
+
+function StackIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 2 2 7l10 5 10-5-10-5z" />
+      <path d="m2 12 10 5 10-5" />
+      <path d="m2 17 10 5 10-5" />
     </svg>
   );
 }

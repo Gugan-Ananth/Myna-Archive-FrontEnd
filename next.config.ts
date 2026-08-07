@@ -2,9 +2,14 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   images: {
-    // Homepage cards go through next/image → prefer modern formats for speed.
-    // Detail view uses a native <img> with the original jpg/png (not this pipeline).
+    // Homepage pins use a Bunny edge loader (see archive-card); keep modern
+    // formats for any default-loader remote images.
     formats: ["image/webp", "image/avif"],
+    // Grid columns are ~20–50vw — smaller breakpoints cut wasted bytes.
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920],
+    imageSizes: [96, 128, 256, 320, 384, 480, 640],
+    // Optimized (or CDN) thumbs are immutable enough to cache longer.
+    minimumCacheTTL: 60 * 60 * 24 * 7, // 7 days
     remotePatterns: [
       {
         protocol: "https",

@@ -51,7 +51,7 @@ export function LanguageSwitcher() {
           "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
           "border border-border bg-surface text-foreground shadow-sm",
           "transition-all duration-200 hover:border-border-strong hover:bg-accent-soft hover:text-primary",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           open ? "border-primary bg-accent-soft text-primary" : "",
         ].join(" ")}
       >

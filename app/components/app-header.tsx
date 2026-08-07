@@ -6,10 +6,11 @@ import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../lib/i18n";
 import { LanguageSwitcher } from "./language-switcher";
 import { SearchBar } from "./search-bar";
+import { TagChipBar } from "./tag-chip-bar";
+import { ThemeToggle } from "./theme-toggle";
 
 /**
- * Top bar: logo (left) · search (center) · Add + language (far right).
- * Tag filtering lives above the home grid.
+ * Top bar: logo (left) · search + tags (center) · Add + theme + language (right).
  */
 export function AppHeader() {
   const { t } = useI18n();
@@ -31,10 +32,9 @@ export function AppHeader() {
   function pushParams(next: URLSearchParams) {
     const qs = next.toString();
     const href = qs ? `/?${qs}` : "/";
+    // Soft URL update only — HomeView re-fetches via client cache (no full RSC refresh).
     if (pathname === "/") {
       router.replace(href, { scroll: false });
-      // Keep the server home payload aligned with the search query.
-      router.refresh();
     } else {
       router.push(href);
     }
@@ -95,8 +95,8 @@ export function AppHeader() {
           </span>
         </Link>
 
-        <div className="flex min-w-0 w-full justify-center">
-          <div className="w-full max-w-2xl">
+        <div className="flex min-w-0 w-full items-center justify-center gap-2">
+          <div className="min-w-0 w-full max-w-2xl">
             <SearchBar
               value={query}
               onChange={handleSearchChange}
@@ -104,15 +104,17 @@ export function AppHeader() {
               onClear={handleSearchClear}
             />
           </div>
+          <TagChipBar variant="header" />
         </div>
 
         <div className="flex items-center gap-2 justify-self-end">
           <Link
             href="/create"
-            className="inline-flex h-10 shrink-0 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground shadow-sm transition-all duration-200 hover:bg-primary-hover hover:shadow-md active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="inline-flex h-10 shrink-0 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground shadow-sm transition-all duration-200 hover:bg-primary-hover hover:shadow-md active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             {t("add")}
           </Link>
+          <ThemeToggle />
           <LanguageSwitcher />
         </div>
       </div>
