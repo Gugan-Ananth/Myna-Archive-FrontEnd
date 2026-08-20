@@ -1,16 +1,24 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
-import { ApiError, deleteArchiveItem, updateArchiveItem } from "../lib/api";
+import { useCallback, useEffect, useState } from "react";
+import {
+  ApiError,
+  deleteArchiveItem,
+  listStoryChapters,
+  updateArchiveItem,
+} from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { itemMediaAssets } from "../lib/media-display";
+import { storyCardBlurb } from "../lib/story-content";
 import { formatTagLabel } from "../lib/taxonomy";
 import type { ArchiveItem } from "../lib/types";
 import { BackButton } from "./back-button";
 import { CategoryTagPicker } from "./category-tag-picker";
 import { ImageGroupCarousel } from "./image-group-carousel";
 import { RatingInput } from "./rating-input";
+import { StatusCallout } from "./status-callout";
 import { VideoPlayer } from "./video-player";
 
 type ItemDetailProps = {
@@ -29,13 +37,14 @@ export function ItemDetail({ item }: ItemDetailProps) {
   const [saved, setSaved] = useState(item);
   const [draft, setDraft] = useState(item);
   const [editing, setEditing] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(false);
   const [ratingValid, setRatingValid] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Active slide in an image group (1-based label uses +1). */
   const [groupSlide, setGroupSlide] = useState({ index: 0, total: 0 });
+  const [chapters, setChapters] = useState<ArchiveItem[]>([]);
 
   const handleGroupIndexChange = useCallback((index: number, total: number) => {
     setGroupSlide((prev) =>
@@ -46,7 +55,23 @@ export function ItemDetail({ item }: ItemDetailProps) {
   }, []);
 
   const isVideo = draft.mediaType === "video";
+  const isStory = draft.mediaType === "story";
   const busy = saving || deleting;
+
+  useEffect(() => {
+    if (item.mediaType !== "story") return;
+    let cancelled = false;
+    void listStoryChapters(item.id)
+      .then((data) => {
+        if (!cancelled) setChapters(data);
+      })
+      .catch(() => {
+        if (!cancelled) setChapters([item]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [item]);
 
   function startEdit() {
     setDraft(saved);
@@ -106,8 +131,27 @@ export function ItemDetail({ item }: ItemDetailProps) {
 
   async function onDelete() {
     if (busy) return;
+
+    let series = chapters;
+    if (isStory) {
+      try {
+        series = await listStoryChapters(saved.id);
+      } catch {
+        series = chapters.length > 0 ? chapters : [saved];
+      }
+    }
+    const others = isStory
+      ? series.filter((chapter) => chapter.id !== saved.id)
+      : [];
     const confirmed = window.confirm(
-      t("deleteConfirm", { name: draft.name }),
+      isStory
+        ? others.length > 0
+          ? t("deleteChapterConfirm", {
+              name: saved.name,
+              n: saved.chapterNumber ?? 1,
+            })
+          : t("deleteLastChapterConfirm", { name: saved.name })
+        : t("deleteConfirm", { name: draft.name }),
     );
     if (!confirmed) return;
 
@@ -115,7 +159,14 @@ export function ItemDetail({ item }: ItemDetailProps) {
     setError(null);
     try {
       await deleteArchiveItem(saved.id);
-      router.push("/");
+      if (isStory && others.length > 0) {
+        const next = [...others].sort(
+          (a, b) => (a.chapterNumber ?? 1) - (b.chapterNumber ?? 1),
+        )[0];
+        router.push(`/item/${next?.id ?? ""}`);
+      } else {
+        router.push(isStory ? "/?view=stories" : "/");
+      }
       router.refresh();
     } catch (err) {
       setDeleting(false);
@@ -130,77 +181,119 @@ export function ItemDetail({ item }: ItemDetailProps) {
   }
 
   const mediaAssets = itemMediaAssets(draft);
-  const isGroup = !isVideo && mediaAssets.length > 1;
+  const isGroup = !isVideo && !isStory && mediaAssets.length > 1;
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col bg-neutral-950 lg:flex-row">
-      {/* Media stage — must establish a real height box for absolute children */}
-      <div className="relative min-h-[70vh] min-w-0 flex-1 lg:min-h-0">
-        {isVideo ? (
-          <VideoPlayer
-            key={draft.mediaUrl}
-            src={draft.mediaUrl}
-            poster={draft.thumbnailUrl}
-            title={draft.name}
-            className="absolute inset-0 h-full w-full"
-          />
+    <div
+      className={[
+        "relative flex min-h-0 flex-1 flex-col lg:flex-row",
+        isStory ? "" : "bg-neutral-950",
+      ].join(" ")}
+    >
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        {isStory ? (
+          <>
+            <header className="relative z-30 flex w-full shrink-0 items-center justify-between gap-3 px-5 py-3 sm:px-8 lg:px-10">
+              <BackButton />
+              <DetailsToggle
+                open={panelOpen}
+                hideLabel={t("hideDetails")}
+                showLabel={t("showDetails")}
+                onToggle={() => setPanelOpen((open) => !open)}
+              />
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="w-full px-5 pb-24 pt-2 sm:px-8 lg:px-10">
+                {chapters.length > 1 ? (
+                  <nav
+                    aria-label={t("storyChapters")}
+                    className="mb-5 flex flex-wrap gap-1.5"
+                  >
+                    {chapters.map((chapter) => {
+                      const active = chapter.id === draft.id;
+                      return (
+                        <Link
+                          key={chapter.id}
+                          href={`/item/${chapter.id}`}
+                          className={[
+                            "inline-flex h-8 items-center rounded-full px-3 text-sm font-medium transition-colors",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            active
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-surface text-foreground-muted ring-1 ring-border hover:bg-accent-soft hover:text-primary",
+                          ].join(" ")}
+                        >
+                          {t("storyChapter")} {chapter.chapterNumber ?? 1}
+                        </Link>
+                      );
+                    })}
+                  </nav>
+                ) : null}
+                <h1 className="w-full text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-[2.6rem] lg:leading-[1.15]">
+                  {draft.name}
+                </h1>
+                <article
+                  className="story-read mt-8 w-full sm:mt-10"
+                  dangerouslySetInnerHTML={{ __html: draft.bodyHtml ?? "" }}
+                />
+              </div>
+            </div>
+          </>
         ) : (
-          <ImageGroupCarousel
-            assets={mediaAssets}
-            title={draft.name}
-            className="absolute inset-0 h-full w-full"
-            onIndexChange={handleGroupIndexChange}
-          />
+          <>
+            {isVideo ? (
+              <VideoPlayer
+                key={draft.mediaUrl}
+                src={draft.mediaUrl}
+                poster={draft.thumbnailUrl}
+                title={draft.name}
+                className="absolute inset-0 h-full w-full"
+              />
+            ) : (
+              <ImageGroupCarousel
+                assets={mediaAssets}
+                title={draft.name}
+                className="absolute inset-0 h-full w-full"
+                onIndexChange={handleGroupIndexChange}
+              />
+            )}
+            <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start justify-between p-3 sm:p-4">
+              <div className="pointer-events-auto">
+                <BackButton />
+              </div>
+              <div className="pointer-events-auto flex items-center gap-2">
+                {isVideo && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-surface/90 px-2.5 py-1.5 text-xs font-medium text-primary shadow-sm ring-1 ring-border backdrop-blur-md">
+                    <FilmIcon className="h-3.5 w-3.5" />
+                    {t("video")}
+                  </span>
+                )}
+                {isGroup && (
+                  <span
+                    className="inline-flex items-center gap-1.5 rounded-full bg-surface/90 px-2.5 py-1.5 text-xs font-medium text-primary shadow-sm ring-1 ring-border backdrop-blur-md"
+                    title={t("photoCount", { count: mediaAssets.length })}
+                  >
+                    <StackIcon className="h-3.5 w-3.5 shrink-0" />
+                    <span className="tabular-nums">
+                      {t("imagePosition", {
+                        n: groupSlide.total
+                          ? groupSlide.index + 1
+                          : 1,
+                        total: groupSlide.total || mediaAssets.length,
+                      })}
+                    </span>
+                  </span>
+                )}
+                <DetailsToggle
+                  open={panelOpen}
+                  hideLabel={t("hideDetails")}
+                  showLabel={t("showDetails")}
+                  onToggle={() => setPanelOpen((open) => !open)}
+                />
+              </div>
+            </div>
+          </>
         )}
-
-        {/* Overlay controls stacked on the media */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start justify-between p-3 sm:p-4">
-          <div className="pointer-events-auto">
-            <BackButton />
-          </div>
-          <div className="pointer-events-auto flex items-center gap-2">
-            {isVideo && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-surface/90 px-2.5 py-1.5 text-xs font-medium text-primary shadow-sm ring-1 ring-border backdrop-blur-md">
-                <FilmIcon className="h-3.5 w-3.5" />
-                {t("video")}
-              </span>
-            )}
-            {isGroup && (
-              <span
-                className="inline-flex items-center gap-1.5 rounded-full bg-surface/90 px-2.5 py-1.5 text-xs font-medium text-primary shadow-sm ring-1 ring-border backdrop-blur-md"
-                title={t("photoCount", { count: mediaAssets.length })}
-              >
-                <StackIcon className="h-3.5 w-3.5 shrink-0" />
-                <span className="tabular-nums">
-                  {t("imagePosition", {
-                    n: groupSlide.total
-                      ? groupSlide.index + 1
-                      : 1,
-                    total: groupSlide.total || mediaAssets.length,
-                  })}
-                </span>
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => setPanelOpen((open) => !open)}
-              aria-label={panelOpen ? t("hideDetails") : t("showDetails")}
-              aria-expanded={panelOpen}
-              className={[
-                "inline-flex h-10 w-10 items-center justify-center rounded-full",
-                "bg-surface/90 text-foreground shadow-sm ring-1 ring-border backdrop-blur-md",
-                "transition-colors hover:bg-accent-soft hover:text-primary",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              ].join(" ")}
-            >
-              {panelOpen ? (
-                <PanelCloseIcon className="h-5 w-5" />
-              ) : (
-                <PanelOpenIcon className="h-5 w-5" />
-              )}
-            </button>
-          </div>
-        </div>
       </div>
 
       <aside
@@ -234,19 +327,29 @@ export function ItemDetail({ item }: ItemDetailProps) {
               </h1>
             )}
 
-            {!editing && (
-              <button
-                type="button"
-                onClick={startEdit}
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-foreground-muted transition-colors hover:bg-accent-soft hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label={
-                  isVideo ? t("editVideoDetails") : t("editImageDetails")
-                }
-                title={t("edit")}
-              >
-                <EditIcon className="h-4 w-4" />
-              </button>
-            )}
+            {!editing &&
+              (isStory ? (
+                <Link
+                  href={`/item/${saved.id}/edit`}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-foreground-muted transition-colors hover:bg-accent-soft hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={t("editStory")}
+                  title={t("edit")}
+                >
+                  <EditIcon className="h-4 w-4" />
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={startEdit}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-foreground-muted transition-colors hover:bg-accent-soft hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={
+                    isVideo ? t("editVideoDetails") : t("editImageDetails")
+                  }
+                  title={t("edit")}
+                >
+                  <EditIcon className="h-4 w-4" />
+                </button>
+              ))}
           </div>
 
           <div>
@@ -269,7 +372,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
             <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-foreground-muted">
               {t("tags")}
             </p>
-            {editing ? (
+            {editing && !isStory ? (
               <CategoryTagPicker
                 value={draft.tags}
                 onChange={(tags) => setDraft((d) => ({ ...d, tags }))}
@@ -298,9 +401,9 @@ export function ItemDetail({ item }: ItemDetailProps) {
 
           <div className="min-h-0 flex-1">
             <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-foreground-muted">
-              {t("description")}
+              {isStory ? t("storySummary") : t("description")}
             </p>
-            {editing ? (
+            {editing && !isStory ? (
               <textarea
                 value={draft.description}
                 disabled={busy}
@@ -312,19 +415,14 @@ export function ItemDetail({ item }: ItemDetailProps) {
               />
             ) : (
               <p className="text-sm leading-relaxed text-foreground-muted">
-                {draft.description || t("noDescription")}
+                {isStory
+                  ? storyCardBlurb(draft) || t("noDescription")
+                  : draft.description || t("noDescription")}
               </p>
             )}
           </div>
 
-          {error && (
-            <p
-              role="alert"
-              className="rounded-xl border border-danger/25 bg-accent-soft/40 px-3 py-2 text-sm text-danger"
-            >
-              {error}
-            </p>
-          )}
+          {error ? <StatusCallout title={error} compact /> : null}
 
           {editing ? (
             <div className="flex flex-wrap gap-2 border-t border-border pt-4">
@@ -350,7 +448,11 @@ export function ItemDetail({ item }: ItemDetailProps) {
                 disabled={busy}
                 className="ml-auto inline-flex h-10 items-center justify-center rounded-full border border-danger/30 px-5 text-sm font-medium text-danger hover:bg-danger/10 disabled:opacity-50"
               >
-                {deleting ? t("deleting") : t("delete")}
+                {deleting
+                  ? t("deleting")
+                  : isStory
+                    ? t("deleteChapter")
+                    : t("delete")}
               </button>
             </div>
           ) : (
@@ -361,13 +463,50 @@ export function ItemDetail({ item }: ItemDetailProps) {
                 disabled={busy}
                 className="inline-flex h-10 items-center justify-center rounded-full border border-border px-5 text-sm font-medium text-foreground-muted transition-colors hover:border-danger/40 hover:bg-danger/5 hover:text-danger disabled:opacity-50"
               >
-                {deleting ? t("deleting") : t("delete")}
+                {deleting
+                  ? t("deleting")
+                  : isStory
+                    ? t("deleteChapter")
+                    : t("delete")}
               </button>
             </div>
           )}
         </div>
       </aside>
     </div>
+  );
+}
+
+function DetailsToggle({
+  open,
+  hideLabel,
+  showLabel,
+  onToggle,
+}: {
+  open: boolean;
+  hideLabel: string;
+  showLabel: string;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={open ? hideLabel : showLabel}
+      aria-expanded={open}
+      className={[
+        "inline-flex h-10 w-10 items-center justify-center rounded-full",
+        "bg-surface/90 text-foreground shadow-sm ring-1 ring-border backdrop-blur-md",
+        "transition-colors hover:bg-accent-soft hover:text-primary",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+      ].join(" ")}
+    >
+      {open ? (
+        <PanelCloseIcon className="h-5 w-5" />
+      ) : (
+        <PanelOpenIcon className="h-5 w-5" />
+      )}
+    </button>
   );
 }
 

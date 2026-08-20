@@ -3,11 +3,19 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { LOCALE_META, LOCALES, useI18n, type Locale } from "../lib/i18n";
 
+type LanguageSwitcherProps = {
+  /** Where the menu opens from the trigger. */
+  menu?: "down" | "rail" | "up";
+  tone?: "header" | "rail";
+};
+
 /**
- * Compact language control for the header (right of Add).
- * Globe mark + menu: Español / English / Català. Default is Spanish.
+ * Compact language control. Globe mark + menu: Español / English / Català.
  */
-export function LanguageSwitcher() {
+export function LanguageSwitcher({
+  menu = "down",
+  tone = "header",
+}: LanguageSwitcherProps) {
   const { locale, setLocale, t } = useI18n();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -47,13 +55,23 @@ export function LanguageSwitcher() {
         aria-expanded={open}
         aria-controls={menuId}
         title={t("language")}
-        className={[
-          "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
-          "border border-border bg-surface text-foreground shadow-sm",
-          "transition-all duration-200 hover:border-border-strong hover:bg-accent-soft hover:text-primary",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-          open ? "border-primary bg-accent-soft text-primary" : "",
-        ].join(" ")}
+        className={
+          tone === "rail"
+            ? [
+                "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
+                "text-foreground-muted transition-colors duration-150",
+                "hover:bg-accent-soft hover:text-primary",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                open ? "bg-accent-soft text-primary" : "",
+              ].join(" ")
+            : [
+                "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
+                "border border-border bg-surface text-foreground shadow-sm",
+                "transition-all duration-200 hover:border-border-strong hover:bg-accent-soft hover:text-primary",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                open ? "border-primary bg-accent-soft text-primary" : "",
+              ].join(" ")
+        }
       >
         <GlobeIcon className="h-5 w-5" />
         <span className="sr-only">
@@ -66,7 +84,15 @@ export function LanguageSwitcher() {
           id={menuId}
           role="listbox"
           aria-label={t("language")}
-          className="absolute right-0 top-[calc(100%+0.4rem)] z-50 min-w-[11.5rem] origin-top-right animate-[search-panel-in_140ms_ease-out] overflow-hidden rounded-2xl border border-border bg-surface py-1.5 shadow-[0_12px_40px_-12px_rgba(30,27,46,0.28)]"
+          className={[
+            "absolute z-50 min-w-[11.5rem] overflow-hidden rounded-2xl border border-border bg-surface py-1.5 shadow-[0_12px_40px_-12px_rgba(30,27,46,0.28)]",
+            "animate-[search-panel-in_140ms_ease-out]",
+            menu === "rail"
+              ? "bottom-0 left-[calc(100%+0.5rem)] origin-bottom-left"
+              : menu === "up"
+                ? "right-0 bottom-[calc(100%+0.4rem)] origin-bottom-right"
+                : "right-0 top-[calc(100%+0.4rem)] origin-top-right",
+          ].join(" ")}
         >
           {LOCALES.map((code) => {
             const meta = LOCALE_META[code];

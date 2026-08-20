@@ -1,5 +1,3 @@
-import type { MediaType } from "./types";
-
 /** Matches backend `common/media-type.ts` allow-lists. */
 export const IMAGE_MIME_TYPES = [
   "image/jpeg",
@@ -17,7 +15,7 @@ export const VIDEO_MIME_TYPES = [
 export const MAX_IMAGE_BYTES = 50 * 1024 * 1024; // 50 MB
 export const MAX_VIDEO_BYTES = 1024 * 1024 * 1024; // 1 GB
 
-export function detectMediaType(file: File): MediaType | null {
+export function detectMediaType(file: File): "image" | "video" | null {
   const mime = normalizeMime(file.type, file.name);
   if ((IMAGE_MIME_TYPES as readonly string[]).includes(mime)) return "image";
   if ((VIDEO_MIME_TYPES as readonly string[]).includes(mime)) return "video";
@@ -52,7 +50,7 @@ export function normalizeMime(type: string, fileName?: string): string {
   }
 }
 
-export function maxBytesFor(mediaType: MediaType): number {
+export function maxBytesFor(mediaType: "image" | "video"): number {
   return mediaType === "image" ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES;
 }
 

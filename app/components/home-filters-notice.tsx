@@ -1,8 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useI18n } from "../lib/i18n";
+import { StatusMascot } from "./status-mascot";
 
 type HomeFiltersNoticeProps = {
   query: string;
@@ -26,38 +27,46 @@ export function HomeFiltersNotice({
   createdVideo = false,
 }: HomeFiltersNoticeProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { t } = useI18n();
   const [toastVisible, setToastVisible] = useState(created);
   const [toastExiting, setToastExiting] = useState(false);
   const toastMs = createdVideo ? TOAST_VIDEO_MS : TOAST_MS;
 
   useEffect(() => {
-    if (!created) {
-      setToastVisible(false);
-      setToastExiting(false);
-      return;
-    }
+    if (!created) return;
 
-    setToastVisible(true);
-    setToastExiting(false);
+    const frame = window.requestAnimationFrame(() => {
+      setToastVisible(true);
+      setToastExiting(false);
+    });
 
     const exitTimer = setTimeout(() => setToastExiting(true), toastMs - 320);
     const clearTimer = setTimeout(() => {
       setToastVisible(false);
-      router.replace("/");
+      dismissCreatedParam();
     }, toastMs);
 
     return () => {
+      window.cancelAnimationFrame(frame);
       clearTimeout(exitTimer);
       clearTimeout(clearTimer);
     };
   }, [created, createdVideo, router, toastMs]);
 
+  function dismissCreatedParam() {
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("created");
+    next.delete("video");
+    const qs = next.toString();
+    router.replace(qs ? `/?${qs}` : "/", { scroll: false });
+  }
+
   function dismissToast() {
     setToastExiting(true);
     window.setTimeout(() => {
       setToastVisible(false);
-      router.replace("/");
+      dismissCreatedParam();
     }, 220);
   }
 
@@ -73,7 +82,7 @@ export function HomeFiltersNotice({
 
       {toastVisible && created ? (
         <div
-          className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:pb-6"
+          className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-[max(1.25rem,calc(env(safe-area-inset-bottom)+5.25rem))] pt-4 md:pb-6"
           aria-live="polite"
         >
           <div
@@ -88,13 +97,12 @@ export function HomeFiltersNotice({
                 : "animate-[toast-in_280ms_cubic-bezier(0.22,1,0.36,1)]",
             ].join(" ")}
           >
-            <div className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3.5 pr-1 pb-4">
-              <span
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-primary-foreground ring-1 ring-white/25"
-                aria-hidden
-              >
-                <CheckIcon className="h-[1.125rem] w-[1.125rem]" />
-              </span>
+            <div className="flex min-w-0 flex-1 items-center gap-3 px-3 py-3 pr-1 pb-4 sm:px-4">
+              <StatusMascot
+                mood={createdVideo ? "success" : "celebrate"}
+                size="sm"
+                className="shrink-0"
+              />
               <p className="min-w-0 text-sm font-semibold leading-snug tracking-tight">
                 {createdVideo ? t("savedVideoProcessing") : t("savedToArchive")}
               </p>
@@ -127,23 +135,6 @@ export function HomeFiltersNotice({
         </div>
       ) : null}
     </>
-  );
-}
-
-function CheckIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M5 12.5 9.5 17 19 7.5" />
-    </svg>
   );
 }
 

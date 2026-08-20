@@ -1,5 +1,5 @@
 /** Media kind stored in the archive. */
-export type MediaType = "image" | "video";
+export type MediaType = "image" | "video" | "story";
 
 /** One uploaded binary within an Archive Item (cover or carousel slide). */
 export type MediaAsset = {
@@ -17,6 +17,10 @@ export type ArchiveItem = {
   id: string;
   name: string;
   description: string;
+  /** Written story HTML; empty/omitted for image/video. */
+  bodyHtml?: string;
+  /** Optional short blurb for story homepage cards. */
+  summary?: string;
   /**
    * Tags as encoded `category:tag` pairs (e.g. `bondage:hogtie`).
    * Legacy freeform strings without `:` are still accepted (Uncategorized).
@@ -24,8 +28,14 @@ export type ArchiveItem = {
   tags: string[];
   /** Decimal score 0.0–10.0; higher ranks first on the home grid. */
   rating: number;
-  /** Whether this item is an image or a video. */
+  /** Whether this item is an image, a video, or a written story. */
   mediaType: MediaType;
+  /** Root story id when this row is a later chapter; null for the series. */
+  seriesId?: string | null;
+  /** 1-based chapter index. Roots are chapter 1. */
+  chapterNumber?: number;
+  /** How many chapters the series has (on story roots). */
+  chapterCount?: number;
   /** Cover thumbnail for the home grid (first media asset). */
   thumbnailUrl: string;
   /**
@@ -48,6 +58,26 @@ export type ArchiveItem = {
 
 /** Max images in one image-group Archive Item (ADR 0009). */
 export const MAX_IMAGE_ASSETS = 10;
+
+/** Max inline images in one written story. */
+export const MAX_STORY_ASSETS = 20;
+
+/** An original character (OC) sheet — portrait plus profile fields. */
+export type OriginalCharacter = {
+  id: string;
+  name: string;
+  age: string;
+  likes: string;
+  dislikes: string;
+  background: string;
+  additionalInfo: string;
+  publicId: string;
+  thumbnailUrl: string;
+  mediaUrl: string;
+  width: number | null;
+  height: number | null;
+  blurHash: string | null;
+};
 
 /** Collection-wide tag vocabulary entry from `GET /api/v1/tags`. */
 export type TagSummary = {

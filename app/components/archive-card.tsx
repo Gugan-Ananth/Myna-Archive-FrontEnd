@@ -13,6 +13,7 @@ import {
   isImageGroup,
   itemMediaAssets,
   gridMediaSrc,
+  STORY_COVER_TEMPLATE,
   videoThumbnailCandidates,
   withCacheBust,
 } from "../lib/media-display";
@@ -41,6 +42,9 @@ function initialDims(item: ArchiveItem): { w: number; h: number } {
     return { w: item.width, h: item.height };
   }
   if (item.mediaType === "video") return { w: 16, h: 9 };
+  if (item.mediaType === "story" && !(item.width && item.height)) {
+    return { w: STORY_COVER_TEMPLATE.width, h: STORY_COVER_TEMPLATE.height };
+  }
   return PLACEHOLDER;
 }
 
@@ -51,13 +55,14 @@ const VIDEO_THUMB_RETRY_MS = 5000;
 type VideoThumbState = "loading" | "ready" | "processing" | "failed";
 
 /**
- * Pinterest-style pin: full-width media at natural aspect ratio, tight caption.
+ * Pinterest-style pin: media only, at the file’s natural aspect ratio.
  * Images use next/image + Bunny edge resize (WebP). Videos use a native img
  * so we can cache-bust and recover once Bunny Stream finishes the still frame.
  */
 export function ArchiveCard({ item, priority = false }: ArchiveCardProps) {
   const { t } = useI18n();
   const isVideo = item.mediaType === "video";
+  const isStory = item.mediaType === "story";
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const hasStoredDims = Boolean(item.width && item.height);
@@ -72,6 +77,12 @@ export function ArchiveCard({ item, priority = false }: ArchiveCardProps) {
     return blurHashPlaceholderFallback();
   }, [isClient, item.blurHash]);
   const imageSrc = gridMediaSrc(item);
+  const storyCover = isStory && Boolean(imageSrc);
+
+  function applyNaturalSize(width: number, height: number) {
+    if (hasStoredDims || width <= 0 || height <= 0) return;
+    setDims({ w: width, h: height });
+  }
 
   return (
     <Link
@@ -81,22 +92,11 @@ export function ArchiveCard({ item, priority = false }: ArchiveCardProps) {
     >
       <article className="overflow-hidden rounded-2xl bg-surface ring-1 ring-border transition-[box-shadow,transform] duration-200 group-hover:shadow-md group-hover:ring-border-strong [content-visibility:auto] [contain-intrinsic-size:auto_280px]">
         <div
-          className={[
-            "relative w-full overflow-hidden bg-surface-muted",
-            // Videos keep a stable 16:9 stage; images size to natural AR.
-            isVideo ? "aspect-video" : "",
-          ].join(" ")}
-          style={
-            !isVideo
-              ? {
-                  // Reserve exact aspect ratio so the masonry never jumps with empty gaps.
-                  aspectRatio: `${dims.w} / ${dims.h}`,
-                }
-              : undefined
-          }
+          className="relative w-full overflow-hidden bg-surface-muted"
+          style={{ aspectRatio: `${dims.w} / ${dims.h}` }}
         >
           {/* Image skeleton */}
-          {!isVideo && !loaded && !failed && (
+          {!isVideo && !isStory && !loaded && !failed && (
             <div
               className="absolute inset-0 animate-pulse bg-gradient-to-br from-surface-muted via-accent-soft/40 to-surface-muted"
               aria-hidden
@@ -108,6 +108,16 @@ export function ArchiveCard({ item, priority = false }: ArchiveCardProps) {
               key={`${item.id}:${item.thumbnailUrl}:${item.mediaUrl}`}
               item={item}
               priority={priority}
+              onNaturalSize={applyNaturalSize}
+            />
+          ) : isStory && !storyCover ? (
+            <Image
+              src={STORY_COVER_TEMPLATE.src}
+              alt=""
+              fill
+              unoptimized
+              sizes="(max-width: 380px) 100vw, (max-width: 620px) 50vw, (max-width: 860px) 33vw, (max-width: 1100px) 25vw, 20vw"
+              className="object-cover object-center transition-transform duration-300 ease-out group-hover:scale-[1.03]"
             />
           ) : (
             <Image
@@ -129,14 +139,7 @@ export function ArchiveCard({ item, priority = false }: ArchiveCardProps) {
               ].join(" ")}
               onLoad={(event) => {
                 const img = event.currentTarget;
-                // Prefer stored API dims for layout; only measure when missing.
-                if (
-                  !hasStoredDims &&
-                  img.naturalWidth > 0 &&
-                  img.naturalHeight > 0
-                ) {
-                  setDims({ w: img.naturalWidth, h: img.naturalHeight });
-                }
+                applyNaturalSize(img.naturalWidth, img.naturalHeight);
                 setLoaded(true);
               }}
               onError={() => {
@@ -146,13 +149,12 @@ export function ArchiveCard({ item, priority = false }: ArchiveCardProps) {
             />
           )}
 
-          {!isVideo && failed && (
+          {!isVideo && !isStory && failed && (
             <div className="absolute inset-0 flex items-center justify-center px-3 text-center text-xs text-foreground-subtle">
               {t("previewUnavailable")}
             </div>
           )}
 
-          {/* Image group: homepage shows cover only + photo count badge */}
           {!isVideo && isImageGroup(item) ? (
             <span
               className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-full bg-surface/95 px-2 py-1 text-[11px] font-medium text-primary shadow-sm ring-1 ring-border backdrop-blur-sm"
@@ -163,19 +165,15 @@ export function ArchiveCard({ item, priority = false }: ArchiveCardProps) {
             </span>
           ) : null}
         </div>
-
-        <div className="px-2.5 py-2">
-          <h2 className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground transition-colors group-hover:text-primary">
-            {item.name}
-          </h2>
-        </div>
       </article>
       <span className="sr-only">
         {isVideo
           ? t("video")
-          : isImageGroup(item)
-            ? t("photoCount", { count: itemMediaAssets(item).length })
-            : t("image")}
+          : isStory
+            ? t("navStories")
+            : isImageGroup(item)
+              ? t("photoCount", { count: itemMediaAssets(item).length })
+              : t("image")}
       </span>
     </Link>
   );
@@ -187,9 +185,11 @@ export function ArchiveCard({ item, priority = false }: ArchiveCardProps) {
 function VideoThumb({
   item,
   priority = false,
+  onNaturalSize,
 }: {
   item: ArchiveItem;
   priority?: boolean;
+  onNaturalSize?: (width: number, height: number) => void;
 }) {
   const { t } = useI18n();
   const [state, setState] = useState<VideoThumbState>(
@@ -280,25 +280,15 @@ function VideoThumb({
             "absolute inset-0 h-full w-full object-cover object-center transition-[transform,opacity] duration-300 ease-out will-change-transform group-hover:scale-[1.03]",
             ready ? "opacity-100" : "opacity-0",
           ].join(" ")}
-          onLoad={() => setState("ready")}
+          onLoad={(event) => {
+            const img = event.currentTarget;
+            onNaturalSize?.(img.naturalWidth, img.naturalHeight);
+            setState("ready");
+          }}
           onError={onVideoThumbError}
         />
       ) : null}
 
-      <div
-        className={[
-          "pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent transition-opacity",
-          ready ? "opacity-90" : "opacity-40",
-        ].join(" ")}
-        aria-hidden
-      />
-      <span
-        className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-full bg-surface/95 px-2 py-1 text-[11px] font-medium text-primary shadow-sm ring-1 ring-border backdrop-blur-sm"
-        aria-hidden
-      >
-        <PlayBadgeIcon className="h-3 w-3" />
-        {t("video")}
-      </span>
       {ready && (
         <span
           className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100"

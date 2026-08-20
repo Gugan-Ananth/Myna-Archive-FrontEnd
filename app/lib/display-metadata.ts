@@ -140,10 +140,14 @@ export function blurHashToDataURL(
  * clients decode in useEffect / on the card.
  */
 export function blurHashPlaceholderFallback(): string {
+  const dark =
+    typeof document !== "undefined" &&
+    document.documentElement.classList.contains("dark");
+  const fill = dark ? "#221f2c" : "#ede9fe";
   return (
     "data:image/svg+xml;charset=utf-8," +
     encodeURIComponent(
-      `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="20"><rect width="100%" height="100%" fill="#ede9fe"/></svg>`,
+      `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="20"><rect width="100%" height="100%" fill="${fill}"/></svg>`,
     )
   );
 }

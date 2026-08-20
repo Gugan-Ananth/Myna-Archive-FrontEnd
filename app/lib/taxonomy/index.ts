@@ -6,6 +6,7 @@ export {
   isEncodedTag,
   parseEncodedTag,
   slugify,
+  toDisplayLabel,
   uncategorizedMeta,
 } from "./encode";
 export {
@@ -18,6 +19,7 @@ export {
   buildFilterTaxonomy,
   buildTaxonomy,
   buildTaxonomyFromApi,
+  scopeTaxonomyToSummaries,
   tagStorageValue,
 } from "./merge";
 export { getSeedTaxonomy } from "./seed";

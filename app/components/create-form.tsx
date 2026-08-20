@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   type DragEvent,
@@ -30,8 +31,10 @@ import {
 } from "../lib/media-constraints";
 import { MAX_IMAGE_ASSETS, type MediaType } from "../lib/types";
 import { BackButton } from "./back-button";
+import { OcIcon } from "./create-oc-form";
 import { CategoryTagPicker } from "./category-tag-picker";
 import { RatingInput } from "./rating-input";
+import { StatusCallout } from "./status-callout";
 import { VideoPlayer } from "./video-player";
 
 type SubmitPhase =
@@ -46,7 +49,7 @@ type PendingMedia = {
   id: string;
   file: File;
   previewUrl: string;
-  mediaType: MediaType;
+  mediaType: "image" | "video";
   meta: DisplayMetadata | null;
   /** Video poster data URL for create preview. */
   posterUrl?: string | null;
@@ -127,7 +130,7 @@ export function CreateForm() {
     const files = Array.from(fileList);
     if (files.length === 0 || busy) return;
 
-    const typed: { file: File; type: MediaType }[] = [];
+    const typed: { file: File; type: "image" | "video" }[] = [];
     for (const file of files) {
       const type = detectMediaType(file);
       if (!type) {
@@ -194,7 +197,7 @@ export function CreateForm() {
   }
 
   async function pushItems(
-    items: { file: File; type: MediaType }[],
+    items: { file: File; type: "image" | "video" }[],
     seedName: boolean,
   ) {
     const jobId = ++metaJobRef.current;
@@ -381,7 +384,9 @@ export function CreateForm() {
 
       setPhase("done");
       abortRef.current = null;
-      router.push(mediaType === "video" ? "/?created=1&video=1" : "/?created=1");
+      const home =
+        mediaType === "video" ? "/?view=videos&created=1" : "/?created=1";
+      router.push(home);
       router.refresh();
     } catch (err) {
       if (isUploadAborted(err) || controller.signal.aborted) {
@@ -437,7 +442,7 @@ export function CreateForm() {
       : "image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime";
 
   return (
-    <div className="relative flex min-h-full flex-1 flex-col bg-background">
+    <div className="relative flex min-h-full flex-1 flex-col">
       <div className="absolute left-3 top-3 z-20 sm:left-4 sm:top-4">
         <BackButton />
       </div>
@@ -456,65 +461,87 @@ export function CreateForm() {
 
       {pending.length === 0 ? (
         <div className="flex min-h-full flex-1 flex-col items-center justify-center px-4 py-16">
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            onDragEnter={(e) => {
-              e.preventDefault();
-              setDragOver(true);
-            }}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOver(true);
-            }}
-            onDragLeave={(e) => {
-              e.preventDefault();
-              const next = e.relatedTarget as Node | null;
-              if (!next || !e.currentTarget.contains(next)) {
-                setDragOver(false);
-              }
-            }}
-            onDrop={onDropFile}
-            className={[
-              "flex w-full max-w-xl flex-col items-center justify-center gap-3 rounded-2xl border border-dashed bg-surface px-8 py-20 text-center shadow-sm transition-all",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              dragOver
-                ? "scale-[1.01] border-primary bg-accent-soft/50 shadow-md"
-                : "border-border-strong hover:border-primary hover:bg-accent-soft/40",
-            ].join(" ")}
-          >
-            <span
+          <div className="grid w-full max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              onDragEnter={(e) => {
+                e.preventDefault();
+                setDragOver(true);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                const next = e.relatedTarget as Node | null;
+                if (!next || !e.currentTarget.contains(next)) {
+                  setDragOver(false);
+                }
+              }}
+              onDrop={onDropFile}
               className={[
-                "flex h-14 w-14 items-center justify-center rounded-2xl text-primary ring-1 ring-border transition-colors",
-                dragOver ? "bg-primary/15" : "bg-accent-soft",
+                CHOOSER_CARD_CLASS,
+                dragOver
+                  ? "scale-[1.01] border-primary bg-accent-soft/50 shadow-md"
+                  : "border-border-strong hover:border-primary hover:bg-accent-soft/40",
               ].join(" ")}
             >
-              <UploadIcon className="h-7 w-7" />
-            </span>
-            <span className="text-base font-medium text-foreground">
-              {dragOver ? t("dropToUpload") : t("clickOrDrag")}
-            </span>
-            <span className="text-sm text-foreground-subtle">
-              {t("acceptedFormats")}
-            </span>
-            <span className="text-xs text-foreground-subtle">
-              {t("groupUploadHint", { max: MAX_IMAGE_ASSETS })}
-            </span>
-            <span className="text-xs text-foreground-subtle">
-              {t("sizeLimits", {
-                imageMax: formatBytes(MAX_IMAGE_HINT),
-                videoMax: formatBytes(MAX_VIDEO_HINT),
-              })}
-            </span>
-          </button>
-          {error && (
-            <p
-              role="alert"
-              className="mt-4 max-w-xl rounded-xl border border-danger/25 bg-surface px-4 py-2.5 text-sm text-danger"
-            >
-              {error}
-            </p>
-          )}
+              <span
+                className={[
+                  "flex h-14 w-14 items-center justify-center rounded-2xl text-primary ring-1 ring-border transition-colors",
+                  dragOver ? "bg-primary/15" : "bg-accent-soft",
+                ].join(" ")}
+              >
+                <UploadIcon className="h-7 w-7" />
+              </span>
+              <span className="text-base font-medium text-foreground">
+                {dragOver ? t("dropToUpload") : t("clickOrDrag")}
+              </span>
+              <span className="text-sm text-foreground-subtle">
+                {t("acceptedFormats")}
+              </span>
+              <span className="text-xs text-foreground-subtle">
+                {t("groupUploadHint", { max: MAX_IMAGE_ASSETS })}
+              </span>
+              <span className="text-xs text-foreground-subtle">
+                {t("sizeLimits", {
+                  imageMax: formatBytes(MAX_IMAGE_HINT),
+                  videoMax: formatBytes(MAX_VIDEO_HINT),
+                })}
+              </span>
+            </button>
+
+            <Link href="/create/story" className={CHOOSER_CARD_CLASS}>
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-soft text-primary ring-1 ring-border">
+                <StoryIcon className="h-7 w-7" />
+              </span>
+              <span className="text-base font-medium text-foreground">
+                {t("writeAStory")}
+              </span>
+              <span className="text-sm text-foreground-subtle">
+                {t("writeAStoryHint")}
+              </span>
+            </Link>
+
+            <Link href="/create/oc" className={CHOOSER_CARD_CLASS}>
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-soft text-primary ring-1 ring-border">
+                <OcIcon className="h-7 w-7" />
+              </span>
+              <span className="text-base font-medium text-foreground">
+                {t("createOc")}
+              </span>
+              <span className="text-sm text-foreground-subtle">
+                {t("createOcHint")}
+              </span>
+            </Link>
+          </div>
+          {error ? (
+            <div className="mt-4 max-w-3xl">
+              <StatusCallout title={error} compact />
+            </div>
+          ) : null}
         </div>
       ) : (
         <form
@@ -707,14 +734,7 @@ export function CreateForm() {
                 />
               </label>
 
-              {error && (
-                <p
-                  role="alert"
-                  className="rounded-xl border border-danger/25 bg-accent-soft/40 px-3 py-2 text-sm text-danger"
-                >
-                  {error}
-                </p>
-              )}
+              {error ? <StatusCallout title={error} compact /> : null}
 
               {busy && (
                 <div className="space-y-2">
@@ -789,6 +809,12 @@ export function CreateForm() {
 const MAX_IMAGE_HINT = 50 * 1024 * 1024;
 const MAX_VIDEO_HINT = 1024 * 1024 * 1024;
 
+const CHOOSER_CARD_CLASS = [
+  "flex w-full flex-col items-center justify-center gap-3 rounded-2xl border border-dashed bg-surface px-6 py-14 text-center shadow-sm transition-all",
+  "border-border-strong hover:border-primary hover:bg-accent-soft/40",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+].join(" ");
+
 function UploadIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -822,6 +848,24 @@ function FilmIcon({ className }: { className?: string }) {
     >
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <path d="M7 5v14M17 5v14M3 9.5h4M3 14.5h4M17 9.5h4M17 14.5h4" />
+    </svg>
+  );
+}
+
+function StoryIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
     </svg>
   );
 }

@@ -1,5 +1,5 @@
 import type { TagSummary, TaxonomyCategoryDto } from "../types";
-import { humanizeSlug, parseEncodedTag } from "./encode";
+import { humanizeSlug, parseEncodedTag, toDisplayLabel } from "./encode";
 import { getSeedTaxonomy } from "./seed";
 import type { TaxonomyCategory, TaxonomyTag } from "./types";
 import { UNCATEGORIZED_LABEL, UNCATEGORIZED_SLUG } from "./types";
@@ -29,15 +29,16 @@ export function buildTaxonomyFromApi(
     label: string,
     builtIn: boolean,
   ): CategoryBuilder {
+    const display = toDisplayLabel(label) || humanizeSlug(slug);
     let cat = bySlug.get(slug);
     if (!cat) {
-      cat = { slug, label, builtIn, tags: new Map() };
+      cat = { slug, label: display, builtIn, tags: new Map() };
       bySlug.set(slug, cat);
     } else if (builtIn) {
       cat.builtIn = true;
-      cat.label = label;
-    } else if (!cat.builtIn && label && cat.label === humanizeSlug(slug)) {
-      cat.label = label;
+      cat.label = display;
+    } else if (!cat.builtIn && display && cat.label === humanizeSlug(slug)) {
+      cat.label = display;
     }
     return cat;
   }
@@ -49,16 +50,17 @@ export function buildTaxonomyFromApi(
     builtIn: boolean,
     count: number,
   ) {
+    const display = toDisplayLabel(label) || humanizeSlug(slug);
     const existing = cat.tags.get(slug);
     if (!existing) {
-      cat.tags.set(slug, { slug, label, builtIn, count });
+      cat.tags.set(slug, { slug, label: display, builtIn, count });
       return;
     }
     if (builtIn) {
       existing.builtIn = true;
-      existing.label = label;
-    } else if (!existing.builtIn && label) {
-      if (existing.label === humanizeSlug(slug)) existing.label = label;
+      existing.label = display;
+    } else if (!existing.builtIn && display) {
+      if (existing.label === humanizeSlug(slug)) existing.label = display;
     }
     if (count > existing.count) existing.count = count;
   }
@@ -193,4 +195,27 @@ export function tagStorageValue(
 ): string {
   if (categorySlug === UNCATEGORIZED_SLUG) return tagSlug;
   return `${categorySlug}:${tagSlug}`;
+}
+
+/**
+ * Keep only tags that appear in `summaries` and use those usage counts.
+ * Needed when GET /tags is scoped to a home section (photos / videos / stories).
+ */
+export function scopeTaxonomyToSummaries(
+  categories: TaxonomyCategory[],
+  summaries: TagSummary[],
+): TaxonomyCategory[] {
+  const counts = new Map(summaries.map((entry) => [entry.tag, entry.count]));
+  return categories
+    .map((cat) => ({
+      ...cat,
+      tags: cat.tags
+        .map((tag) => {
+          const encoded = tagStorageValue(cat.slug, tag.slug);
+          const count = counts.get(encoded) ?? 0;
+          return { ...tag, count };
+        })
+        .filter((tag) => tag.count > 0),
+    }))
+    .filter((cat) => cat.tags.length > 0);
 }

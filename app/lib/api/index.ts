@@ -7,6 +7,7 @@ export {
   getArchiveItem,
   invalidateArchiveCaches,
   listArchiveItems,
+  listStoryChapters,
   listTagSummaries,
   seedListCache,
   seedTagsCache,
@@ -15,20 +16,37 @@ export {
 export {
   createTaxonomyCategory,
   createTaxonomyTag,
+  deleteTaxonomyCategory,
+  deleteTaxonomyTag,
   invalidateTaxonomyCache,
   listTaxonomy,
   seedTaxonomyCache,
+  updateTaxonomyCategory,
+  updateTaxonomyTag,
 } from "./taxonomy";
+export {
+  createOriginalCharacter,
+  deleteOriginalCharacter,
+  getOriginalCharacter,
+  listOriginalCharacters,
+  seedOcListCache,
+  updateOriginalCharacter,
+} from "./original-characters";
 export { createUploadSignature } from "./media";
 export type {
   ArchiveItem,
   BunnyUploadResult,
   CreateArchiveItemInput,
   CreateMediaAssetInput,
+  CreateOriginalCharacterInput,
   ListArchiveItemsParams,
+  ListOriginalCharactersParams,
+  ListTagSummariesParams,
   MediaAsset,
   MediaType,
+  OriginalCharacter,
   PaginatedArchiveItems,
+  PaginatedOriginalCharacters,
   TagSummary,
   TagsListResponse,
   TaxonomyCategoryDto,
@@ -37,6 +55,7 @@ export type {
   TaxonomyTagDto,
   TaxonomyTagResponse,
   UpdateArchiveItemInput,
+  UpdateOriginalCharacterInput,
   UploadSignature,
   UploadSignatureInput,
 } from "./types";

@@ -9,13 +9,70 @@ import {
   seedTagsCache,
   seedTaxonomyCache,
 } from "../lib/api";
+import {
+  listParamsForView,
+  parseCollectionView,
+  type CollectionView,
+} from "../lib/collection-view";
 import { useI18n } from "../lib/i18n";
-import type { ArchiveItem, TagSummary, TaxonomyCategoryDto } from "../lib/types";
+import type {
+  ArchiveItem,
+  OriginalCharacter,
+  TagSummary,
+  TaxonomyCategoryDto,
+} from "../lib/types";
 import { ActiveTagsSummary } from "./active-tags-summary";
 import { ArchiveGrid } from "./archive-grid";
 import { HomeFiltersNotice } from "./home-filters-notice";
+import { OcHome } from "./oc-home";
+import { StatusCallout } from "./status-callout";
+import { StoryWorksList } from "./story-works-list";
 
 const PAGE_SIZE = 40;
+
+function sectionListParams(
+  view: CollectionView,
+  query: string,
+  tags: string[],
+  page: number,
+) {
+  const section = listParamsForView(view);
+  return {
+    q: query || undefined,
+    tag: tags.length > 0 ? tags : undefined,
+    ...section,
+    page,
+    pageSize: PAGE_SIZE,
+  };
+}
+
+function emptyTitleKey(
+  view: CollectionView,
+): "archiveEmptyPhotos" | "archiveEmptyVideos" | "archiveEmptyStories" {
+  if (view === "videos") return "archiveEmptyVideos";
+  if (view === "stories") return "archiveEmptyStories";
+  return "archiveEmptyPhotos";
+}
+
+function emptyHintKey(
+  view: CollectionView,
+):
+  | "archiveEmptyPhotosHint"
+  | "archiveEmptyVideosHint"
+  | "archiveEmptyStoriesHint" {
+  if (view === "videos") return "archiveEmptyVideosHint";
+  if (view === "stories") return "archiveEmptyStoriesHint";
+  return "archiveEmptyPhotosHint";
+}
+
+function viewOfFilterKey(key: string): CollectionView {
+  try {
+    const parsed = JSON.parse(key) as { view?: string };
+    return parseCollectionView(parsed.view);
+  } catch {
+    return "photos";
+  }
+}
 
 type HomeViewProps = {
   /** Server-rendered first paint (may lag soft navigations). */
@@ -27,12 +84,15 @@ type HomeViewProps = {
   total: number;
   query: string;
   tags: string[];
+  view: CollectionView;
   created: boolean;
   /** True when the just-created item is a video (Stream may still be encoding). */
   createdVideo?: boolean;
   /** Raw API error message when initial load failed; null when OK. */
   loadError: string | null;
   usedFallbackError: boolean;
+  ocs?: OriginalCharacter[];
+  ocsTotal?: number;
 };
 
 /**
@@ -50,10 +110,13 @@ export function HomeView({
   total: initialTotal,
   query: initialQuery,
   tags: initialTags,
+  view: initialView,
   created,
   createdVideo = false,
   loadError: initialLoadError,
   usedFallbackError,
+  ocs = [],
+  ocsTotal = 0,
 }: HomeViewProps) {
   const { t } = useI18n();
   const searchParams = useSearchParams();
@@ -64,21 +127,24 @@ export function HomeView({
     () => new URLSearchParams(searchKey).getAll("tag").filter(Boolean),
     [searchKey],
   );
+  const liveView = parseCollectionView(searchParams.get("view"));
   const filterKey = useMemo(
     () =>
       JSON.stringify({
         q: liveQuery,
         tags: liveTags,
+        view: liveView,
       }),
-    [liveQuery, liveTags],
+    [liveQuery, liveTags, liveView],
   );
   const initialFilterKey = useMemo(
     () =>
       JSON.stringify({
         q: initialQuery,
         tags: initialTags,
+        view: initialView,
       }),
-    [initialQuery, initialTags],
+    [initialQuery, initialTags, initialView],
   );
 
   /**
@@ -102,40 +168,51 @@ export function HomeView({
   const matchesServer = filterKey === initialFilterKey;
   const useClient =
     clientSnap !== null && clientSnap.filterKey === filterKey;
+  const sameViewAsSnap =
+    clientSnap !== null && viewOfFilterKey(clientSnap.filterKey) === liveView;
 
   const items = useClient
     ? clientSnap.items
     : matchesServer
       ? initialItems
-      : (clientSnap?.items ?? initialItems);
+      : sameViewAsSnap
+        ? clientSnap.items
+        : [];
   const total = useClient
     ? clientSnap.total
     : matchesServer
       ? initialTotal
-      : (clientSnap?.total ?? initialTotal);
-  const page = useClient ? clientSnap.page : matchesServer ? 1 : (clientSnap?.page ?? 1);
+      : sameViewAsSnap
+        ? clientSnap.total
+        : 0;
+  const page = useClient
+    ? clientSnap.page
+    : matchesServer
+      ? 1
+      : sameViewAsSnap
+        ? clientSnap.page
+        : 1;
   const loadError = useClient
     ? clientSnap.loadError
     : matchesServer
       ? initialLoadError
-      : (clientSnap?.loadError ?? initialLoadError);
+      : sameViewAsSnap
+        ? clientSnap.loadError
+        : null;
   const usedFallback = useClient
     ? clientSnap.usedFallback
     : matchesServer
       ? usedFallbackError
-      : (clientSnap?.usedFallback ?? usedFallbackError);
+      : sameViewAsSnap
+        ? clientSnap.usedFallback
+        : false;
 
   const hasMore = items.length < total && total > 0;
 
   // Seed browser cache from SSR so tag toggles / revisits skip network when fresh.
   useEffect(() => {
     seedListCache(
-      {
-        q: initialQuery || undefined,
-        tag: initialTags.length > 0 ? initialTags : undefined,
-        page: 1,
-        pageSize: PAGE_SIZE,
-      },
+      sectionListParams(initialView, initialQuery, initialTags, 1),
       {
         data: initialItems,
         meta: {
@@ -146,19 +223,21 @@ export function HomeView({
         },
       },
     );
-    seedTagsCache(tagSummaries);
+    seedTagsCache(tagSummaries, listParamsForView(initialView));
     seedTaxonomyCache(taxonomy);
   }, [
     initialItems,
     initialQuery,
     initialTags,
     initialTotal,
+    initialView,
     tagSummaries,
     taxonomy,
   ]);
 
   // Re-fetch page 1 whenever live filters leave the SSR snapshot (cached when possible).
   useEffect(() => {
+    if (liveView === "oc") return;
     if (filterKey === initialFilterKey) {
       // Prefer SSR props; clear a stale client snap only if it was for another filter.
       requestIdRef.current += 1;
@@ -173,12 +252,9 @@ export function HomeView({
 
     void (async () => {
       try {
-        const result = await listArchiveItems({
-          q: liveQuery || undefined,
-          tag: liveTags.length > 0 ? liveTags : undefined,
-          page: 1,
-          pageSize: PAGE_SIZE,
-        });
+        const result = await listArchiveItems(
+          sectionListParams(liveView, liveQuery, liveTags, 1),
+        );
         if (cancelled || requestId !== requestIdRef.current) return;
         setClientSnap({
           filterKey,
@@ -210,20 +286,18 @@ export function HomeView({
     return () => {
       cancelled = true;
     };
-  }, [filterKey, initialFilterKey, liveQuery, liveTags]);
+  }, [filterKey, initialFilterKey, liveQuery, liveTags, liveView]);
 
   const loadMore = useCallback(async () => {
+    if (liveView === "oc") return;
     if (isLoadingMore || isFiltering || !hasMore) return;
 
     const nextPage = page + 1;
     setIsLoadingMore(true);
     try {
-      const result = await listArchiveItems({
-        q: liveQuery || undefined,
-        tag: liveTags.length > 0 ? liveTags : undefined,
-        page: nextPage,
-        pageSize: PAGE_SIZE,
-      });
+      const result = await listArchiveItems(
+        sectionListParams(liveView, liveQuery, liveTags, nextPage),
+      );
       setClientSnap((prev) => {
         const baseItems =
           prev?.filterKey === filterKey
@@ -264,6 +338,7 @@ export function HomeView({
     items,
     liveQuery,
     liveTags,
+    liveView,
     matchesServer,
     page,
     total,
@@ -271,20 +346,18 @@ export function HomeView({
 
   // Prefetch page 2+ into the client cache while the first page is visible.
   useEffect(() => {
+    if (liveView === "oc") return;
     if (!hasMore || isFiltering || loadError) return;
     const nextPage = page + 1;
     const timer = window.setTimeout(() => {
-      void listArchiveItems({
-        q: liveQuery || undefined,
-        tag: liveTags.length > 0 ? liveTags : undefined,
-        page: nextPage,
-        pageSize: PAGE_SIZE,
-      }).catch(() => {
+      void listArchiveItems(
+        sectionListParams(liveView, liveQuery, liveTags, nextPage),
+      ).catch(() => {
         /* prefetch is best-effort */
       });
     }, 400);
     return () => window.clearTimeout(timer);
-  }, [hasMore, isFiltering, loadError, liveQuery, liveTags, page]);
+  }, [hasMore, isFiltering, loadError, liveQuery, liveTags, liveView, page]);
 
   const errorBody = loadError
     ? usedFallback
@@ -294,8 +367,22 @@ export function HomeView({
 
   const hasFilters = Boolean(liveQuery) || liveTags.length > 0;
 
+  if (liveView === "oc") {
+    return (
+      <OcHome
+        items={ocs}
+        total={ocsTotal}
+        query={initialQuery}
+        created={created}
+        loadError={initialView === "oc" ? initialLoadError : null}
+        usedFallbackError={initialView === "oc" ? usedFallbackError : false}
+        seeded={initialView === "oc"}
+      />
+    );
+  }
+
   return (
-    <main className="flex w-full flex-1 flex-col px-2 pt-3 pb-6 sm:px-3 lg:px-4">
+    <main className="relative flex w-full flex-1 flex-col px-2 pt-3 pb-24 sm:px-3 md:pb-6 lg:px-4">
       <Suspense fallback={null}>
         <HomeFiltersNotice
           query={liveQuery}
@@ -306,14 +393,11 @@ export function HomeView({
       </Suspense>
 
       {errorBody ? (
-        <div
-          role="alert"
-          className="mb-4 rounded-2xl border border-danger/30 bg-surface px-5 py-4 text-sm text-foreground"
-        >
-          <p className="font-medium text-danger">{t("unableToLoadArchive")}</p>
-          <p className="mt-1 text-foreground-muted">{errorBody}</p>
-          <p className="mt-2 text-foreground-subtle">{t("loadErrorHint")}</p>
-        </div>
+        <StatusCallout
+          title={t("unableToLoadArchive")}
+          hint={errorBody}
+          footer={t("loadErrorHint")}
+        />
       ) : null}
 
       {!loadError && liveTags.length > 0 ? (
@@ -324,28 +408,51 @@ export function HomeView({
 
       <div
         className={[
-          "relative min-h-[8rem] transition-opacity duration-150",
+          "relative flex min-h-[8rem] flex-1 flex-col transition-opacity duration-150",
           isFiltering ? "opacity-70" : "opacity-100",
         ].join(" ")}
         aria-busy={isFiltering || isLoadingMore}
       >
-        <ArchiveGrid
-          items={items}
-          emptyMessage={
-            loadError
-              ? " "
-              : !hasFilters
-                ? t("archiveEmpty")
-                : undefined
-          }
-          emptyHint={
-            loadError
-              ? null
-              : !hasFilters
-                ? t("archiveEmptyHint")
-                : undefined
-          }
-        />
+        {liveView === "stories" ? (
+          <StoryWorksList
+            items={items}
+            emptyHref={!hasFilters ? "/create/story" : undefined}
+            emptyMessage={
+              loadError
+                ? " "
+                : !hasFilters
+                  ? t(emptyTitleKey(liveView))
+                  : undefined
+            }
+            emptyHint={
+              loadError
+                ? null
+                : !hasFilters
+                  ? t(emptyHintKey(liveView))
+                  : undefined
+            }
+          />
+        ) : (
+          <ArchiveGrid
+            items={items}
+            emptyKind={liveView}
+            emptyHref={!hasFilters ? "/create" : undefined}
+            emptyMessage={
+              loadError
+                ? " "
+                : !hasFilters
+                  ? t(emptyTitleKey(liveView))
+                  : undefined
+            }
+            emptyHint={
+              loadError
+                ? null
+                : !hasFilters
+                  ? t(emptyHintKey(liveView))
+                  : undefined
+            }
+          />
+        )}
 
         {hasMore && !loadError ? (
           <div className="mt-2 flex justify-center pt-2">
