@@ -45,18 +45,32 @@ export function parseEncodedTag(value: string): ParsedTag | null {
   return { categorySlug, tagSlug };
 }
 
-/** Title-case a slug for display when no explicit label is known. */
+/**
+ * Sentence-case a tag or category name for UI.
+ * "BALL GAG" / "ball gag" / "ball-gag" → "Ball gag"
+ */
+export function toDisplayLabel(raw: string): string {
+  const normalized = raw
+    .trim()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+  if (!normalized) return "";
+  const lower = normalized.toLocaleLowerCase();
+  return lower.charAt(0).toLocaleUpperCase() + lower.slice(1);
+}
+
+/** Sentence-case a slug for display when no explicit label is known. */
 export function humanizeSlug(slug: string): string {
-  return slug
-    .split("-")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+  return toDisplayLabel(slug);
+}
+
+function displayName(label: string | undefined, slug: string): string {
+  return toDisplayLabel(label ?? "") || humanizeSlug(slug);
 }
 
 /**
  * Format an encoded (or legacy freeform) tag for UI chips.
- * Prefers taxonomy labels when provided.
+ * Prefers taxonomy labels when provided; always sentence-cases the result.
  */
 export function formatTagLabel(
   encoded: string,
@@ -64,15 +78,14 @@ export function formatTagLabel(
 ): string {
   const parsed = parseEncodedTag(encoded);
   if (!parsed) {
-    return encoded;
+    return toDisplayLabel(encoded) || encoded;
   }
 
   if (taxonomy) {
     const cat = taxonomy.find((c) => c.slug === parsed.categorySlug);
     if (cat) {
       const tag = cat.tags.find((t) => t.slug === parsed.tagSlug);
-      const tagLabel = tag?.label ?? humanizeSlug(parsed.tagSlug);
-      return `${cat.label} · ${tagLabel}`;
+      return `${displayName(cat.label, parsed.categorySlug)} · ${displayName(tag?.label, parsed.tagSlug)}`;
     }
   }
 
@@ -85,11 +98,11 @@ export function formatTagNameOnly(
   taxonomy?: TaxonomyCategory[],
 ): string {
   const parsed = parseEncodedTag(encoded);
-  if (!parsed) return encoded;
+  if (!parsed) return toDisplayLabel(encoded) || encoded;
   if (taxonomy) {
     const cat = taxonomy.find((c) => c.slug === parsed.categorySlug);
     const tag = cat?.tags.find((t) => t.slug === parsed.tagSlug);
-    if (tag) return tag.label;
+    if (tag) return displayName(tag.label, parsed.tagSlug);
   }
   return humanizeSlug(parsed.tagSlug);
 }

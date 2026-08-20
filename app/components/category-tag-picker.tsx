@@ -14,6 +14,7 @@ import {
   formatTagLabel,
   slugify,
   tagStorageValue,
+  toDisplayLabel,
   UNCATEGORIZED_SLUG,
   type TaxonomyCategory,
 } from "../lib/taxonomy";
@@ -125,7 +126,10 @@ export function CategoryTagPicker({
     setMutating(true);
     setLocalError(null);
     try {
-      const result = await createTaxonomyTag(category.slug, label);
+      const result = await createTaxonomyTag(
+        category.slug,
+        toDisplayLabel(label),
+      );
       const encoded = encodeTag(result.categorySlug, result.tag.slug);
       await refreshTaxonomy();
       if (encoded && !selectedSet.has(encoded)) {
@@ -152,8 +156,8 @@ export function CategoryTagPicker({
     setLocalError(null);
     try {
       const created = await createTaxonomyCategory({
-        label: catLabel,
-        firstTag: { label: tagLabel },
+        label: toDisplayLabel(catLabel),
+        firstTag: { label: toDisplayLabel(tagLabel) },
       });
       const first = created.tags[0];
       const encoded = first

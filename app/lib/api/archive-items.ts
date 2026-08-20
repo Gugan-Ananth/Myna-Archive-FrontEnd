@@ -11,6 +11,7 @@ import type {
   ArchiveItem,
   CreateArchiveItemInput,
   ListArchiveItemsParams,
+  ListTagSummariesParams,
   PaginatedArchiveItems,
   TagSummary,
   TagsListResponse,
@@ -22,8 +23,6 @@ const LIST_TTL_MS = 45_000;
 const LIST_STALE_MS = 5 * 60_000;
 const TAGS_TTL_MS = 2 * 60_000;
 const TAGS_STALE_MS = 15 * 60_000;
-
-const TAGS_CACHE_KEY = buildQueryCacheKey("tags");
 
 /** Server fetch defaults: short revalidate instead of always no-store. */
 const SERVER_LIST_REVALIDATE = 30;
@@ -38,8 +37,17 @@ function listCacheKey(params: ListArchiveItemsParams): string {
     q: params.q,
     tag: params.tag,
     mediaType: params.mediaType,
+    imageGroup: params.imageGroup,
+    storyRoot: params.storyRoot,
     page: params.page ?? 1,
     pageSize: params.pageSize ?? 20,
+  });
+}
+
+function tagsCacheKey(params: ListTagSummariesParams = {}): string {
+  return buildQueryCacheKey("tags", {
+    mediaType: params.mediaType,
+    imageGroup: params.imageGroup,
   });
 }
 
@@ -60,6 +68,8 @@ export async function listArchiveItems(
         q: params.q,
         tag: params.tag,
         mediaType: params.mediaType,
+        imageGroup: params.imageGroup,
+        storyRoot: params.storyRoot,
         page: params.page,
         pageSize: params.pageSize,
       },
@@ -118,6 +128,17 @@ export async function getArchiveItem(
   return fetchItem();
 }
 
+/** All chapters in the series that contains this story (root or continuation). */
+export async function listStoryChapters(
+  id: string,
+): Promise<ArchiveItem[]> {
+  const result = await apiFetch<{ data: ArchiveItem[] }>(
+    `/archive-items/${encodeURIComponent(id)}/chapters`,
+    { cache: "no-store" },
+  );
+  return result.data ?? [];
+}
+
 export async function createArchiveItem(
   input: CreateArchiveItemInput,
   options?: { signal?: AbortSignal },
@@ -164,10 +185,16 @@ export async function deleteArchiveItem(id: string): Promise<void> {
  * Cached aggressively; one round-trip replaces paging the whole archive.
  */
 export async function listTagSummaries(
+  params: ListTagSummariesParams = {},
   options?: { cache?: RequestCache; next?: NextFetchRequestConfig },
 ): Promise<TagSummary[]> {
+  const key = tagsCacheKey(params);
   const fetchTags = async (): Promise<TagSummary[]> => {
     const result = await apiFetch<TagsListResponse>("/tags", {
+      query: {
+        mediaType: params.mediaType,
+        imageGroup: params.imageGroup,
+      },
       cache:
         options?.cache ??
         (isBrowser() ? "no-store" : undefined),
@@ -184,7 +211,7 @@ export async function listTagSummaries(
   };
 
   if (isBrowser()) {
-    return cachedQuery(TAGS_CACHE_KEY, fetchTags, {
+    return cachedQuery(key, fetchTags, {
       ttlMs: TAGS_TTL_MS,
       staleMs: TAGS_STALE_MS,
       revalidateInBackground: true,
@@ -196,9 +223,10 @@ export async function listTagSummaries(
 
 /** Tag strings only (ordered as returned by the API: count DESC, tag ASC). */
 export async function getAllTags(
+  params: ListTagSummariesParams = {},
   options?: { cache?: RequestCache; next?: NextFetchRequestConfig },
 ): Promise<string[]> {
-  const summaries = await listTagSummaries(options);
+  const summaries = await listTagSummaries(params, options);
   return summaries.map((entry) => entry.tag);
 }
 
@@ -238,9 +266,12 @@ export function seedListCache(
   });
 }
 
-export function seedTagsCache(summaries: TagSummary[]): void {
+export function seedTagsCache(
+  summaries: TagSummary[],
+  params: ListTagSummariesParams = {},
+): void {
   if (!isBrowser()) return;
-  setQueryCache(TAGS_CACHE_KEY, summaries, {
+  setQueryCache(tagsCacheKey(params), summaries, {
     ttlMs: TAGS_TTL_MS,
     staleMs: TAGS_STALE_MS,
   });

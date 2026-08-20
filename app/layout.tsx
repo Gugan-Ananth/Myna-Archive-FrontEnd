@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Playfair } from "next/font/google";
 import { cookies } from "next/headers";
 import { Suspense } from "react";
+import { AppMobileNav, AppNavRail } from "./components/app-nav-rail";
 import { ConditionalHeader } from "./components/conditional-header";
 import {
   DEFAULT_LOCALE,
@@ -20,9 +21,10 @@ import {
 } from "./lib/theme";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const playfair = Playfair({
+  variable: "--font-playfair",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
 const geistMono = Geist_Mono({
@@ -72,26 +74,40 @@ export default async function RootLayout({
   return (
     <html
       lang={LOCALE_META[locale].htmlLang}
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased${theme === "dark" ? " dark" : ""}`}
+      className={`${playfair.variable} ${geistMono.variable} h-full antialiased${theme === "dark" ? " dark" : ""}`}
       style={{ colorScheme: theme }}
       // Extensions often inject attrs on <html>/<body> before hydrate (e.g. bis_register).
       suppressHydrationWarning
     >
       <body
-        className="flex h-full min-h-full flex-col bg-background text-foreground"
+        className="flex h-full min-h-full flex-col text-foreground"
         suppressHydrationWarning
       >
         <ThemeProvider initialTheme={theme}>
           <LanguageProvider initialLocale={locale}>
-            <Suspense
-              fallback={
-                <header className="h-14 border-b border-border bg-surface" />
-              }
-            >
-              <ConditionalHeader />
+            <div className="flex min-h-0 flex-1">
+              <Suspense
+                fallback={
+                  <aside className="hidden h-dvh w-14 shrink-0 border-r border-border md:block" />
+                }
+              >
+                <AppNavRail />
+              </Suspense>
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                <Suspense
+                  fallback={
+                    <header className="h-14 border-b border-transparent bg-transparent" />
+                  }
+                >
+                  <ConditionalHeader />
+                </Suspense>
+                {/* min-h-0 lets fullscreen item pages size the media stage correctly */}
+                <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+              </div>
+            </div>
+            <Suspense fallback={null}>
+              <AppMobileNav />
             </Suspense>
-            {/* min-h-0 lets fullscreen item pages size the media stage correctly */}
-            <div className="flex min-h-0 flex-1 flex-col">{children}</div>
           </LanguageProvider>
         </ThemeProvider>
       </body>

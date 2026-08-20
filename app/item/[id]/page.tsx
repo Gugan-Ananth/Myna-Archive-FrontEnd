@@ -33,5 +33,5 @@ export default async function ItemPage({ params }: ItemPageProps) {
     throw error;
   }
 
-  return <ItemDetail item={item} />;
+  return <ItemDetail key={item.id} item={item} />;
 }

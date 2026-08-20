@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
+import type { CollectionView } from "../lib/collection-view";
 import type { ArchiveItem } from "../lib/types";
 import { useI18n } from "../lib/i18n";
 import { ArchiveCard } from "./archive-card";
+import { EmptyBoard } from "./empty-board";
 
 type ArchiveGridProps = {
   items: ArchiveItem[];
@@ -13,6 +15,8 @@ type ArchiveGridProps = {
   emptyHint?: string | null;
   /** How many pins to preload (above-the-fold). */
   priorityCount?: number;
+  emptyKind?: CollectionView;
+  emptyHref?: string;
 };
 
 /**
@@ -25,10 +29,11 @@ export function ArchiveGrid({
   emptyMessage,
   emptyHint,
   priorityCount = 8,
+  emptyKind,
+  emptyHref,
 }: ArchiveGridProps) {
   const { t } = useI18n();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const columnCount = useColumnCount(containerRef);
+  const { columnCount, ref: containerRef } = useColumnCount();
 
   const { columns, priorityIds } = useMemo(() => {
     const priority = new Set(
@@ -40,9 +45,10 @@ export function ArchiveGrid({
     };
   }, [items, columnCount, priorityCount]);
 
+  // Width sentinel stays mounted on empty so view switches don't drop the observer.
   if (items.length === 0) {
     if (emptyMessage === " ") {
-      return null;
+      return <div ref={containerRef} className="w-full" />;
     }
     const title = emptyMessage || t("noItemsMatch");
     const hint =
@@ -52,11 +58,13 @@ export function ArchiveGrid({
           ? emptyHint
           : t("noItemsMatchHint");
     return (
-      <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-border-strong bg-surface px-6 py-16 text-center">
-        <p className="text-base font-medium text-foreground">{title}</p>
-        {hint ? (
-          <p className="mt-1 max-w-sm text-sm text-foreground-muted">{hint}</p>
-        ) : null}
+      <div ref={containerRef} className="w-full">
+        <EmptyBoard
+          title={title}
+          hint={hint}
+          kind={emptyKind}
+          href={emptyHref}
+        />
       </div>
     );
   }
@@ -85,37 +93,43 @@ export function ArchiveGrid({
   );
 }
 
+function columnsForWidth(width: number): number {
+  // Full-bleed pinboard: more columns earlier so the wall fills the viewport
+  // instead of a narrow centered strip.
+  if (width >= 1680) return 7;
+  if (width >= 1400) return 6;
+  if (width >= 1100) return 5;
+  if (width >= 860) return 4;
+  if (width >= 620) return 3;
+  if (width >= 380) return 2;
+  return 1;
+}
+
 /** Responsive column count from container width (Pinterest-like density). */
-function useColumnCount(containerRef: React.RefObject<HTMLDivElement | null>) {
+function useColumnCount() {
   const [count, setCount] = useState(2);
+  const [node, setNode] = useState<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
+  useLayoutEffect(() => {
+    if (!node) return;
 
-    function update(width: number) {
-      // Full-bleed pinboard: more columns earlier so the wall fills the viewport
-      // instead of a narrow centered strip.
-      if (width >= 1680) setCount(7);
-      else if (width >= 1400) setCount(6);
-      else if (width >= 1100) setCount(5);
-      else if (width >= 860) setCount(4);
-      else if (width >= 620) setCount(3);
-      else if (width >= 380) setCount(2);
-      else setCount(1);
-    }
+    const update = (width: number) => {
+      // Ignore 0-width unmount/collapse readings — they lock the grid to 1 column.
+      if (width <= 0) return;
+      setCount(columnsForWidth(width));
+    };
 
-    update(el.clientWidth);
+    update(node.clientWidth);
 
     const observer = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect.width ?? el.clientWidth;
+      const width = entries[0]?.contentRect.width ?? node.clientWidth;
       update(width);
     });
-    observer.observe(el);
+    observer.observe(node);
     return () => observer.disconnect();
-  }, [containerRef]);
+  }, [node]);
 
-  return count;
+  return { columnCount: count, ref: setNode };
 }
 
 /**
@@ -144,8 +158,6 @@ function distributeIntoColumns(
     } else {
       heights[shortest] += 1.15; // portrait-ish default until measured
     }
-    // Title row under the media.
-    heights[shortest] += 0.18;
   }
 
   return columns;

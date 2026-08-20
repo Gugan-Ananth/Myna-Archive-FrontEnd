@@ -3,14 +3,19 @@
 import { useI18n } from "../lib/i18n";
 import { useTheme } from "../lib/theme";
 
+type ThemeToggleProps = {
+  /** Match the left rail / dock icon buttons. */
+  tone?: "header" | "rail";
+};
+
 /**
- * Compact light/dark control for the header (beside language).
- * Shows moon in light mode, sun in dark mode.
+ * Compact light/dark control. Shows moon in light mode, sun in dark mode.
  */
-export function ThemeToggle() {
+export function ThemeToggle({ tone = "header" }: ThemeToggleProps) {
   const { t } = useI18n();
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
+  const rail = tone === "rail";
 
   return (
     <button
@@ -19,13 +24,22 @@ export function ThemeToggle() {
       aria-label={isDark ? t("switchToLightMode") : t("switchToDarkMode")}
       title={isDark ? t("lightMode") : t("darkMode")}
       aria-pressed={isDark}
-      className={[
-        "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
-        "border border-border bg-surface text-foreground shadow-sm",
-        "transition-all duration-200 hover:border-border-strong hover:bg-accent-soft hover:text-primary",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-        "focus-visible:ring-offset-background",
-      ].join(" ")}
+      className={
+        rail
+          ? [
+              "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
+              "text-foreground-muted transition-colors duration-150",
+              "hover:bg-accent-soft hover:text-primary",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            ].join(" ")
+          : [
+              "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
+              "border border-border bg-surface text-foreground shadow-sm",
+              "transition-all duration-200 hover:border-border-strong hover:bg-accent-soft hover:text-primary",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              "focus-visible:ring-offset-background",
+            ].join(" ")
+      }
     >
       {isDark ? (
         <SunIcon className="h-5 w-5" />

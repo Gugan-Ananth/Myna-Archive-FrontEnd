@@ -3,11 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { parseCollectionView } from "../lib/collection-view";
 import { useI18n } from "../lib/i18n";
-import { LanguageSwitcher } from "./language-switcher";
 import { SearchBar } from "./search-bar";
 import { TagChipBar } from "./tag-chip-bar";
-import { ThemeToggle } from "./theme-toggle";
 
 /**
  * Top bar: logo (left) · search + tags (center) · Add + theme + language (right).
@@ -20,6 +19,15 @@ export function AppHeader() {
   /** Local draft while typing; falls back to URL when null. */
   const [draftQuery, setDraftQuery] = useState<string | null>(null);
   const query = draftQuery ?? searchParams.get("q") ?? "";
+  const view = parseCollectionView(searchParams.get("view"));
+  const searchPlaceholder =
+    view === "videos"
+      ? t("searchVideos")
+      : view === "stories"
+        ? t("searchStories")
+        : view === "oc"
+          ? t("searchOcs")
+          : t("searchPhotos");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const urlQuery = searchParams.get("q") ?? "";
 
@@ -75,11 +83,11 @@ export function AppHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-surface/95 backdrop-blur-md">
+    <header className="sticky top-0 z-40 border-b border-transparent bg-transparent">
       <div className="grid h-14 w-full grid-cols-[1fr_minmax(0,40rem)_1fr] items-center gap-3 px-3 sm:gap-4 sm:px-6">
         <Link
           href="/"
-          className="flex min-w-0 shrink-0 items-center gap-2 justify-self-start rounded-lg outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-w-0 shrink-0 items-center gap-2 justify-self-start rounded-lg outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring md:invisible"
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- brand SVG mark */}
           <img
@@ -102,9 +110,10 @@ export function AppHeader() {
               onChange={handleSearchChange}
               onSubmit={handleSearchSubmit}
               onClear={handleSearchClear}
+              placeholder={searchPlaceholder}
             />
           </div>
-          <TagChipBar variant="header" />
+          {view === "oc" ? null : <TagChipBar variant="header" />}
         </div>
 
         <div className="flex items-center gap-2 justify-self-end">
@@ -114,8 +123,6 @@ export function AppHeader() {
           >
             {t("add")}
           </Link>
-          <ThemeToggle />
-          <LanguageSwitcher />
         </div>
       </div>
     </header>

@@ -2,6 +2,7 @@ import type {
   ArchiveItem,
   MediaAsset,
   MediaType,
+  OriginalCharacter,
   TagSummary,
   TaxonomyCategoryDto,
   TaxonomyTagDto,
@@ -11,6 +12,7 @@ export type {
   ArchiveItem,
   MediaAsset,
   MediaType,
+  OriginalCharacter,
   TagSummary,
   TaxonomyCategoryDto,
   TaxonomyTagDto,
@@ -49,8 +51,61 @@ export type ListArchiveItemsParams = {
   q?: string;
   tag?: string[];
   mediaType?: MediaType;
+  /** true = image groups; false = single images. Omit for all of `mediaType`. */
+  imageGroup?: boolean;
+  /** When true with mediaType=story, only series roots (not later chapters). */
+  storyRoot?: boolean;
   page?: number;
   pageSize?: number;
+};
+
+export type ListTagSummariesParams = {
+  mediaType?: MediaType;
+  imageGroup?: boolean;
+};
+
+export type PaginatedOriginalCharacters = {
+  data: OriginalCharacter[];
+  meta: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
+export type ListOriginalCharactersParams = {
+  q?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+export type CreateOriginalCharacterInput = {
+  name: string;
+  age?: string;
+  likes?: string;
+  dislikes?: string;
+  background?: string;
+  additionalInfo?: string;
+  publicId: string;
+  resourceType: "image";
+  width?: number;
+  height?: number;
+  blurHash?: string;
+};
+
+export type UpdateOriginalCharacterInput = {
+  name?: string;
+  age?: string;
+  likes?: string;
+  dislikes?: string;
+  background?: string;
+  additionalInfo?: string;
+  publicId?: string;
+  resourceType?: "image";
+  width?: number;
+  height?: number;
+  blurHash?: string;
 };
 
 /** One asset on create finalize (URLs derived by Nest). */
@@ -68,6 +123,12 @@ export type CreateArchiveItemInput = {
   tags: string[];
   rating: number;
   description?: string;
+  /** Written story HTML. Inline images bind to `assets` in document order. */
+  bodyHtml?: string;
+  /** Optional short story blurb for homepage cards. */
+  summary?: string;
+  seriesId?: string;
+  chapterNumber?: number;
   /**
    * Preferred: ordered assets (image 1–10, video exactly 1).
    * When set, top-level publicId/resourceType/dims are not required.
@@ -84,12 +145,16 @@ export type CreateArchiveItemInput = {
 export type UpdateArchiveItemInput = {
   name?: string;
   description?: string;
+  bodyHtml?: string;
+  summary?: string;
+  /** Replace story cover + body images (cover is the extra leading asset). */
+  assets?: CreateMediaAssetInput[];
   tags?: string[];
   rating?: number;
 };
 
 export type UploadSignatureInput = {
-  mediaType: MediaType;
+  mediaType: "image" | "video";
   mimeType: string;
   byteSize: number;
   fileName?: string;

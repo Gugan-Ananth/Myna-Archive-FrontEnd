@@ -1,14 +1,17 @@
-import type { ArchiveItem, MediaAsset } from "./types";
+import type { ArchiveItem, MediaAsset, OriginalCharacter } from "./types";
 
 /** Ensure mediaAssets always has at least the cover (legacy-safe). */
 export function itemMediaAssets(item: ArchiveItem): MediaAsset[] {
   if (item.mediaAssets && item.mediaAssets.length > 0) {
     return item.mediaAssets;
   }
+  if (item.mediaType === "story" && !item.mediaUrl) {
+    return [];
+  }
   return [
     {
       publicId: "",
-      resourceType: item.mediaType,
+      resourceType: item.mediaType === "video" ? "video" : "image",
       mediaUrl: item.mediaUrl,
       thumbnailUrl: item.thumbnailUrl,
       width: item.width,
@@ -56,6 +59,15 @@ export function gridMediaSrc(item: ArchiveItem): string {
 
   const original = originalMediaUrl(item.mediaUrl);
   return withBunnyResize(original, {
+    width: GRID_THUMB_WIDTH,
+    quality: GRID_THUMB_QUALITY,
+  });
+}
+
+/** OC board source — CDN thumb, then Bunny-resized original. */
+export function ocGridSrc(oc: Pick<OriginalCharacter, "thumbnailUrl" | "mediaUrl">): string {
+  if (oc.thumbnailUrl) return oc.thumbnailUrl;
+  return withBunnyResize(originalMediaUrl(oc.mediaUrl), {
     width: GRID_THUMB_WIDTH,
     quality: GRID_THUMB_QUALITY,
   });
@@ -161,6 +173,13 @@ export function videoThumbnailCandidates(item: ArchiveItem): string[] {
 
   return urls;
 }
+
+/** Default pin when a story has no uploaded cover. 3:4 book-cover frame. */
+export const STORY_COVER_TEMPLATE = {
+  src: "/story-cover-template.jpg",
+  width: 864,
+  height: 1152,
+} as const;
 
 export type ImageOrientation = "portrait" | "landscape" | "square";
 

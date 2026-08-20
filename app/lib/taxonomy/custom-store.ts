@@ -1,6 +1,6 @@
 import type { CustomTaxonomy } from "./types";
 import { CUSTOM_TAXONOMY_STORAGE_KEY } from "./types";
-import { slugify } from "./encode";
+import { humanizeSlug, slugify, toDisplayLabel } from "./encode";
 
 function emptyCustom(): CustomTaxonomy {
   return { categories: [] };
@@ -24,7 +24,7 @@ export function readCustomTaxonomy(): CustomTaxonomy {
         )
         .map((c) => ({
           slug: slugify(c.slug),
-          label: c.label.trim() || slugify(c.slug),
+          label: toDisplayLabel(c.label) || humanizeSlug(c.slug),
           tags: c.tags
             .filter(
               (t) =>
@@ -32,7 +32,7 @@ export function readCustomTaxonomy(): CustomTaxonomy {
             )
             .map((t) => ({
               slug: slugify(t.slug),
-              label: t.label.trim() || slugify(t.slug),
+              label: toDisplayLabel(t.label) || humanizeSlug(t.slug),
             }))
             .filter((t) => t.slug),
         }))
@@ -69,7 +69,11 @@ export function upsertCustomCategory(label: string): {
   if (existing) {
     return { slug: existing.slug, label: existing.label };
   }
-  const entry = { slug, label: label.trim() || humanFallback(slug), tags: [] };
+  const entry = {
+    slug,
+    label: toDisplayLabel(label) || humanizeSlug(slug),
+    tags: [],
+  };
   custom.categories.push(entry);
   writeCustomTaxonomy(custom);
   return { slug: entry.slug, label: entry.label };
@@ -89,30 +93,23 @@ export function upsertCustomTag(
   if (!cat) {
     cat = {
       slug: catSlug,
-      label: humanFallback(catSlug),
+      label: humanizeSlug(catSlug),
       tags: [],
     };
     custom.categories.push(cat);
   }
   const existing = cat.tags.find((t) => t.slug === tagSlug);
+  const display = toDisplayLabel(tagLabel) || humanizeSlug(tagSlug);
   if (!existing) {
     cat.tags.push({
       slug: tagSlug,
-      label: tagLabel.trim() || humanFallback(tagSlug),
+      label: display,
     });
   }
   writeCustomTaxonomy(custom);
   return {
     categorySlug: catSlug,
     tagSlug,
-    tagLabel: existing?.label ?? tagLabel.trim() ?? humanFallback(tagSlug),
+    tagLabel: existing?.label ?? display,
   };
-}
-
-function humanFallback(slug: string): string {
-  return slug
-    .split("-")
-    .filter(Boolean)
-    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-    .join(" ");
 }

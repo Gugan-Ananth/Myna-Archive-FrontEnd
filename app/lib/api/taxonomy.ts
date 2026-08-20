@@ -6,6 +6,7 @@ import {
   isBrowser,
   setQueryCache,
 } from "./query-cache";
+import { revalidateArchiveDataCache } from "./revalidate-archive";
 import type {
   TaxonomyCategoryDto,
   TaxonomyCategoryResponse,
@@ -13,6 +14,13 @@ import type {
   TaxonomyTagDto,
   TaxonomyTagResponse,
 } from "./types";
+
+async function bustTaxonomyCaches(): Promise<void> {
+  invalidateQueryCache("taxonomy");
+  invalidateQueryCache("tags");
+  invalidateQueryCache("list");
+  await revalidateArchiveDataCache();
+}
 
 const TAXONOMY_TTL_MS = 2 * 60_000;
 const TAXONOMY_STALE_MS = 15 * 60_000;
@@ -67,8 +75,7 @@ export async function createTaxonomyCategory(input: {
       cache: "no-store",
     },
   );
-  invalidateQueryCache("taxonomy");
-  invalidateQueryCache("tags");
+  await bustTaxonomyCaches();
   return result.data;
 }
 
@@ -85,9 +92,70 @@ export async function createTaxonomyTag(
       cache: "no-store",
     },
   );
-  invalidateQueryCache("taxonomy");
-  invalidateQueryCache("tags");
+  await bustTaxonomyCaches();
   return result.data;
+}
+
+export async function updateTaxonomyCategory(
+  categorySlug: string,
+  label: string,
+): Promise<TaxonomyCategoryDto> {
+  const result = await apiFetch<TaxonomyCategoryResponse>(
+    `/taxonomy/categories/${encodeURIComponent(categorySlug)}`,
+    {
+      method: "PATCH",
+      body: { label },
+      cache: "no-store",
+    },
+  );
+  await bustTaxonomyCaches();
+  return result.data;
+}
+
+export async function deleteTaxonomyCategory(
+  categorySlug: string,
+): Promise<void> {
+  await apiFetch<void>(
+    `/taxonomy/categories/${encodeURIComponent(categorySlug)}`,
+    {
+      method: "DELETE",
+      empty: true,
+      cache: "no-store",
+    },
+  );
+  await bustTaxonomyCaches();
+}
+
+export async function updateTaxonomyTag(
+  categorySlug: string,
+  tagSlug: string,
+  input: { label?: string; categorySlug?: string },
+): Promise<{ categorySlug: string; tag: TaxonomyTagDto }> {
+  const result = await apiFetch<TaxonomyTagResponse>(
+    `/taxonomy/categories/${encodeURIComponent(categorySlug)}/tags/${encodeURIComponent(tagSlug)}`,
+    {
+      method: "PATCH",
+      body: input,
+      cache: "no-store",
+    },
+  );
+  await bustTaxonomyCaches();
+  return result.data;
+}
+
+export async function deleteTaxonomyTag(
+  categorySlug: string,
+  tagSlug: string,
+): Promise<void> {
+  await apiFetch<void>(
+    `/taxonomy/categories/${encodeURIComponent(categorySlug)}/tags/${encodeURIComponent(tagSlug)}`,
+    {
+      method: "DELETE",
+      empty: true,
+      cache: "no-store",
+    },
+  );
+  await bustTaxonomyCaches();
 }
 
 export function seedTaxonomyCache(categories: TaxonomyCategoryDto[]): void {

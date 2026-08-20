@@ -13,8 +13,11 @@ import { revalidatePath, updateTag } from "next/cache";
  */
 export async function revalidateArchiveDataCache(): Promise<void> {
   updateTag("archive-items");
+  updateTag("original-characters");
   updateTag("tags");
   updateTag("taxonomy");
   revalidatePath("/");
+  revalidatePath("/tags");
   revalidatePath("/item", "layout");
+  revalidatePath("/oc", "layout");
 }

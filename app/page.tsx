@@ -2,15 +2,25 @@ import { HomeView } from "./components/home-view";
 import {
   ApiError,
   listArchiveItems,
+  listOriginalCharacters,
   listTagSummaries,
   listTaxonomy,
 } from "./lib/api";
-import type { TagSummary, TaxonomyCategoryDto } from "./lib/types";
+import {
+  listParamsForView,
+  parseCollectionView,
+} from "./lib/collection-view";
+import type {
+  OriginalCharacter,
+  TagSummary,
+  TaxonomyCategoryDto,
+} from "./lib/types";
 
 type HomeProps = {
   searchParams: Promise<{
     q?: string;
     tag?: string | string[];
+    view?: string | string[];
     created?: string;
     video?: string;
   }>;
@@ -20,30 +30,48 @@ export default async function Home({ searchParams }: HomeProps) {
   const params = await searchParams;
   const query = typeof params.q === "string" ? params.q : "";
   const tags = normalizeTags(params.tag);
+  const view = parseCollectionView(params.view);
+  const section = listParamsForView(view);
 
   let items: Awaited<ReturnType<typeof listArchiveItems>>["data"] = [];
   let tagSummaries: TagSummary[] = [];
   let taxonomy: TaxonomyCategoryDto[] = [];
   let total = 0;
+  let ocs: OriginalCharacter[] = [];
+  let ocsTotal = 0;
   let loadError: string | null = null;
   let usedFallbackError = false;
 
   try {
-    // Parallel SSR: list + flat tags + taxonomy tree.
-    const [listResult, tagsResult, taxonomyResult] = await Promise.all([
-      listArchiveItems({
+    if (view === "oc") {
+      const listResult = await listOriginalCharacters({
         q: query || undefined,
-        tag: tags.length > 0 ? tags : undefined,
         page: 1,
         pageSize: 40,
-      }),
-      listTagSummaries(),
-      listTaxonomy(),
-    ]);
-    items = listResult.data;
-    total = listResult.meta.total;
-    tagSummaries = tagsResult;
-    taxonomy = taxonomyResult;
+      });
+      ocs = listResult.data;
+      ocsTotal = listResult.meta.total;
+    } else {
+      // Parallel SSR: list + flat tags + taxonomy tree, scoped to the section.
+      const [listResult, tagsResult, taxonomyResult] = await Promise.all([
+        listArchiveItems({
+          q: query || undefined,
+          tag: tags.length > 0 ? tags : undefined,
+          ...section,
+          page: 1,
+          pageSize: 40,
+        }),
+        listTagSummaries({
+          mediaType: section.mediaType,
+          imageGroup: section.imageGroup,
+        }),
+        listTaxonomy(),
+      ]);
+      items = listResult.data;
+      total = listResult.meta.total;
+      tagSummaries = tagsResult;
+      taxonomy = taxonomyResult;
+    }
   } catch (error) {
     if (error instanceof ApiError) {
       loadError = error.message;
@@ -62,10 +90,16 @@ export default async function Home({ searchParams }: HomeProps) {
       total={total}
       query={query}
       tags={tags}
+      view={view}
       created={params.created === "1"}
-      createdVideo={params.created === "1" && params.video === "1"}
+      createdVideo={
+        params.created === "1" &&
+        (params.video === "1" || view === "videos")
+      }
       loadError={loadError}
       usedFallbackError={usedFallbackError}
+      ocs={ocs}
+      ocsTotal={ocsTotal}
     />
   );
 }

@@ -9,9 +9,15 @@ import {
   useState,
 } from "react";
 import { listTagSummaries, listTaxonomy } from "../lib/api";
+import {
+  listParamsForView,
+  parseCollectionView,
+  type CollectionView,
+} from "../lib/collection-view";
 import { useI18n } from "../lib/i18n";
 import {
   buildTaxonomyFromApi,
+  scopeTaxonomyToSummaries,
   tagStorageValue,
   type TaxonomyCategory,
 } from "../lib/taxonomy";
@@ -39,11 +45,14 @@ export function TagChipBar({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const selectedTags = searchParams.getAll("tag");
+  const view = parseCollectionView(searchParams.get("view"));
+  const section = listParamsForView(view);
 
   const [panelOpen, setPanelOpen] = useState(false);
   const [filterQuery, setFilterQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [fetched, setFetched] = useState<{
+    view: CollectionView;
     taxonomy: TaxonomyCategoryDto[];
     summaries: TagSummary[];
   } | null>(null);
@@ -57,10 +66,13 @@ export function TagChipBar({
       try {
         const [tax, summaries] = await Promise.all([
           listTaxonomy(),
-          listTagSummaries(),
+          listTagSummaries({
+            mediaType: section.mediaType,
+            imageGroup: section.imageGroup,
+          }),
         ]);
         if (!cancelled) {
-          setFetched({ taxonomy: tax, summaries });
+          setFetched({ view, taxonomy: tax, summaries });
         }
       } catch {
         /* seed fallback */
@@ -69,16 +81,20 @@ export function TagChipBar({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [section.imageGroup, section.mediaType, view]);
 
-  const apiTaxonomy = fetched?.taxonomy ?? initialTaxonomy;
-  const tagSummaries = fetched?.summaries ?? initialSummaries;
+  const scopedFetch = fetched?.view === view ? fetched : null;
+  const apiTaxonomy = scopedFetch?.taxonomy ?? initialTaxonomy;
+  const tagSummaries = scopedFetch?.summaries ?? initialSummaries;
 
   const taxonomy = useMemo(
     () =>
-      buildTaxonomyFromApi(apiTaxonomy, tagSummaries, {
-        includeUnused: true,
-      }),
+      scopeTaxonomyToSummaries(
+        buildTaxonomyFromApi(apiTaxonomy, tagSummaries, {
+          includeUnused: true,
+        }),
+        tagSummaries,
+      ),
     [apiTaxonomy, tagSummaries],
   );
 
