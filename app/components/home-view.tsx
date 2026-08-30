@@ -10,6 +10,7 @@ import {
   seedTaxonomyCache,
 } from "../lib/api";
 import {
+  createHrefForView,
   listParamsForView,
   parseCollectionView,
   type CollectionView,
@@ -23,6 +24,7 @@ import type {
 } from "../lib/types";
 import { ActiveTagsSummary } from "./active-tags-summary";
 import { ArchiveGrid } from "./archive-grid";
+import { HomeBackdrop } from "./home-backdrop";
 import { HomeFiltersNotice } from "./home-filters-notice";
 import { OcHome } from "./oc-home";
 import { StatusCallout } from "./status-callout";
@@ -48,9 +50,16 @@ function sectionListParams(
 
 function emptyTitleKey(
   view: CollectionView,
-): "archiveEmptyPhotos" | "archiveEmptyVideos" | "archiveEmptyStories" {
+):
+  | "archiveEmptyPhotos"
+  | "archiveEmptyCollections"
+  | "archiveEmptyComics"
+  | "archiveEmptyVideos"
+  | "archiveEmptyStories" {
   if (view === "videos") return "archiveEmptyVideos";
+  if (view === "comics") return "archiveEmptyComics";
   if (view === "stories") return "archiveEmptyStories";
+  if (view === "collections") return "archiveEmptyCollections";
   return "archiveEmptyPhotos";
 }
 
@@ -58,10 +67,14 @@ function emptyHintKey(
   view: CollectionView,
 ):
   | "archiveEmptyPhotosHint"
+  | "archiveEmptyCollectionsHint"
+  | "archiveEmptyComicsHint"
   | "archiveEmptyVideosHint"
   | "archiveEmptyStoriesHint" {
   if (view === "videos") return "archiveEmptyVideosHint";
+  if (view === "comics") return "archiveEmptyComicsHint";
   if (view === "stories") return "archiveEmptyStoriesHint";
+  if (view === "collections") return "archiveEmptyCollectionsHint";
   return "archiveEmptyPhotosHint";
 }
 
@@ -383,6 +396,8 @@ export function HomeView({
 
   return (
     <main className="relative flex w-full flex-1 flex-col px-2 pt-3 pb-24 sm:px-3 md:pb-6 lg:px-4">
+      <HomeBackdrop view={liveView} />
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col">
       <Suspense fallback={null}>
         <HomeFiltersNotice
           query={liveQuery}
@@ -416,7 +431,7 @@ export function HomeView({
         {liveView === "stories" ? (
           <StoryWorksList
             items={items}
-            emptyHref={!hasFilters ? "/create/story" : undefined}
+            emptyHref={!hasFilters ? createHrefForView("stories") : undefined}
             emptyMessage={
               loadError
                 ? " "
@@ -436,7 +451,9 @@ export function HomeView({
           <ArchiveGrid
             items={items}
             emptyKind={liveView}
-            emptyHref={!hasFilters ? "/create" : undefined}
+            emptyHref={
+              !hasFilters ? createHrefForView(liveView) : undefined
+            }
             emptyMessage={
               loadError
                 ? " "
@@ -455,7 +472,7 @@ export function HomeView({
         )}
 
         {hasMore && !loadError ? (
-          <div className="mt-2 flex justify-center pt-2">
+          <div className="relative z-10 mt-2 flex justify-center pt-2">
             <button
               type="button"
               onClick={() => void loadMore()}
@@ -466,6 +483,7 @@ export function HomeView({
             </button>
           </div>
         ) : null}
+      </div>
       </div>
     </main>
   );

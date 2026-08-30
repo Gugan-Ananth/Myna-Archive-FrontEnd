@@ -221,8 +221,8 @@ export function TagChipBar({
           "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full border font-medium shadow-sm transition-all",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           isHeader
-            ? "h-10 w-10 border-border bg-surface text-foreground hover:border-border-strong hover:bg-accent-soft hover:text-primary sm:w-auto sm:px-3.5 sm:text-sm"
-            : "h-9 gap-1.5 border-border bg-surface px-3.5 text-sm text-foreground hover:border-border-strong hover:bg-accent-soft hover:text-primary",
+            ? "h-11 w-11 border-border bg-surface text-foreground hover:border-border-strong hover:bg-accent-soft hover:text-primary sm:w-auto sm:px-4 sm:text-sm"
+            : "h-10 gap-1.5 border-border bg-surface px-4 text-sm text-foreground hover:border-border-strong hover:bg-accent-soft hover:text-primary",
           panelOpen ? "border-primary bg-accent-soft text-primary" : "",
         ].join(" ")}
       >

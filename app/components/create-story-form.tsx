@@ -40,9 +40,11 @@ import {
   type ArchiveItem,
   type MediaAsset,
 } from "../lib/types";
+import { CHOOSER_SCENE } from "../lib/stickers";
 import { BackButton } from "./back-button";
 import { CategoryTagPicker } from "./category-tag-picker";
 import { RatingInput } from "./rating-input";
+import { SceneFigure } from "./scene-figure";
 import { StatusCallout } from "./status-callout";
 
 const FONT_OPTIONS = [
@@ -602,14 +604,14 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
       onSubmit={onSubmit}
       className="relative flex min-h-full flex-1 flex-col"
     >
-      <header className="sticky top-0 z-30 flex shrink-0 items-center gap-2 border-b border-border/60 bg-transparent px-2 py-2 backdrop-blur-md sm:gap-3 sm:px-4">
+      <header className="sticky top-0 z-30 flex shrink-0 flex-wrap items-center gap-2 border-b border-border/60 bg-transparent px-2 py-2 backdrop-blur-md sm:flex-nowrap sm:gap-3 sm:px-4">
         <BackButton
           href={item ? `/item/${item.id}` : "/create"}
           className="shrink-0"
         />
         <div className="hidden h-6 w-px bg-border sm:block" />
         <div
-          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto scrollbar-none"
+          className="order-last flex w-full min-w-0 items-center gap-1 overflow-x-auto scrollbar-none sm:order-none sm:w-auto sm:flex-1"
           onMouseDown={() => rememberSelection()}
         >
           <label className="sr-only" htmlFor="story-font">
@@ -691,13 +693,18 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
         <button
           type="submit"
           disabled={!canSubmit}
-          className="inline-flex h-9 shrink-0 items-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+          className="ml-auto inline-flex h-11 shrink-0 items-center rounded-full bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 sm:ml-0"
         >
-          {saving
-            ? saveLabel || t("saving")
-            : isEditing
-              ? t("save")
-              : t("saveToArchive")}
+          {saving ? (
+            saveLabel || t("saving")
+          ) : isEditing ? (
+            t("save")
+          ) : (
+            <>
+              <span className="sm:hidden">{t("save")}</span>
+              <span className="hidden sm:inline">{t("saveToArchive")}</span>
+            </>
+          )}
         </button>
       </header>
 
@@ -722,9 +729,9 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
         }}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:overflow-hidden">
-        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-3 py-6 sm:px-6 lg:px-10">
-          <div className="mx-auto w-full max-w-[816px] rounded-sm bg-surface px-8 py-10 shadow-[0_12px_40px_-18px_rgba(30,27,46,0.35)] ring-1 ring-border sm:px-14 sm:py-14 dark:shadow-[0_12px_40px_-16px_rgba(0,0,0,0.55)]">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
+        <div className="min-h-[28rem] min-w-0 flex-1 px-3 py-6 sm:px-6 lg:min-h-0 lg:overflow-y-auto lg:px-10">
+          <div className="app-card mx-auto w-full max-w-[816px] rounded-sm px-5 py-8 shadow-[0_12px_40px_-18px_rgba(30,27,46,0.35)] ring-1 ring-border sm:px-14 sm:py-14 dark:shadow-[0_12px_40px_-16px_rgba(0,0,0,0.55)]">
             <div
               ref={editorRef}
               role="textbox"
@@ -758,13 +765,13 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
           </div>
         </div>
 
-        <aside className="flex w-full shrink-0 flex-col border-t border-border bg-surface lg:h-full lg:w-[min(22rem,36%)] lg:border-l lg:border-t-0">
-          <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5 sm:p-6">
+        <aside className="app-card flex w-full shrink-0 flex-col border-t border-border lg:h-full lg:w-[min(22rem,36%)] lg:border-l lg:border-t-0">
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4 sm:p-5">
             <div>
-              <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-foreground-muted">
+              <p className="mb-1 text-sm font-medium uppercase tracking-wide text-foreground-muted">
                 {t("storyCover")}
               </p>
-              <p className="mb-2 text-xs text-foreground-subtle">
+              <p className="mb-1.5 text-sm text-foreground-subtle">
                 {t("storyCoverOptional")}
               </p>
               {cover.kind === "none" ? (
@@ -772,8 +779,13 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                   type="button"
                   disabled={saving}
                   onClick={() => coverInputRef.current?.click()}
-                  className="flex w-full flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border-strong bg-background px-3 py-8 text-sm text-foreground-muted transition-colors hover:border-primary hover:bg-accent-soft hover:text-primary disabled:opacity-50"
+                  className="app-card app-card-interactive flex w-full flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border-strong px-3 py-4 text-base text-foreground-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
                 >
+                  <SceneFigure
+                    sticker={CHOOSER_SCENE.story}
+                    className="h-20 w-auto"
+                    sizes="80px"
+                  />
                   {t("storyAddCover")}
                 </button>
               ) : (
@@ -784,14 +796,14 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                       cover.kind === "file" ? cover.previewUrl : cover.url
                     }
                     alt=""
-                    className="max-h-56 w-full object-cover"
+                    className="max-h-44 w-full object-cover"
                   />
-                  <div className="flex gap-2 border-t border-border bg-surface p-2">
+                  <div className="flex gap-2 border-t border-border p-1.5">
                     <button
                       type="button"
                       disabled={saving}
                       onClick={() => coverInputRef.current?.click()}
-                      className="inline-flex h-8 flex-1 items-center justify-center rounded-full border border-border px-3 text-xs font-medium text-foreground hover:bg-accent-soft hover:text-primary disabled:opacity-50"
+                      className="inline-flex h-8 flex-1 items-center justify-center rounded-full border border-border px-3 text-sm font-medium text-foreground hover:bg-accent-soft hover:text-primary disabled:opacity-50"
                     >
                       {t("storyChangeCover")}
                     </button>
@@ -799,7 +811,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                       type="button"
                       disabled={saving}
                       onClick={clearCover}
-                      className="inline-flex h-8 flex-1 items-center justify-center rounded-full border border-border px-3 text-xs font-medium text-foreground-muted hover:border-danger/40 hover:text-danger disabled:opacity-50"
+                      className="inline-flex h-8 flex-1 items-center justify-center rounded-full border border-border px-3 text-sm font-medium text-foreground-muted hover:border-danger/40 hover:text-danger disabled:opacity-50"
                     >
                       {t("storyRemoveCover")}
                     </button>
@@ -808,12 +820,12 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
               )}
             </div>
             {!isEditing ? (
-            <fieldset className="space-y-2">
-              <legend className="text-xs font-medium uppercase tracking-wide text-foreground-muted">
+            <fieldset className="space-y-1.5">
+              <legend className="text-sm font-medium uppercase tracking-wide text-foreground-muted">
                 {t("storyChapter")}
               </legend>
-              <div className="flex flex-col gap-2">
-                <label className="flex items-center gap-2 text-sm text-foreground">
+              <div className="flex flex-col gap-1.5">
+                <label className="flex items-center gap-2 text-base text-foreground">
                   <input
                     type="radio"
                     name="story-link-mode"
@@ -828,7 +840,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                   />
                   {t("storyNewStory")}
                 </label>
-                <label className="flex items-center gap-2 text-sm text-foreground">
+                <label className="flex items-center gap-2 text-base text-foreground">
                   <input
                     type="radio"
                     name="story-link-mode"
@@ -841,16 +853,16 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                 </label>
               </div>
               {linkMode === "chapter" ? (
-                <div className="space-y-2 pt-1">
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-xs text-foreground-muted">
+                <div className="space-y-1.5 pt-1">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-sm text-foreground-muted">
                       {t("storySelectStory")}
                     </span>
                     <select
                       value={seriesId}
                       disabled={saving}
                       onChange={(e) => selectSeries(e.target.value)}
-                      className="rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+                      className="rounded-xl border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
                     >
                       <option value="">{t("storySelectStory")}</option>
                       {seriesRoots.map((root) => (
@@ -860,8 +872,8 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                       ))}
                     </select>
                   </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-xs text-foreground-muted">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-sm text-foreground-muted">
                       {t("storyChapterNumber")}
                     </span>
                     <input
@@ -875,15 +887,15 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                           Math.max(1, Number(e.target.value) || 1),
                         )
                       }
-                      className="rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+                      className="rounded-xl border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
                     />
                   </label>
                 </div>
               ) : null}
             </fieldset>
             ) : null}
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium uppercase tracking-wide text-foreground-muted">
+            <label className="flex flex-col gap-1">
+              <span className="text-sm font-medium uppercase tracking-wide text-foreground-muted">
                 {t("storyTitle")}{" "}
                 <span className="normal-case text-foreground-subtle">
                   {t("required")}
@@ -899,11 +911,11 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                   if (error) setError(null);
                 }}
                 placeholder={t("storyTitlePlaceholder")}
-                className="rounded-xl border border-border bg-background px-3 py-2.5 text-base font-medium outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+                className="rounded-xl border border-border bg-background px-3 py-2 text-lg font-medium outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
               />
             </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium uppercase tracking-wide text-foreground-muted">
+            <label className="flex flex-col gap-1">
+              <span className="text-sm font-medium uppercase tracking-wide text-foreground-muted">
                 {t("storySummary")}{" "}
                 <span className="normal-case text-foreground-subtle">
                   {t("storySummaryOptional")}
@@ -914,17 +926,17 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                 value={summary}
                 disabled={saving}
                 maxLength={600}
-                rows={4}
+                rows={3}
                 onChange={(e) => setSummary(e.target.value)}
                 placeholder={t("storySummaryPlaceholder")}
-                className="resize-y rounded-xl border border-border bg-background px-3 py-2.5 text-sm leading-relaxed outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+                className="resize-y rounded-xl border border-border bg-background px-3 py-2 text-base leading-relaxed outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
               />
-              <span className="self-end text-[11px] tabular-nums text-foreground-subtle">
+              <span className="self-end text-xs tabular-nums text-foreground-subtle">
                 {summary.length}/600
               </span>
             </label>
             <div>
-              <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-foreground-muted">
+              <p className="mb-1 text-sm font-medium uppercase tracking-wide text-foreground-muted">
                 {t("tags")}{" "}
                 <span className="normal-case text-foreground-subtle">
                   {t("required")}
@@ -937,7 +949,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
               />
             </div>
             <div>
-              <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-foreground-muted">
+              <p className="mb-1 text-sm font-medium uppercase tracking-wide text-foreground-muted">
                 {t("rating")}
               </p>
               <RatingInput

@@ -54,7 +54,7 @@ export function RatingInput({
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1">
       <input
         id={inputId}
         type="text"
@@ -84,7 +84,7 @@ export function RatingInput({
           }
         }}
         className={[
-          "h-11 w-28 rounded-xl border bg-background px-3 text-lg font-semibold tabular-nums text-foreground outline-none",
+          "h-10 w-28 rounded-xl border bg-background px-3 text-lg font-semibold tabular-nums text-foreground outline-none",
           showError
             ? "border-danger focus:border-danger focus:ring-2 focus:ring-danger/20"
             : "border-border focus:border-primary focus:ring-2 focus:ring-ring/25",
@@ -92,7 +92,7 @@ export function RatingInput({
         aria-label={t("rating")}
       />
       {showError && (
-        <p id={errorId} role="alert" className="text-sm font-medium text-danger">
+        <p id={errorId} role="alert" className="text-base font-medium text-danger">
           {error}
         </p>
       )}

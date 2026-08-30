@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { TagsManager } from "../components/tags-manager";
 import { listTaxonomy } from "../lib/api";
+import { sessionAuth } from "../lib/auth/session";
 import type { TaxonomyCategoryDto } from "../lib/types";
 
 export const metadata: Metadata = {
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
 export default async function TagsPage() {
   let categories: TaxonomyCategoryDto[] = [];
   try {
-    categories = await listTaxonomy();
+    categories = await listTaxonomy(await sessionAuth());
   } catch {
     categories = [];
   }

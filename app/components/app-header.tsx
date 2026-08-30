@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { parseCollectionView } from "../lib/collection-view";
 import { useI18n } from "../lib/i18n";
+import { AddMediaTrigger } from "./add-media-trigger";
 import { SearchBar } from "./search-bar";
 import { TagChipBar } from "./tag-chip-bar";
 
@@ -23,11 +24,15 @@ export function AppHeader() {
   const searchPlaceholder =
     view === "videos"
       ? t("searchVideos")
-      : view === "stories"
-        ? t("searchStories")
-        : view === "oc"
-          ? t("searchOcs")
-          : t("searchPhotos");
+      : view === "comics"
+        ? t("searchComics")
+        : view === "stories"
+          ? t("searchStories")
+          : view === "oc"
+            ? t("searchOcs")
+            : view === "collections"
+              ? t("searchCollections")
+              : t("searchPhotos");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const urlQuery = searchParams.get("q") ?? "";
 
@@ -84,10 +89,10 @@ export function AppHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-transparent bg-transparent">
-      <div className="grid h-14 w-full grid-cols-[1fr_minmax(0,40rem)_1fr] items-center gap-3 px-3 sm:gap-4 sm:px-6">
+      <div className="flex h-16 w-full min-w-0 items-center gap-2 px-3 sm:gap-3 sm:px-4 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,40rem)_minmax(0,1fr)] md:gap-4 md:px-6">
         <Link
           href="/"
-          className="flex min-w-0 shrink-0 items-center gap-2 justify-self-start rounded-lg outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring md:invisible"
+          className="hidden min-w-0 shrink-0 items-center gap-2 justify-self-start rounded-lg outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring md:invisible md:flex"
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- brand SVG mark */}
           <img
@@ -98,13 +103,13 @@ export function AppHeader() {
             className="h-8 w-8 rounded-xl shadow-sm ring-1 ring-border"
             aria-hidden
           />
-          <span className="hidden text-sm font-semibold tracking-tight text-foreground sm:inline">
+          <span className="text-sm font-semibold tracking-tight text-foreground">
             {t("brandName")}
           </span>
         </Link>
 
-        <div className="flex min-w-0 w-full items-center justify-center gap-2">
-          <div className="min-w-0 w-full max-w-2xl">
+        <div className="flex min-w-0 flex-1 items-center gap-2 md:w-full">
+          <div className="min-w-0 flex-1">
             <SearchBar
               value={query}
               onChange={handleSearchChange}
@@ -116,15 +121,33 @@ export function AppHeader() {
           {view === "oc" ? null : <TagChipBar variant="header" />}
         </div>
 
-        <div className="flex items-center gap-2 justify-self-end">
-          <Link
-            href="/create"
-            className="inline-flex h-10 shrink-0 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground shadow-sm transition-all duration-200 hover:bg-primary-hover hover:shadow-md active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        <div className="flex shrink-0 items-center justify-self-end">
+          <AddMediaTrigger
+            view={view}
+            aria-label={t("add")}
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-medium text-primary-foreground shadow-sm transition-all duration-200 hover:bg-primary-hover hover:shadow-md active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:w-auto sm:px-6"
           >
-            {t("add")}
-          </Link>
+            <PlusIcon className="h-6 w-6 sm:hidden" />
+            <span className="hidden sm:inline">{t("add")}</span>
+          </AddMediaTrigger>
         </div>
       </div>
     </header>
+  );
+}
+
+function PlusIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.25"
+      strokeLinecap="round"
+      aria-hidden
+    >
+      <path d="M12 5v14M5 12h14" />
+    </svg>
   );
 }

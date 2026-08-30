@@ -24,8 +24,10 @@ import {
   normalizeMime,
 } from "../lib/media-constraints";
 import { originalMediaUrl } from "../lib/media-display";
+import { CHOOSER_SCENE } from "../lib/stickers";
 import type { OriginalCharacter } from "../lib/types";
 import { BackButton } from "./back-button";
+import { SceneFigure } from "./scene-figure";
 import { StatusCallout } from "./status-callout";
 
 type CreateOcFormProps = {
@@ -236,7 +238,7 @@ export function CreateOcForm({ oc }: CreateOcFormProps) {
         onSubmit={(event) => void onSubmit(event)}
         className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-4 py-16 sm:px-6 lg:flex-row lg:items-start lg:py-20"
       >
-        <div className="w-full shrink-0 lg:w-[18rem]">
+        <div className="mx-auto w-full max-w-[14rem] shrink-0 sm:max-w-xs lg:mx-0 lg:max-w-none lg:w-[18rem]">
           <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-foreground-muted">
             {t("ocPortrait")}{" "}
             <span className="normal-case text-foreground-subtle">
@@ -277,10 +279,10 @@ export function CreateOcForm({ oc }: CreateOcFormProps) {
             }}
             onDrop={onDrop}
             className={[
-              "relative flex aspect-[3/4] w-full flex-col items-center justify-center overflow-hidden rounded-2xl border border-dashed bg-surface text-center shadow-sm transition-all",
+              "app-card app-card-interactive relative flex aspect-[3/4] w-full flex-col items-center justify-center overflow-hidden rounded-2xl border border-dashed text-center shadow-sm transition-all",
               dragOver
-                ? "border-primary bg-accent-soft/50"
-                : "border-border-strong hover:border-primary hover:bg-accent-soft/40",
+                ? "is-active border-primary"
+                : "border-border-strong hover:border-primary",
             ].join(" ")}
           >
             {preview ? (
@@ -292,9 +294,11 @@ export function CreateOcForm({ oc }: CreateOcFormProps) {
               />
             ) : (
               <>
-                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-soft text-primary ring-1 ring-border">
-                  <OcIcon className="h-7 w-7" />
-                </span>
+                <SceneFigure
+                  sticker={CHOOSER_SCENE.oc}
+                  size="chooser"
+                  float
+                />
                 <span className="mt-3 px-4 text-sm font-medium text-foreground">
                   {t("ocAddPortrait")}
                 </span>
@@ -313,7 +317,7 @@ export function CreateOcForm({ oc }: CreateOcFormProps) {
           ) : null}
         </div>
 
-        <div className="flex min-w-0 flex-1 flex-col gap-4">
+        <div className="app-card flex min-w-0 flex-1 flex-col gap-4 rounded-2xl border border-border p-5 shadow-sm sm:p-6">
           <Field
             label={t("ocName")}
             required
@@ -410,7 +414,7 @@ function Field({
         required={required}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+        className="rounded-xl border border-border bg-background px-3 py-2.5 text-base outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 sm:text-sm"
       />
     </label>
   );
@@ -442,26 +446,9 @@ function Area({
         rows={rows}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="resize-y rounded-xl border border-border bg-background px-3 py-2.5 text-sm leading-relaxed outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+        className="resize-y rounded-xl border border-border bg-background px-3 py-2.5 text-base leading-relaxed outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 sm:text-sm"
       />
     </label>
   );
 }
 
-export function OcIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <circle cx="12" cy="8" r="3.25" />
-      <path d="M5.4 19.2c1.3-3.1 3.7-4.7 6.6-4.7s5.3 1.6 6.6 4.7" />
-    </svg>
-  );
-}

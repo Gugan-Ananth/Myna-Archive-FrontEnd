@@ -72,12 +72,12 @@ export function ArchiveGrid({
   return (
     <div
       ref={containerRef}
-      className="flex w-full items-start gap-2 sm:gap-2.5 lg:gap-3"
+      className="flex w-full items-start gap-3 sm:gap-3.5 lg:gap-4"
     >
       {columns.map((column, columnIndex) => (
         <ul
           key={columnIndex}
-          className="flex min-w-0 flex-1 list-none flex-col gap-2 sm:gap-2.5 lg:gap-3"
+          className="flex min-w-0 flex-1 list-none flex-col gap-3 sm:gap-3.5 lg:gap-4"
         >
           {column.map((item) => (
             <li key={item.id} className="w-full">
@@ -94,14 +94,11 @@ export function ArchiveGrid({
 }
 
 function columnsForWidth(width: number): number {
-  // Full-bleed pinboard: more columns earlier so the wall fills the viewport
-  // instead of a narrow centered strip.
-  if (width >= 1680) return 7;
-  if (width >= 1400) return 6;
-  if (width >= 1100) return 5;
-  if (width >= 860) return 4;
-  if (width >= 620) return 3;
-  if (width >= 380) return 2;
+  // Fewer columns so each pin reads larger; still fills a wide viewport.
+  if (width >= 1680) return 5;
+  if (width >= 1280) return 4;
+  if (width >= 900) return 3;
+  if (width >= 540) return 2;
   return 1;
 }
 

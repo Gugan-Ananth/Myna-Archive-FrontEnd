@@ -180,17 +180,17 @@ export function CategoryTagPicker({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex min-h-[2rem] flex-wrap gap-1.5">
+    <div className="space-y-2">
+      <div className="flex min-h-[1.75rem] flex-wrap gap-1.5">
         {value.length === 0 && (
-          <span className="text-xs text-foreground-subtle">
+          <span className="text-sm text-foreground-subtle">
             {t("addAtLeastOneTagHint")}
           </span>
         )}
         {value.map((encoded) => (
           <span
             key={encoded}
-            className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2.5 py-1 text-sm font-medium text-primary"
+            className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2.5 py-0.5 text-base font-medium text-primary"
           >
             {formatTagLabel(encoded, taxonomy)}
             <button
@@ -209,15 +209,15 @@ export function CategoryTagPicker({
       </div>
 
       {localError && (
-        <p className="text-sm text-danger" role="alert">
+        <p className="text-base text-danger" role="alert">
           {localError}
         </p>
       )}
 
       {loading && taxonomy.length === 0 ? (
-        <p className="text-sm text-foreground-muted">{t("loadingMore")}</p>
+        <p className="text-base text-foreground-muted">{t("loadingMore")}</p>
       ) : (
-        <div className="space-y-2.5">
+        <div className="space-y-1.5">
           {taxonomy.map((category) => (
             <CategorySection
               key={category.slug}
@@ -251,8 +251,8 @@ export function CategoryTagPicker({
       )}
 
       {addingCategory ? (
-        <div className="space-y-2 rounded-2xl border border-border bg-surface-muted/40 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-foreground-muted">
+        <div className="space-y-1.5 rounded-xl border border-border bg-background p-2.5">
+          <p className="text-sm font-semibold uppercase tracking-wide text-foreground-muted">
             {t("addCategory")}
           </p>
           <input
@@ -261,7 +261,7 @@ export function CategoryTagPicker({
             disabled={busy}
             onChange={(e) => setNewCategoryName(e.target.value)}
             placeholder={t("categoryNamePlaceholder")}
-            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
+            className="w-full rounded-xl border border-border bg-background px-3 py-1.5 text-base outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
           />
           <input
             type="text"
@@ -275,7 +275,7 @@ export function CategoryTagPicker({
               }
             }}
             placeholder={t("firstTagPlaceholder")}
-            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
+            className="w-full rounded-xl border border-border bg-background px-3 py-1.5 text-base outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
           />
           <div className="flex gap-2">
             <button
@@ -286,7 +286,7 @@ export function CategoryTagPicker({
                 !slugify(newCategoryTag)
               }
               onClick={() => void submitNewCategory()}
-              className="rounded-xl bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
+              className="rounded-xl bg-primary px-3 py-1.5 text-base font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
             >
               {t("addCategoryConfirm")}
             </button>
@@ -298,7 +298,7 @@ export function CategoryTagPicker({
                 setNewCategoryName("");
                 setNewCategoryTag("");
               }}
-              className="rounded-xl border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-surface-muted disabled:opacity-50"
+              className="rounded-xl border border-border px-3 py-1.5 text-base font-medium text-foreground hover:bg-surface-muted disabled:opacity-50"
             >
               {t("cancel")}
             </button>
@@ -312,7 +312,7 @@ export function CategoryTagPicker({
             setAddingCategory(true);
             setOthersOpen(null);
           }}
-          className="inline-flex h-9 items-center rounded-xl border border-dashed border-border-strong px-3 text-sm font-medium text-foreground-muted transition-colors hover:border-primary hover:bg-accent-soft hover:text-primary disabled:opacity-50"
+          className="inline-flex h-8 items-center rounded-xl border border-dashed border-border-strong px-3 text-base font-medium text-foreground-muted transition-colors hover:border-primary hover:bg-accent-soft hover:text-primary disabled:opacity-50"
         >
           + {t("addCategory")}
         </button>
@@ -357,12 +357,12 @@ function CategorySection({
   return (
     <fieldset
       disabled={disabled}
-      className="rounded-2xl border border-border bg-surface px-3 py-2.5 disabled:opacity-60"
+      className="rounded-xl border border-border bg-background px-2.5 py-1.5 disabled:opacity-60"
     >
-      <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
+      <legend className="px-1 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
         {category.label}
       </legend>
-      <div className="mt-1 flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-1">
         {category.tags.map((tag) => {
           const encoded = tagStorageValue(category.slug, tag.slug);
           const selected = selectedSet.has(encoded);
@@ -373,7 +373,7 @@ function CategorySection({
               onClick={() => onToggleTag(tag.slug)}
               aria-pressed={selected}
               className={[
-                "inline-flex h-8 items-center rounded-lg px-2.5 text-sm font-medium transition-all",
+                "inline-flex h-8 items-center rounded-lg px-2.5 text-base font-medium transition-all",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                 selected
                   ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover"
@@ -391,11 +391,11 @@ function CategorySection({
             onClick={() => (othersOpen ? onCloseOthers() : onOpenOthers())}
             aria-expanded={othersOpen}
             className={[
-              "inline-flex h-8 items-center rounded-lg border border-dashed px-2.5 text-sm font-medium transition-all",
+              "inline-flex h-8 items-center rounded-lg border border-dashed px-2.5 text-base font-medium transition-all",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
               othersOpen
                 ? "border-primary bg-accent-soft text-primary"
-                : "border-border-strong bg-surface text-foreground-muted hover:border-primary hover:bg-accent-soft hover:text-primary",
+                : "border-border-strong bg-background text-foreground-muted hover:border-primary hover:bg-accent-soft hover:text-primary",
             ].join(" ")}
           >
             {othersLabel}
@@ -404,7 +404,7 @@ function CategorySection({
       </div>
 
       {allowOthers && othersOpen && (
-        <div className="mt-2 flex gap-2">
+        <div className="mt-1.5 flex gap-2">
           <input
             type="text"
             value={othersDraft}
@@ -421,13 +421,13 @@ function CategorySection({
               }
             }}
             placeholder={customTagPlaceholder}
-            className="min-w-0 flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+            className="min-w-0 flex-1 rounded-xl border border-border bg-background px-3 py-1.5 text-base outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
           />
           <button
             type="button"
             disabled={!slugify(othersDraft)}
             onClick={onAddOthers}
-            className="rounded-xl border border-border px-3 text-sm font-medium hover:bg-surface-muted disabled:opacity-50"
+            className="rounded-xl border border-border px-3 text-base font-medium hover:bg-surface-muted disabled:opacity-50"
           >
             {addLabel}
           </button>

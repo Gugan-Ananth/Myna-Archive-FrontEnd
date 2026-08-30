@@ -6,10 +6,11 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { useI18n } from "../lib/i18n";
+
+type Mode = "contain" | "fill-width";
 
 type ImageZoomViewerProps = {
   /** Prefer the original asset URL (jpg/png/…), not an optimized webp transform. */
@@ -23,40 +24,53 @@ type ImageZoomViewerProps = {
   controlsClassName?: string;
   /** Fired when zoom crosses 1× so parents can disable slide-swipe while panning. */
   onZoomChange?: (zoomed: boolean) => void;
+  /** Opening layout. `"fill-width"` is the comic page reader. */
+  initialMode?: Mode;
+  /** Click toggles contain ↔ fill-width. Off for comic pages (arrows change pages). */
+  clickTogglesZoom?: boolean;
 };
 
-const MIN_SCALE = 1;
-const MAX_SCALE = 5;
+const MIN_EXTRA = 1;
+const MAX_EXTRA = 5;
 const BUTTON_STEP = 0.4;
-const QUICK_SCALE = 2.5;
 /** Wheel / trackpad zoom sensitivity (higher = faster). */
 const WHEEL_INTENSITY = 0.0022;
 
-type Transform = {
-  scale: number;
-  /** Pan offset in CSS pixels (applied after scale, around center). */
-  x: number;
-  y: number;
+type Anchor = {
+  /** 0–1 position on the image (layout box, not the letterboxed stage). */
+  nx: number;
+  ny: number;
+  clientX: number;
+  clientY: number;
 };
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
 
-function clampScale(s: number): number {
-  return clamp(s, MIN_SCALE, MAX_SCALE);
+function clampExtra(s: number): number {
+  return clamp(s, MIN_EXTRA, MAX_EXTRA);
+}
+
+function containSize(
+  naturalW: number,
+  naturalH: number,
+  stageW: number,
+  stageH: number,
+): { w: number; h: number } {
+  if (!naturalW || !naturalH || !stageW || !stageH) return { w: 0, h: 0 };
+  const scale = Math.min(stageW / naturalW, stageH / naturalH, 1);
+  return { w: naturalW * scale, h: naturalH * scale };
 }
 
 /**
- * Full-stage image viewer with transform-based zoom.
+ * Full-stage image viewer.
  *
- * Gestures:
- * - Scroll / trackpad two-finger swipe → scroll the image (and the page)
- * - Trackpad pinch (wheel + ctrl) / Safari gesture / two-finger touch → zoom
- * - Click → zoom in toward cursor (or step further when already zoomed)
- * - Double-click → reset
- * - Drag when zoomed → pan
- * - − / % / + buttons → stepped zoom / reset
+ * Contain (default): the whole image is visible, like opening the file in a
+ * new tab. Click lays the image out at stage width (no letterbox) and the
+ * stage scrolls. Click again returns to contain. Pinch / buttons grow the
+ * laid-out image further so both axes can scroll — the photo is sized, never
+ * a CSS scale of empty padding.
  */
 export function ImageZoomViewer({
   src,
@@ -64,246 +78,187 @@ export function ImageZoomViewer({
   className = "",
   controlsClassName = "",
   onZoomChange,
+  initialMode = "contain",
+  clickTogglesZoom = true,
 }: ImageZoomViewerProps) {
   const { t } = useI18n();
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [transform, setTransform] = useState<Transform>({
-    scale: MIN_SCALE,
-    x: 0,
-    y: 0,
-  });
+  const [mode, setMode] = useState<Mode>(initialMode);
+  const [extraScale, setExtraScale] = useState(MIN_EXTRA);
+  const [stageSize, setStageSize] = useState({ w: 0, h: 0 });
+  const [natural, setNatural] = useState({ w: 0, h: 0 });
 
   const rootRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
-  /** Kept in sync wherever transform is written — not during render. */
-  const transformRef = useRef<Transform>({ scale: MIN_SCALE, x: 0, y: 0 });
+  const modeRef = useRef<Mode>(mode);
+  const extraRef = useRef(extraScale);
+
+  const pendingAnchorRef = useRef<Anchor | null>(null);
 
   const dragRef = useRef<{
-    active: boolean;
     startX: number;
     startY: number;
-    originX: number;
-    originY: number;
-    pointerId: number | null;
+    scrollLeft: number;
+    scrollTop: number;
+    pointerId: number;
   } | null>(null);
 
   const pinchRef = useRef<{
     startDistance: number;
-    startScale: number;
-    /** Unscaled offset from the image center that sat under the pinch midpoint. */
-    localX: number;
-    localY: number;
+    startExtra: number;
+    nx: number;
+    ny: number;
   } | null>(null);
 
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const movedRef = useRef(false);
 
-  const isZoomed = transform.scale > MIN_SCALE + 0.001;
-
-  const commitTransform = useCallback((next: Transform) => {
-    transformRef.current = next;
-    const img = imgRef.current;
-    if (img) {
-      img.style.transform = `translate3d(${next.x}px, ${next.y}px, 0) scale(${next.scale})`;
-    }
-    setTransform(next);
-  }, []);
+  const isZoomed = mode !== "contain";
 
   useEffect(() => {
     onZoomChange?.(isZoomed);
   }, [isZoomed, onZoomChange]);
 
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
+
+  useEffect(() => {
+    extraRef.current = extraScale;
+  }, [extraScale]);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const sync = () => {
+      setStageSize({ w: root.clientWidth, h: root.clientHeight });
+    };
+    sync();
+    const observer = new ResizeObserver(sync);
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, []);
+
   useLayoutEffect(() => {
-    if (!isZoomed) return;
+    const anchor = pendingAnchorRef.current;
+    if (!anchor || mode !== "fill-width") return;
+    pendingAnchorRef.current = null;
     const stage = stageRef.current;
-    if (stage && stage.scrollTop) stage.scrollTop = 0;
-  }, [isZoomed]);
+    const img = imgRef.current;
+    if (!stage || !img) return;
+    const stageRect = stage.getBoundingClientRect();
+    stage.scrollLeft =
+      anchor.nx * img.offsetWidth - (anchor.clientX - stageRect.left);
+    stage.scrollTop =
+      anchor.ny * img.offsetHeight - (anchor.clientY - stageRect.top);
+  }, [mode, extraScale, stageSize.w]);
 
-  const resetTransform = useCallback(() => {
-    commitTransform({ scale: MIN_SCALE, x: 0, y: 0 });
-  }, [commitTransform]);
-
-  /**
-   * Clamp pan so some of the image stays on stage, without stealing the
-   * focal point when zooming into a region that isn't the image center.
-   */
-  const clampPan = useCallback(
-    (scale: number, x: number, y: number): { x: number; y: number } => {
-      if (scale <= MIN_SCALE) return { x: 0, y: 0 };
-
-      const stage = stageRef.current;
+  const captureAnchor = useCallback(
+    (clientX: number, clientY: number): Anchor | null => {
       const img = imgRef.current;
-      if (!stage || !img) return { x, y };
-
-      const stageW = stage.clientWidth;
-      const stageH = stage.clientHeight;
-      const fitW = img.offsetWidth;
-      const fitH = img.offsetHeight;
-      if (!fitW || !fitH) return { x, y };
-
-      const scaledW = fitW * scale;
-      const scaledH = fitH * scale;
-      const minVisible = 48;
-      const maxX = Math.max(0, (scaledW + stageW) / 2 - minVisible);
-      const maxY = Math.max(0, (scaledH + stageH) / 2 - minVisible);
-
+      if (!img) return null;
+      const r = img.getBoundingClientRect();
+      if (!r.width || !r.height) return null;
       return {
-        x: clamp(x, -maxX, maxX),
-        y: clamp(y, -maxY, maxY),
+        nx: (clientX - r.left) / r.width,
+        ny: (clientY - r.top) / r.height,
+        clientX,
+        clientY,
       };
     },
     [],
   );
 
-  /**
-   * Lock the 1× scroll box into the zoomed layout (image flex-centered in the
-   * stage, overflow hidden) so scale/pan origin is the stage center.
-   * Must run after reading the image-local point, before applying pan.
-   */
-  const ensureZoomedLayout = useCallback(() => {
+  const resetView = useCallback(() => {
+    pendingAnchorRef.current = null;
+    setMode(clickTogglesZoom ? "contain" : "fill-width");
+    setExtraScale(MIN_EXTRA);
     const stage = stageRef.current;
-    const wrap = imgRef.current?.parentElement;
-    if (!stage || !wrap) return;
-    stage.classList.remove(
-      "overflow-y-auto",
-      "overflow-x-hidden",
-      "overscroll-y-contain",
-    );
-    stage.classList.add("overflow-hidden");
-    if (stage.scrollTop) stage.scrollTop = 0;
-    wrap.className = "flex h-full w-full items-center justify-center";
-  }, []);
+    if (stage) {
+      stage.scrollLeft = 0;
+      stage.scrollTop = 0;
+    }
+  }, [clickTogglesZoom]);
 
-  /**
-   * Unscaled offset from the image's layout center to the content under
-   * (clientX, clientY). Uses the current painted box (scroll + transform).
-   */
-  const imageLocalFromClient = useCallback((clientX: number, clientY: number) => {
-    const img = imgRef.current;
-    const scale = transformRef.current.scale;
-    if (!img || scale <= 0) return { x: 0, y: 0 };
-    const r = img.getBoundingClientRect();
-    return {
-      x: (clientX - (r.left + r.right) / 2) / scale,
-      y: (clientY - (r.top + r.bottom) / 2) / scale,
-    };
-  }, []);
-
-  /**
-   * Pan/scale so the given image-local point stays under (clientX, clientY).
-   * Origin is the stage center — the transform-origin once zoomed layout is on.
-   */
-  const zoomToLocalPoint = useCallback(
-    (
-      nextScaleRaw: number,
-      localX: number,
-      localY: number,
-      clientX: number,
-      clientY: number,
-    ) => {
-      const stage = stageRef.current;
-      if (!stage) return;
-
-      const prev = transformRef.current;
-      const nextScale = clampScale(nextScaleRaw);
-      if (nextScale <= MIN_SCALE) {
-        resetTransform();
-        return;
+  const enterFillWidth = useCallback(
+    (extra: number, clientX?: number, clientY?: number) => {
+      if (typeof clientX === "number" && typeof clientY === "number") {
+        pendingAnchorRef.current = captureAnchor(clientX, clientY);
       }
-
-      if (prev.scale <= MIN_SCALE) {
-        ensureZoomedLayout();
-      }
-
-      const rect = stage.getBoundingClientRect();
-      const originX = rect.left + rect.width / 2;
-      const originY = rect.top + rect.height / 2;
-      const pan = clampPan(
-        nextScale,
-        clientX - originX - localX * nextScale,
-        clientY - originY - localY * nextScale,
-      );
-
-      if (
-        Math.abs(nextScale - prev.scale) < 0.0008 &&
-        Math.abs(pan.x - prev.x) < 0.05 &&
-        Math.abs(pan.y - prev.y) < 0.05
-      ) {
-        return;
-      }
-
-      commitTransform({ scale: nextScale, x: pan.x, y: pan.y });
+      setMode("fill-width");
+      setExtraScale(clampExtra(extra));
     },
-    [clampPan, commitTransform, ensureZoomedLayout, resetTransform],
+    [captureAnchor],
   );
 
-  /**
-   * Zoom so the content currently under (clientX, clientY) stays put.
-   */
-  const zoomAtClientPoint = useCallback(
-    (nextScaleRaw: number, clientX: number, clientY: number) => {
-      const local = imageLocalFromClient(clientX, clientY);
-      zoomToLocalPoint(nextScaleRaw, local.x, local.y, clientX, clientY);
+  const applyExtraAtPoint = useCallback(
+    (nextExtraRaw: number, clientX: number, clientY: number) => {
+      const nextExtra = clampExtra(nextExtraRaw);
+      if (modeRef.current === "contain") {
+        if (nextExtraRaw < MIN_EXTRA + 0.02) return;
+        enterFillWidth(nextExtra, clientX, clientY);
+        return;
+      }
+      if (nextExtraRaw < MIN_EXTRA - 0.02) {
+        if (!clickTogglesZoom) {
+          pendingAnchorRef.current = captureAnchor(clientX, clientY);
+          setExtraScale(MIN_EXTRA);
+          return;
+        }
+        resetView();
+        return;
+      }
+      pendingAnchorRef.current = captureAnchor(clientX, clientY);
+      setExtraScale(nextExtra);
     },
-    [imageLocalFromClient, zoomToLocalPoint],
+    [captureAnchor, clickTogglesZoom, enterFillWidth, resetView],
   );
 
   const zoomByStep = useCallback(
     (delta: number) => {
       const stage = stageRef.current;
-      if (!stage) return;
-      const rect = stage.getBoundingClientRect();
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
-      zoomAtClientPoint(transformRef.current.scale + delta, cx, cy);
+      const rect = stage?.getBoundingClientRect();
+      const cx = rect ? rect.left + rect.width / 2 : 0;
+      const cy = rect ? rect.top + rect.height / 2 : 0;
+      if (modeRef.current === "contain") {
+        if (delta > 0) enterFillWidth(MIN_EXTRA, cx, cy);
+        return;
+      }
+      applyExtraAtPoint(extraRef.current + delta, cx, cy);
     },
-    [zoomAtClientPoint],
+    [applyExtraAtPoint, enterFillWidth],
   );
 
-  // Wheel: pinch (ctrl/meta) zooms; otherwise scroll the image / page.
+  // Wheel: pinch (ctrl/meta) zooms the laid-out width; otherwise native scroll.
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
 
     const onWheel = (event: WheelEvent) => {
-      const t = transformRef.current;
       const isPinchZoom = event.ctrlKey || event.metaKey;
+      if (!isPinchZoom) return;
 
-      if (isPinchZoom) {
-        event.preventDefault();
-        event.stopPropagation();
+      event.preventDefault();
+      event.stopPropagation();
 
-        const delta =
-          event.deltaMode === 1
-            ? event.deltaY * 16
-            : event.deltaMode === 2
-              ? event.deltaY * 800
-              : event.deltaY;
+      const delta =
+        event.deltaMode === 1
+          ? event.deltaY * 16
+          : event.deltaMode === 2
+            ? event.deltaY * 800
+            : event.deltaY;
 
-        const factor = Math.exp(-delta * WHEEL_INTENSITY * 1.35);
-        zoomAtClientPoint(
-          t.scale * factor,
-          event.clientX,
-          event.clientY,
-        );
-        return;
-      }
-
-      if (t.scale > MIN_SCALE + 0.001) {
-        // Zoomed: wheel pans the enlarged image instead of changing scale.
-        event.preventDefault();
-        event.stopPropagation();
-        const pan = clampPan(t.scale, t.x - event.deltaX, t.y - event.deltaY);
-        commitTransform({ scale: t.scale, x: pan.x, y: pan.y });
-      }
-      // Fit: do not preventDefault — the stage (and page) scroll normally.
+      const factor = Math.exp(-delta * WHEEL_INTENSITY * 1.35);
+      const current =
+        modeRef.current === "contain" ? MIN_EXTRA : extraRef.current;
+      applyExtraAtPoint(current * factor, event.clientX, event.clientY);
     };
 
     stage.addEventListener("wheel", onWheel, { passive: false });
     return () => stage.removeEventListener("wheel", onWheel);
-  }, [clampPan, commitTransform, zoomAtClientPoint]);
+  }, [applyExtraAtPoint]);
 
   // Safari gesture events (older trackpad pinch)
   useEffect(() => {
@@ -314,20 +269,25 @@ export function ImageZoomViewer({
       event.preventDefault();
     };
 
-    let gestureScale = 1;
+    let gestureExtra = MIN_EXTRA;
     const onGestureStart = (event: Event) => {
       event.preventDefault();
-      gestureScale = transformRef.current.scale;
+      gestureExtra =
+        modeRef.current === "contain" ? MIN_EXTRA : extraRef.current;
     };
     const onGestureChange = (event: Event) => {
       event.preventDefault();
-      const ge = event as Event & { scale?: number; clientX?: number; clientY?: number };
+      const ge = event as Event & {
+        scale?: number;
+        clientX?: number;
+        clientY?: number;
+      };
       if (typeof ge.scale !== "number") return;
       const stage = stageRef.current;
       if (!stage) return;
       const rect = stage.getBoundingClientRect();
-      zoomAtClientPoint(
-        gestureScale * ge.scale,
+      applyExtraAtPoint(
+        gestureExtra * ge.scale,
         ge.clientX ?? rect.left + rect.width / 2,
         ge.clientY ?? rect.top + rect.height / 2,
       );
@@ -344,7 +304,7 @@ export function ImageZoomViewer({
       root.removeEventListener("gesturechange", onGestureChange);
       root.removeEventListener("gestureend", prevent);
     };
-  }, [zoomAtClientPoint]);
+  }, [applyExtraAtPoint]);
 
   function pointerDistance(
     a: { x: number; y: number },
@@ -368,42 +328,30 @@ export function ImageZoomViewer({
       y: event.clientY,
     });
 
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      /* ignore */
-    }
-
     if (pointersRef.current.size === 2) {
       const [a, b] = [...pointersRef.current.values()];
       if (!a || !b) return;
       dragRef.current = null;
       const mid = pointerMid(a, b);
-      const local = imageLocalFromClient(mid.x, mid.y);
+      const anchor = captureAnchor(mid.x, mid.y);
       pinchRef.current = {
         startDistance: Math.max(8, pointerDistance(a, b)),
-        startScale: transformRef.current.scale,
-        localX: local.x,
-        localY: local.y,
+        startExtra:
+          modeRef.current === "contain" ? MIN_EXTRA : extraRef.current,
+        nx: anchor?.nx ?? 0.5,
+        ny: anchor?.ny ?? 0.5,
       };
       movedRef.current = true;
       return;
     }
 
-    // Single pointer: pan only when zoomed.
-    if (transformRef.current.scale <= MIN_SCALE) {
-      dragRef.current = null;
-      movedRef.current = false;
-      return;
-    }
-
     movedRef.current = false;
+    const stage = stageRef.current;
     dragRef.current = {
-      active: true,
       startX: event.clientX,
       startY: event.clientY,
-      originX: transformRef.current.x,
-      originY: transformRef.current.y,
+      scrollLeft: stage?.scrollLeft ?? 0,
+      scrollTop: stage?.scrollTop ?? 0,
       pointerId: event.pointerId,
     };
   }
@@ -416,7 +364,6 @@ export function ImageZoomViewer({
       });
     }
 
-    // Pinch: keep the original image point under the live midpoint.
     if (pinchRef.current && pointersRef.current.size >= 2) {
       event.preventDefault();
       const [a, b] = [...pointersRef.current.values()];
@@ -424,21 +371,30 @@ export function ImageZoomViewer({
       const pinch = pinchRef.current;
       const dist = Math.max(8, pointerDistance(a, b));
       const mid = pointerMid(a, b);
-      const nextScale = pinch.startScale * (dist / pinch.startDistance);
-      zoomToLocalPoint(nextScale, pinch.localX, pinch.localY, mid.x, mid.y);
+      pendingAnchorRef.current = {
+        nx: pinch.nx,
+        ny: pinch.ny,
+        clientX: mid.x,
+        clientY: mid.y,
+      };
+      applyExtraAtPoint(
+        pinch.startExtra * (dist / pinch.startDistance),
+        mid.x,
+        mid.y,
+      );
       return;
     }
 
     const drag = dragRef.current;
-    if (!drag?.active || drag.pointerId !== event.pointerId) return;
-
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const stage = stageRef.current;
     const dx = event.clientX - drag.startX;
     const dy = event.clientY - drag.startY;
-    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) movedRef.current = true;
-
-    const scale = transformRef.current.scale;
-    const pan = clampPan(scale, drag.originX + dx, drag.originY + dy);
-    commitTransform({ scale, x: pan.x, y: pan.y });
+    const dsx = Math.abs((stage?.scrollLeft ?? 0) - drag.scrollLeft);
+    const dsy = Math.abs((stage?.scrollTop ?? 0) - drag.scrollTop);
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4 || dsx > 4 || dsy > 4) {
+      movedRef.current = true;
+    }
   }
 
   function onPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
@@ -450,45 +406,37 @@ export function ImageZoomViewer({
     }
 
     if (dragRef.current?.pointerId === event.pointerId) {
+      const drag = dragRef.current;
+      const stage = stageRef.current;
+      const dsx = Math.abs((stage?.scrollLeft ?? 0) - drag.scrollLeft);
+      const dsy = Math.abs((stage?.scrollTop ?? 0) - drag.scrollTop);
+      if (dsx > 4 || dsy > 4) movedRef.current = true;
       dragRef.current = null;
     }
 
-    try {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    } catch {
-      /* ignore */
-    }
-
-    // Pan / pinch ended with movement → not a click.
     if (moved) {
       movedRef.current = false;
       return;
     }
 
-    // Another finger still down, or non-primary mouse button.
     if (pointersRef.current.size > 0) return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (!clickTogglesZoom) return;
 
-    // Clean tap: zoom in toward the click (or reset when already at max).
-    if (transformRef.current.scale >= MAX_SCALE - 0.05) {
-      resetTransform();
-    } else if (transformRef.current.scale > MIN_SCALE + 0.05) {
-      zoomAtClientPoint(
-        transformRef.current.scale + BUTTON_STEP,
-        event.clientX,
-        event.clientY,
-      );
+    if (modeRef.current === "fill-width") {
+      resetView();
     } else {
-      zoomAtClientPoint(QUICK_SCALE, event.clientX, event.clientY);
+      enterFillWidth(MIN_EXTRA, event.clientX, event.clientY);
     }
   }
 
-  function onDoubleClick(event: ReactMouseEvent<HTMLDivElement>) {
-    event.preventDefault();
-    event.stopPropagation();
-    // Double-click always resets to fit (clear exit from deep zoom).
-    resetTransform();
-  }
+  const fitted = containSize(natural.w, natural.h, stageSize.w, stageSize.h);
+  const displayWidth =
+    mode === "contain"
+      ? fitted.w
+      : stageSize.w * extraScale;
+  const zoomPercent =
+    fitted.w > 0 ? Math.round((displayWidth / fitted.w) * 100) : 100;
 
   return (
     <div
@@ -511,57 +459,62 @@ export function ImageZoomViewer({
         </div>
       )}
 
-      {/*
-        1×: image can be taller than the stage — wheel / touch scroll it.
-        Zoomed: overflow locks and transform pan/scale take over.
-      */}
       <div
         ref={stageRef}
         className={[
           "absolute inset-0 select-none",
           isZoomed
-            ? "overflow-hidden [touch-action:none] cursor-grab active:cursor-grabbing"
-            : "overflow-y-auto overflow-x-hidden overscroll-y-contain [touch-action:pan-y] cursor-zoom-in",
+            ? [
+                "overflow-auto overscroll-contain [touch-action:pan-x_pan-y]",
+                clickTogglesZoom ? "cursor-zoom-out" : "",
+              ].join(" ")
+            : [
+                "flex items-center justify-center overflow-hidden [touch-action:manipulation]",
+                clickTogglesZoom ? "cursor-zoom-in" : "",
+              ].join(" "),
         ].join(" ")}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        onDoubleClick={onDoubleClick}
       >
-        <div
-          className={
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          ref={imgRef}
+          src={src}
+          alt={alt}
+          draggable={false}
+          decoding="async"
+          onLoad={(event) => {
+            const el = event.currentTarget;
+            setNatural({ w: el.naturalWidth, h: el.naturalHeight });
+            setLoaded(true);
+          }}
+          onError={() => {
+            setFailed(true);
+            setLoaded(true);
+          }}
+          style={
             isZoomed
-              ? "flex h-full w-full items-center justify-center"
-              : "flex min-h-full w-full items-center justify-center"
+              ? {
+                  width: `${extraScale * 100}%`,
+                  height: "auto",
+                  maxWidth: "none",
+                  maxHeight: "none",
+                }
+              : undefined
           }
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            ref={imgRef}
-            src={src}
-            alt={alt}
-            draggable={false}
-            decoding="async"
-            onLoad={() => setLoaded(true)}
-            onError={() => {
-              setFailed(true);
-              setLoaded(true);
-            }}
-            style={{
-              transform: `translate3d(${transform.x}px, ${transform.y}px, 0) scale(${transform.scale})`,
-              transformOrigin: "center center",
-            }}
-            className={[
-              "pointer-events-none h-auto w-auto max-w-full will-change-transform",
-              "transition-opacity duration-200",
-              loaded ? "opacity-100" : "opacity-0",
-            ].join(" ")}
-          />
-        </div>
+          className={[
+            "pointer-events-none",
+            isZoomed
+              ? "block h-auto"
+              : "h-auto w-auto max-h-full max-w-full object-contain",
+            "transition-opacity duration-200",
+            loaded ? "opacity-100" : "opacity-0",
+          ].join(" ")}
+        />
       </div>
 
-      {/* Zoom chrome */}
       <div
         className={[
           "pointer-events-none absolute z-20 flex items-center gap-0.5 rounded-full bg-black/55 px-1 py-1 shadow-lg ring-1 ring-white/10 backdrop-blur-md",
@@ -572,13 +525,9 @@ export function ImageZoomViewer({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            if (transformRef.current.scale <= MIN_SCALE + BUTTON_STEP / 2) {
-              resetTransform();
-            } else {
-              zoomByStep(-BUTTON_STEP);
-            }
+            zoomByStep(-BUTTON_STEP);
           }}
-          disabled={transform.scale <= MIN_SCALE}
+          disabled={clickTogglesZoom ? !isZoomed : extraScale <= MIN_EXTRA}
           aria-label={t("zoomOut")}
           className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full text-white/90 transition-colors hover:bg-white/10 disabled:opacity-35"
         >
@@ -588,13 +537,13 @@ export function ImageZoomViewer({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            resetTransform();
+            resetView();
           }}
           aria-label={t("resetZoom")}
           title={t("resetZoom")}
           className="pointer-events-auto min-w-[3.25rem] px-2 text-center text-xs font-medium tabular-nums text-white/85"
         >
-          {Math.round(transform.scale * 100)}%
+          {zoomPercent}%
         </button>
         <button
           type="button"
@@ -602,7 +551,7 @@ export function ImageZoomViewer({
             e.stopPropagation();
             zoomByStep(BUTTON_STEP);
           }}
-          disabled={transform.scale >= MAX_SCALE}
+          disabled={isZoomed && extraScale >= MAX_EXTRA}
           aria-label={t("zoomIn")}
           className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full text-white/90 transition-colors hover:bg-white/10 disabled:opacity-35"
         >

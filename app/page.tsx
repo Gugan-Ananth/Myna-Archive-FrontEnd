@@ -6,6 +6,7 @@ import {
   listTagSummaries,
   listTaxonomy,
 } from "./lib/api";
+import { sessionAuth } from "./lib/auth/session";
 import {
   listParamsForView,
   parseCollectionView,
@@ -32,6 +33,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const tags = normalizeTags(params.tag);
   const view = parseCollectionView(params.view);
   const section = listParamsForView(view);
+  const auth = await sessionAuth();
 
   let items: Awaited<ReturnType<typeof listArchiveItems>>["data"] = [];
   let tagSummaries: TagSummary[] = [];
@@ -44,28 +46,37 @@ export default async function Home({ searchParams }: HomeProps) {
 
   try {
     if (view === "oc") {
-      const listResult = await listOriginalCharacters({
-        q: query || undefined,
-        page: 1,
-        pageSize: 40,
-      });
+      const listResult = await listOriginalCharacters(
+        {
+          q: query || undefined,
+          page: 1,
+          pageSize: 40,
+        },
+        auth,
+      );
       ocs = listResult.data;
       ocsTotal = listResult.meta.total;
     } else {
       // Parallel SSR: list + flat tags + taxonomy tree, scoped to the section.
       const [listResult, tagsResult, taxonomyResult] = await Promise.all([
-        listArchiveItems({
-          q: query || undefined,
-          tag: tags.length > 0 ? tags : undefined,
-          ...section,
-          page: 1,
-          pageSize: 40,
-        }),
-        listTagSummaries({
-          mediaType: section.mediaType,
-          imageGroup: section.imageGroup,
-        }),
-        listTaxonomy(),
+        listArchiveItems(
+          {
+            q: query || undefined,
+            tag: tags.length > 0 ? tags : undefined,
+            ...section,
+            page: 1,
+            pageSize: 40,
+          },
+          auth,
+        ),
+        listTagSummaries(
+          {
+            mediaType: section.mediaType,
+            imageGroup: section.imageGroup,
+          },
+          auth,
+        ),
+        listTaxonomy(auth),
       ]);
       items = listResult.data;
       total = listResult.meta.total;

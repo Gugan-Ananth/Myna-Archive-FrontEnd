@@ -27,13 +27,13 @@ export function ThemeToggle({ tone = "header" }: ThemeToggleProps) {
       className={
         rail
           ? [
-              "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
-              "text-foreground-muted transition-colors duration-150",
-              "hover:bg-accent-soft hover:text-primary",
+              "inline-flex h-10 w-10 shrink-0 items-center justify-center justify-self-center rounded-full md:h-12 md:w-12",
+              "bg-surface-muted text-foreground ring-1 ring-border transition-colors duration-150",
+              "hover:bg-accent-soft hover:text-primary hover:ring-border-strong",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             ].join(" ")
           : [
-              "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
+              "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full",
               "border border-border bg-surface text-foreground shadow-sm",
               "transition-all duration-200 hover:border-border-strong hover:bg-accent-soft hover:text-primary",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
@@ -42,9 +42,9 @@ export function ThemeToggle({ tone = "header" }: ThemeToggleProps) {
       }
     >
       {isDark ? (
-        <SunIcon className="h-5 w-5" />
+        <SunIcon className="h-5 w-5 md:h-6 md:w-6" />
       ) : (
-        <MoonIcon className="h-5 w-5" />
+        <MoonIcon className="h-5 w-5 md:h-6 md:w-6" />
       )}
     </button>
   );

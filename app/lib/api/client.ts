@@ -1,5 +1,12 @@
+import { isBrowser } from "./query-cache";
 import { getApiV1Url } from "./config";
 import { ApiError, parseApiError } from "./errors";
+
+export type FetchCacheOptions = {
+  cache?: RequestCache;
+  next?: NextFetchRequestConfig;
+  accessToken?: string | null;
+};
 
 type RequestOptions = {
   method?: string;
@@ -11,6 +18,8 @@ type RequestOptions = {
   next?: NextFetchRequestConfig;
   /** Abort in-flight request (e.g. cancel create finalize). */
   signal?: AbortSignal;
+  /** Server Components pass the session cookie value; the browser uses the BFF. */
+  accessToken?: string | null;
 };
 
 function buildUrl(
@@ -47,16 +56,23 @@ export async function apiFetch<T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { method = "GET", body, query, empty, cache, next, signal } = options;
+  const { method = "GET", body, query, empty, cache, next, signal, accessToken } =
+    options;
+
+  const headers: Record<string, string> =
+    body !== undefined
+      ? { "Content-Type": "application/json", Accept: "application/json" }
+      : { Accept: "application/json" };
+
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
 
   let response: Response;
   try {
     response = await fetch(buildUrl(path, query), {
       method,
-      headers:
-        body !== undefined
-          ? { "Content-Type": "application/json", Accept: "application/json" }
-          : { Accept: "application/json" },
+      headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
       cache,
       next,
@@ -74,6 +90,11 @@ export async function apiFetch<T>(
     );
   }
 
+  if (response.status === 401) {
+    await bounceToLogin();
+    throw await parseApiError(response);
+  }
+
   if (!response.ok) {
     throw await parseApiError(response);
   }
@@ -88,4 +109,15 @@ export async function apiFetch<T>(
   }
 
   return JSON.parse(text) as T;
+}
+
+async function bounceToLogin(): Promise<void> {
+  if (!isBrowser()) return;
+  if (window.location.pathname === "/login") return;
+  try {
+    await fetch("/api/auth/logout", { method: "POST", keepalive: true });
+  } catch {
+    /* still leave */
+  }
+  window.location.assign("/login");
 }

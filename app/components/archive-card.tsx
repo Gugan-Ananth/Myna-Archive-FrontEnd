@@ -10,6 +10,7 @@ import {
 } from "../lib/display-metadata";
 import { useI18n } from "../lib/i18n";
 import {
+  isComic,
   isImageGroup,
   itemMediaAssets,
   gridMediaSrc,
@@ -116,7 +117,7 @@ export function ArchiveCard({ item, priority = false }: ArchiveCardProps) {
               alt=""
               fill
               unoptimized
-              sizes="(max-width: 380px) 100vw, (max-width: 620px) 50vw, (max-width: 860px) 33vw, (max-width: 1100px) 25vw, 20vw"
+              sizes="(max-width: 540px) 100vw, (max-width: 900px) 50vw, (max-width: 1280px) 33vw, (max-width: 1680px) 25vw, 20vw"
               className="object-cover object-center transition-transform duration-300 ease-out group-hover:scale-[1.03]"
             />
           ) : (
@@ -125,7 +126,7 @@ export function ArchiveCard({ item, priority = false }: ArchiveCardProps) {
               alt=""
               fill
               loader={bunnyImageLoader}
-              sizes="(max-width: 380px) 100vw, (max-width: 620px) 50vw, (max-width: 860px) 33vw, (max-width: 1100px) 25vw, (max-width: 1400px) 20vw, (max-width: 1680px) 16vw, 14vw"
+              sizes="(max-width: 540px) 100vw, (max-width: 900px) 50vw, (max-width: 1280px) 33vw, (max-width: 1680px) 25vw, 20vw"
               quality={72}
               // Next 16: `preload` replaces deprecated `priority`.
               preload={priority}
@@ -155,7 +156,7 @@ export function ArchiveCard({ item, priority = false }: ArchiveCardProps) {
             </div>
           )}
 
-          {!isVideo && isImageGroup(item) ? (
+          {!isVideo && (isImageGroup(item) || isComic(item)) ? (
             <span
               className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-full bg-surface/95 px-2 py-1 text-[11px] font-medium text-primary shadow-sm ring-1 ring-border backdrop-blur-sm"
               aria-hidden
@@ -171,9 +172,11 @@ export function ArchiveCard({ item, priority = false }: ArchiveCardProps) {
           ? t("video")
           : isStory
             ? t("navStories")
-            : isImageGroup(item)
-              ? t("photoCount", { count: itemMediaAssets(item).length })
-              : t("image")}
+            : isComic(item)
+              ? t("pageCount", { count: itemMediaAssets(item).length })
+              : isImageGroup(item)
+                ? t("photoCount", { count: itemMediaAssets(item).length })
+                : t("image")}
       </span>
     </Link>
   );
@@ -303,19 +306,6 @@ function VideoThumb({
   );
 }
 
-function PlayBadgeIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={className}
-      fill="currentColor"
-      aria-hidden
-    >
-      <path d="M8.5 5.5v13l11-6.5-11-6.5z" />
-    </svg>
-  );
-}
-
 function FilmIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -330,6 +320,19 @@ function FilmIcon({ className }: { className?: string }) {
     >
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <path d="M7 5v14M17 5v14M3 9.5h4M3 14.5h4M17 9.5h4M17 14.5h4" />
+    </svg>
+  );
+}
+
+function PlayBadgeIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="currentColor"
+      aria-hidden
+    >
+      <path d="M8.5 5.5v13l11-6.5-11-6.5z" />
     </svg>
   );
 }

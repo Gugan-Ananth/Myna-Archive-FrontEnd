@@ -42,7 +42,7 @@ export function OcGrid({
   }
 
   return (
-    <ul className="grid list-none grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
+    <ul className="grid list-none grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
       {items.map((oc, index) => (
         <li key={oc.id} className="min-w-0">
           <OcCard oc={oc} priority={index < priorityCount} />

@@ -42,8 +42,8 @@ export function StoryWorkCard({ item }: StoryWorkCardProps) {
       prefetch
       className="group block h-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
-      <article className="flex h-full flex-row overflow-hidden rounded-2xl bg-surface ring-1 ring-border transition-[box-shadow,transform] duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:ring-border-strong">
-        <div className="flex w-[6.75rem] shrink-0 items-center justify-center bg-surface-muted p-2 sm:w-[10.5rem] sm:p-3">
+      <article className="app-card flex h-full flex-row overflow-hidden rounded-2xl ring-1 ring-border transition-[box-shadow,transform] duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:ring-border-strong">
+        <div className="flex w-[8.5rem] shrink-0 items-center justify-center bg-surface-muted p-2.5 sm:w-[13rem] sm:p-4">
           <Image
             src={src}
             alt=""
@@ -51,16 +51,16 @@ export function StoryWorkCard({ item }: StoryWorkCardProps) {
             height={height}
             loader={hasCover ? bunnyImageLoader : undefined}
             unoptimized={!hasCover}
-            sizes="(max-width: 640px) 108px, 168px"
+            sizes="(max-width: 640px) 136px, 208px"
             style={{ width: "auto", height: "auto" }}
-            className="max-h-72 max-w-full object-contain"
+            className="max-h-80 max-w-full object-contain"
           />
         </div>
-        <div className="flex min-w-0 flex-1 flex-col px-5 py-5 sm:px-6 sm:py-6">
+        <div className="flex min-w-0 flex-1 flex-col px-4 py-5 sm:px-7 sm:py-7">
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
             {t("navStories")}
           </p>
-          <h2 className="mt-1.5 text-xl font-semibold leading-snug tracking-tight text-foreground group-hover:text-primary sm:text-2xl">
+          <h2 className="mt-1.5 text-lg font-semibold leading-snug tracking-tight text-foreground group-hover:text-primary sm:text-2xl">
             {item.name}
           </h2>
           {blurb ? (

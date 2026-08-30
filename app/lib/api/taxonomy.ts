@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiFetch, type FetchCacheOptions } from "./client";
 import {
   buildQueryCacheKey,
   cachedQuery,
@@ -33,7 +33,7 @@ const TAXONOMY_TAG = "taxonomy";
  * Includes built-ins (seeded on Nest boot) and user-created entries.
  */
 export async function listTaxonomy(
-  options?: { cache?: RequestCache; next?: NextFetchRequestConfig },
+  options?: FetchCacheOptions,
 ): Promise<TaxonomyCategoryDto[]> {
   const fetchTaxonomy = async (): Promise<TaxonomyCategoryDto[]> => {
     const result = await apiFetch<TaxonomyListResponse>("/taxonomy", {
@@ -47,6 +47,7 @@ export async function listTaxonomy(
               revalidate: SERVER_TAXONOMY_REVALIDATE,
               tags: [TAXONOMY_TAG],
             }),
+      accessToken: options?.accessToken,
     });
     return result.data ?? [];
   };

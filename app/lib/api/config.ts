@@ -11,5 +11,10 @@ export function getApiBaseUrl(): string {
 }
 
 export function getApiV1Url(): string {
+  // Browser calls go through the Next BFF so the httpOnly session cookie
+  // can be turned into Authorization without exposing the token to JS.
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/api/backend`;
+  }
   return `${getApiBaseUrl()}/api/v1`;
 }

@@ -55,7 +55,7 @@ export function OcCard({ oc, priority = false }: OcCardProps) {
       prefetch
       className="group block h-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
-      <article className="flex h-full flex-col overflow-hidden rounded-2xl bg-surface ring-1 ring-border transition-[box-shadow,transform] duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:ring-border-strong [content-visibility:auto] [contain-intrinsic-size:auto_320px]">
+      <article className="app-card flex h-full flex-col overflow-hidden rounded-2xl ring-1 ring-border transition-[box-shadow,transform] duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:ring-border-strong [content-visibility:auto] [contain-intrinsic-size:auto_320px]">
         <div
           className="relative w-full overflow-hidden bg-surface-muted"
           style={{ aspectRatio: `${dims.w} / ${dims.h}` }}
@@ -71,7 +71,7 @@ export function OcCard({ oc, priority = false }: OcCardProps) {
             alt=""
             fill
             loader={bunnyImageLoader}
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
+            sizes="(max-width: 640px) 50vw, (max-width: 1280px) 33vw, 25vw"
             quality={72}
             preload={priority}
             fetchPriority={priority ? "high" : "auto"}

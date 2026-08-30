@@ -25,6 +25,10 @@ export function isImageGroup(item: ArchiveItem): boolean {
   return item.mediaType === "image" && itemMediaAssets(item).length > 1;
 }
 
+export function isComic(item: ArchiveItem): boolean {
+  return item.mediaType === "comic";
+}
+
 /** Strip CDN/optimizer query string so we get the original asset URL. */
 export function originalMediaUrl(url: string): string {
   if (!url) return url;
