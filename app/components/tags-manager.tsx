@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -51,9 +52,20 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [tagDraft, setTagDraft] = useState("");
   const [movingKey, setMovingKey] = useState<string | null>(null);
-  const dragRef = useRef<DragState | null>(null);
+  const dragRef = useRef<ActiveDrag | null>(null);
   const persistLock = useRef(false);
+  const categoriesRef = useRef(categories);
   const [drag, setDrag] = useState<DragState | null>(null);
+
+  useEffect(() => {
+    categoriesRef.current = categories;
+  }, [categories]);
+
+  useEffect(() => {
+    return () => {
+      teardownLift(dragRef.current);
+    };
+  }, []);
 
   const searching = Boolean(query.trim());
   const canReorder = !busy && !searching;
@@ -225,24 +237,59 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
     });
   }
 
-  function dropIdFromPoint(
+  function closestDropId(
     x: number,
     y: number,
     kind: DragKind,
     categorySlug: string | null,
   ): string | null {
-    const stack = document.elementsFromPoint(x, y);
-    for (const node of stack) {
-      if (!(node instanceof Element)) continue;
-      const target = node.closest("[data-drop-kind]");
-      if (!(target instanceof HTMLElement)) continue;
-      if (target.dataset.dropKind !== kind) continue;
-      if (kind === "tag" && target.dataset.dropCategory !== categorySlug) {
-        continue;
+    const selector =
+      kind === "tag" && categorySlug
+        ? `[data-drop-kind="tag"][data-drop-category="${CSS.escape(categorySlug)}"]`
+        : `[data-drop-kind="category"]`;
+    const nodes = document.querySelectorAll(selector);
+    let bestId: string | null = null;
+    let bestDist = Infinity;
+    for (const node of nodes) {
+      if (!(node instanceof HTMLElement)) continue;
+      const rect = node.getBoundingClientRect();
+      const dx = rect.left + rect.width / 2 - x;
+      const dy = rect.top + rect.height / 2 - y;
+      const dist = dx * dx + dy * dy;
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestId = node.dataset.dropId ?? null;
       }
-      return target.dataset.dropId ?? null;
     }
-    return null;
+    return bestId;
+  }
+
+  function liveReorder(kind: DragKind, id: string, overId: string, categorySlug: string | null) {
+    if (kind === "category") {
+      const current = categoriesRef.current;
+      const from = current.findIndex((category) => category.slug === id);
+      const to = current.findIndex((category) => category.slug === overId);
+      const next = moveItem(current, from, to);
+      if (next === current) return;
+      categoriesRef.current = next;
+      setCategories(next);
+      return;
+    }
+    if (!categorySlug) return;
+    const current = categoriesRef.current;
+    let changed = false;
+    const next = current.map((category) => {
+      if (category.slug !== categorySlug) return category;
+      const from = category.tags.findIndex((tag) => tag.slug === id);
+      const to = category.tags.findIndex((tag) => tag.slug === overId);
+      const tags = moveItem(category.tags, from, to);
+      if (tags === category.tags) return category;
+      changed = true;
+      return { ...category, tags };
+    });
+    if (!changed) return;
+    categoriesRef.current = next;
+    setCategories(next);
   }
 
   function startDrag(
@@ -252,83 +299,116 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
     categorySlug: string | null,
   ) {
     if (!canReorder || event.button !== 0) return;
+    const source = event.currentTarget.closest("[data-drop-kind]");
+    if (!(source instanceof HTMLElement)) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    const next: DragState = {
+
+    const rect = source.getBoundingClientRect();
+    const scale = kind === "category" ? 1.055 : 1.12;
+    const clone = liftSource(source, rect, scale);
+    const snapshot = categoriesRef.current;
+    const next: ActiveDrag = {
       kind,
       categorySlug,
       id,
       overId: id,
       pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originLeft: rect.left,
+      originTop: rect.top,
+      scale,
+      snapshot,
+      clone,
+      moved: false,
+      detachEscape: () => {},
     };
+    const onEscape = (keyboard: globalThis.KeyboardEvent) => {
+      if (keyboard.key !== "Escape") return;
+      keyboard.preventDefault();
+      abortDrag();
+    };
+    window.addEventListener("keydown", onEscape);
+    next.detachEscape = () => window.removeEventListener("keydown", onEscape);
     dragRef.current = next;
-    setDrag(next);
+    setDrag({
+      kind,
+      categorySlug,
+      id,
+      overId: id,
+      pointerId: event.pointerId,
+    });
+    lockPageForDrag();
   }
 
   function updateDragOver(event: PointerEvent<HTMLButtonElement>) {
     const current = dragRef.current;
     if (!current || event.pointerId !== current.pointerId) return;
-    const overId = dropIdFromPoint(
+    const dx = event.clientX - current.startX;
+    const dy = event.clientY - current.startY;
+    moveLiftedClone(current, dx, dy);
+    const overId = closestDropId(
       event.clientX,
       event.clientY,
       current.kind,
       current.categorySlug,
     );
-    if (overId === current.overId) return;
-    const next = { ...current, overId };
-    dragRef.current = next;
-    setDrag(next);
+    if (!overId || overId === current.id) return;
+    current.overId = overId;
+    liveReorder(current.kind, current.id, overId, current.categorySlug);
   }
 
   function finishDrag(event: PointerEvent<HTMLButtonElement>) {
     const current = dragRef.current;
     if (!current || event.pointerId !== current.pointerId) return;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
     dragRef.current = null;
     setDrag(null);
-    if (!current.overId || current.overId === current.id) return;
+    teardownLift(current);
+    const next = categoriesRef.current;
     if (current.kind === "category") {
-      void persistCategoryOrder(current.id, current.overId);
+      void persistCategoryList(next, current.snapshot);
       return;
     }
     if (current.categorySlug) {
-      void persistTagOrder(
-        current.categorySlug,
-        current.id,
-        current.overId,
-      );
+      void persistTagList(current.categorySlug, next, current.snapshot);
     }
+  }
+
+  function abortDrag() {
+    const current = dragRef.current;
+    if (!current) return;
+    dragRef.current = null;
+    setDrag(null);
+    teardownLift(current);
+    categoriesRef.current = current.snapshot;
+    setCategories(current.snapshot);
   }
 
   function cancelDrag(event: PointerEvent<HTMLButtonElement>) {
     const current = dragRef.current;
     if (!current || event.pointerId !== current.pointerId) return;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    dragRef.current = null;
-    setDrag(null);
+    abortDrag();
   }
 
-  async function persistCategoryOrder(fromId: string, toId: string) {
-    if (persistLock.current) return;
-    const from = categories.findIndex((category) => category.slug === fromId);
-    const to = categories.findIndex((category) => category.slug === toId);
-    const next = moveItem(categories, from, to);
-    if (next === categories) return;
+  async function persistCategoryList(
+    next: TaxonomyCategoryDto[],
+    previous: TaxonomyCategoryDto[],
+  ) {
+    if (sameCategoryOrder(next, previous) || persistLock.current) return;
     persistLock.current = true;
-    const previous = categories;
     setCategories(next);
+    categoriesRef.current = next;
     try {
       await run(async () => {
         try {
           const saved = await reorderTaxonomy({
             categorySlugs: next.map((category) => category.slug),
           });
+          categoriesRef.current = saved;
           setCategories(saved);
         } catch (err) {
+          categoriesRef.current = previous;
           setCategories(previous);
           throw err;
         }
@@ -338,24 +418,19 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
     }
   }
 
-  async function persistTagOrder(
+  async function persistTagList(
     categorySlug: string,
-    fromId: string,
-    toId: string,
+    next: TaxonomyCategoryDto[],
+    previous: TaxonomyCategoryDto[],
   ) {
-    if (persistLock.current) return;
-    const category = categories.find((entry) => entry.slug === categorySlug);
-    if (!category) return;
-    const from = category.tags.findIndex((tag) => tag.slug === fromId);
-    const to = category.tags.findIndex((tag) => tag.slug === toId);
-    const tags = moveItem(category.tags, from, to);
-    if (tags === category.tags) return;
+    const nextTags =
+      next.find((category) => category.slug === categorySlug)?.tags ?? [];
+    const previousTags =
+      previous.find((category) => category.slug === categorySlug)?.tags ?? [];
+    if (sameTagOrder(nextTags, previousTags) || persistLock.current) return;
     persistLock.current = true;
-    const previous = categories;
-    const next = categories.map((entry) =>
-      entry.slug === categorySlug ? { ...entry, tags } : entry,
-    );
     setCategories(next);
+    categoriesRef.current = next;
     try {
       await run(async () => {
         try {
@@ -363,12 +438,14 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
             tags: [
               {
                 categorySlug,
-                tagSlugs: tags.map((tag) => tag.slug),
+                tagSlugs: nextTags.map((tag) => tag.slug),
               },
             ],
           });
+          categoriesRef.current = saved;
           setCategories(saved);
         } catch (err) {
+          categoriesRef.current = previous;
           setCategories(previous);
           throw err;
         }
@@ -376,6 +453,29 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
     } finally {
       persistLock.current = false;
     }
+  }
+
+  async function persistCategoryOrder(fromId: string, toId: string) {
+    const previous = categoriesRef.current;
+    const from = previous.findIndex((category) => category.slug === fromId);
+    const to = previous.findIndex((category) => category.slug === toId);
+    const next = moveItem(previous, from, to);
+    await persistCategoryList(next, previous);
+  }
+
+  async function persistTagOrder(
+    categorySlug: string,
+    fromId: string,
+    toId: string,
+  ) {
+    const previous = categoriesRef.current;
+    const next = previous.map((entry) => {
+      if (entry.slug !== categorySlug) return entry;
+      const from = entry.tags.findIndex((tag) => tag.slug === fromId);
+      const to = entry.tags.findIndex((tag) => tag.slug === toId);
+      return { ...entry, tags: moveItem(entry.tags, from, to) };
+    });
+    await persistTagList(categorySlug, next, previous);
   }
 
   function nudgeCategory(slug: string, delta: number) {
@@ -535,10 +635,6 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
             const addingHere = addingTagFor === category.slug;
             const categoryDragging =
               drag?.kind === "category" && drag.id === category.slug;
-            const categoryDropTarget =
-              drag?.kind === "category" &&
-              drag.overId === category.slug &&
-              drag.id !== category.slug;
             return (
               <li
                 key={category.slug}
@@ -546,11 +642,10 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
                 data-drop-id={category.slug}
                 className={[
                   "app-card min-w-0 rounded-2xl border p-4 shadow-sm sm:p-5",
+                  "transition-[opacity,border-color,box-shadow] duration-200",
                   categoryDragging
-                    ? "border-primary opacity-60"
-                    : categoryDropTarget
-                      ? "border-primary ring-2 ring-ring/35"
-                      : "border-border",
+                    ? "border-dashed border-primary/50 opacity-35 shadow-none"
+                    : "border-border",
                 ].join(" ")}
               >
                 <div className="flex min-w-0 items-center gap-1.5 border-b border-border pb-3">
@@ -615,8 +710,7 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
                             }
                             if (event.key === "Escape" && drag) {
                               event.preventDefault();
-                              dragRef.current = null;
-                              setDrag(null);
+                              abortDrag();
                             }
                           }}
                         />
@@ -673,11 +767,6 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
                       drag?.kind === "tag" &&
                       drag.categorySlug === category.slug &&
                       drag.id === tag.slug;
-                    const tagDropTarget =
-                      drag?.kind === "tag" &&
-                      drag.categorySlug === category.slug &&
-                      drag.overId === tag.slug &&
-                      drag.id !== tag.slug;
                     const showTagHandle =
                       !searching && category.tags.length > 1 && !editing;
                     return (
@@ -688,7 +777,7 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
                         data-drop-id={tag.slug}
                         className={[
                           "relative min-w-0",
-                          tagDragging ? "opacity-60" : "",
+                          tagDragging ? "opacity-35" : "",
                         ].join(" ")}
                       >
                         {editing ? (
@@ -721,10 +810,10 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
                             className={[
                               "inline-flex items-center gap-0.5 rounded-full border bg-surface py-1 pr-1.5 shadow-sm",
                               showTagHandle ? "pl-1" : "pl-3.5",
-                              moving || tagDropTarget
+                              moving || tagDragging
                                 ? "border-primary"
                                 : "border-border",
-                              tagDropTarget ? "ring-2 ring-ring/35" : "",
+                              tagDragging ? "border-dashed shadow-none" : "",
                             ].join(" ")}
                           >
                             {showTagHandle ? (
@@ -762,8 +851,7 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
                                   }
                                   if (event.key === "Escape" && drag) {
                                     event.preventDefault();
-                                    dragRef.current = null;
-                                    setDrag(null);
+                                    abortDrag();
                                   }
                                 }}
                               />
@@ -888,6 +976,109 @@ type DragState = {
   overId: string | null;
   pointerId: number;
 };
+
+type ActiveDrag = DragState & {
+  startX: number;
+  startY: number;
+  originLeft: number;
+  originTop: number;
+  scale: number;
+  snapshot: TaxonomyCategoryDto[];
+  clone: HTMLElement | null;
+  moved: boolean;
+  detachEscape: () => void;
+};
+
+const LIFT_PX = 8;
+
+function sameCategoryOrder(
+  left: TaxonomyCategoryDto[],
+  right: TaxonomyCategoryDto[],
+): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((category, index) => category.slug === right[index]?.slug);
+}
+
+function sameTagOrder(left: TaxonomyTagDto[], right: TaxonomyTagDto[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((tag, index) => tag.slug === right[index]?.slug);
+}
+
+function liftSource(
+  source: HTMLElement,
+  rect: DOMRect,
+  scale: number,
+): HTMLElement {
+  const kind = source.dataset.dropKind;
+  const clone = source.cloneNode(true) as HTMLElement;
+  clone.removeAttribute("data-drop-kind");
+  clone.removeAttribute("data-drop-id");
+  clone.removeAttribute("data-drop-category");
+  clone.setAttribute("aria-hidden", "true");
+  clone.querySelectorAll("[id]").forEach((node) => node.removeAttribute("id"));
+  clone.style.position = "fixed";
+  clone.style.left = "0";
+  clone.style.top = "0";
+  clone.style.width = `${rect.width}px`;
+  clone.style.height = `${rect.height}px`;
+  clone.style.margin = "0";
+  clone.style.listStyle = "none";
+  clone.style.zIndex = "70";
+  clone.style.pointerEvents = "none";
+  clone.style.cursor = "grabbing";
+  clone.style.transformOrigin = "center center";
+  clone.style.willChange = "transform";
+  clone.style.opacity = "1";
+  const shadow =
+    "0 22px 48px -14px color-mix(in srgb, var(--foreground) 32%, transparent), 0 8px 18px -10px color-mix(in srgb, var(--primary) 45%, transparent)";
+  if (kind === "category") {
+    clone.style.borderStyle = "solid";
+    clone.style.borderColor = "var(--primary)";
+    clone.style.boxShadow = shadow;
+  } else {
+    const chip = clone.querySelector(":scope > div");
+    if (chip instanceof HTMLElement) {
+      chip.style.borderColor = "var(--primary)";
+      chip.style.boxShadow = shadow;
+    }
+  }
+  clone.style.transition =
+    "transform 180ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms ease";
+  clone.style.transform = `translate3d(${rect.left}px, ${rect.top}px, 0) scale(1)`;
+  document.body.appendChild(clone);
+  void clone.offsetWidth;
+  clone.style.transform = `translate3d(${rect.left}px, ${rect.top - LIFT_PX}px, 0) scale(${scale})`;
+  return clone;
+}
+
+function moveLiftedClone(drag: ActiveDrag, dx: number, dy: number) {
+  if (!drag.clone) return;
+  if (!drag.moved) {
+    drag.clone.style.transition = "none";
+    drag.moved = true;
+  }
+  drag.clone.style.transform = `translate3d(${drag.originLeft + dx}px, ${drag.originTop + dy - LIFT_PX}px, 0) scale(${drag.scale})`;
+}
+
+function lockPageForDrag() {
+  const { body } = document;
+  body.style.cursor = "grabbing";
+  body.style.userSelect = "none";
+}
+
+function unlockPageForDrag() {
+  const { body } = document;
+  body.style.cursor = "";
+  body.style.userSelect = "";
+}
+
+function teardownLift(drag: ActiveDrag | null) {
+  if (!drag) return;
+  drag.detachEscape();
+  drag.clone?.remove();
+  drag.clone = null;
+  unlockPageForDrag();
+}
 
 function moveItem<T>(items: T[], from: number, to: number): T[] {
   if (
