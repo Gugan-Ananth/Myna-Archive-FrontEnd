@@ -32,7 +32,7 @@ export default function ErrorPage({
             <button
               type="button"
               onClick={() => retry()}
-              className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
+              className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
             >
               {t("tryAgain")}
             </button>

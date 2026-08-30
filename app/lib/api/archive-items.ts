@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiFetch, type FetchCacheOptions } from "./client";
 import {
   buildQueryCacheKey,
   cachedQuery,
@@ -58,7 +58,7 @@ function tagsCacheKey(params: ListTagSummariesParams = {}): string {
  */
 export async function listArchiveItems(
   params: ListArchiveItemsParams = {},
-  options?: { cache?: RequestCache; next?: NextFetchRequestConfig },
+  options?: FetchCacheOptions,
 ): Promise<PaginatedArchiveItems> {
   const key = listCacheKey(params);
 
@@ -84,6 +84,7 @@ export async function listArchiveItems(
               revalidate: SERVER_LIST_REVALIDATE,
               tags: [ARCHIVE_ITEMS_TAG],
             }),
+      accessToken: options?.accessToken,
     });
 
   if (isBrowser()) {
@@ -99,7 +100,7 @@ export async function listArchiveItems(
 
 export async function getArchiveItem(
   id: string,
-  options?: { cache?: RequestCache; next?: NextFetchRequestConfig },
+  options?: FetchCacheOptions,
 ): Promise<ArchiveItem> {
   const key = buildQueryCacheKey("item", { id });
 
@@ -116,6 +117,7 @@ export async function getArchiveItem(
               revalidate: SERVER_LIST_REVALIDATE,
               tags: [ARCHIVE_ITEMS_TAG],
             }),
+      accessToken: options?.accessToken,
     });
 
   if (isBrowser()) {
@@ -186,7 +188,7 @@ export async function deleteArchiveItem(id: string): Promise<void> {
  */
 export async function listTagSummaries(
   params: ListTagSummariesParams = {},
-  options?: { cache?: RequestCache; next?: NextFetchRequestConfig },
+  options?: FetchCacheOptions,
 ): Promise<TagSummary[]> {
   const key = tagsCacheKey(params);
   const fetchTags = async (): Promise<TagSummary[]> => {
@@ -206,6 +208,7 @@ export async function listTagSummaries(
               revalidate: SERVER_TAGS_REVALIDATE,
               tags: [TAGS_TAG],
             }),
+      accessToken: options?.accessToken,
     });
     return result.data ?? [];
   };

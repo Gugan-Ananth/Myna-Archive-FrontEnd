@@ -30,7 +30,7 @@ export function CollectionMasthead({
     : "-";
 
   return (
-    <section className="relative isolate mb-6 overflow-hidden rounded-[1.75rem] border border-border bg-surface shadow-[0_18px_55px_-32px_rgba(124,58,237,0.7)] dark:shadow-[0_18px_60px_-28px_rgba(0,0,0,0.55)]">
+    <section className="app-card relative isolate mb-6 overflow-hidden rounded-[1.75rem] border border-border shadow-[0_18px_55px_-32px_rgba(124,58,237,0.7)] dark:shadow-[0_18px_60px_-28px_rgba(0,0,0,0.55)]">
       <div
         className="pointer-events-none absolute -right-20 -top-24 z-0 h-64 w-64 rounded-full bg-accent-soft/80 blur-3xl"
         aria-hidden
@@ -70,7 +70,7 @@ export function CollectionMasthead({
           <Link
             href={`/item/${featured.id}`}
             aria-label={t("homeOpenFeatured", { name: featured.name })}
-            className="group relative block w-full max-w-[22rem] rotate-1 rounded-[1.35rem] bg-surface p-2 shadow-[0_22px_45px_-18px_rgba(30,27,46,0.35)] ring-1 ring-border transition-transform duration-300 hover:-rotate-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-accent-soft"
+            className="app-card group relative block w-full max-w-[22rem] rotate-1 rounded-[1.35rem] p-2 shadow-[0_22px_45px_-18px_rgba(30,27,46,0.35)] ring-1 ring-border transition-transform duration-300 hover:-rotate-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-accent-soft"
           >
             <div className="relative aspect-[1.25] overflow-hidden rounded-[0.95rem] bg-surface-muted">
               {featuredSrc ? (

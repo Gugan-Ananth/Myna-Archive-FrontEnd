@@ -130,7 +130,7 @@ export type CreateArchiveItemInput = {
   seriesId?: string;
   chapterNumber?: number;
   /**
-   * Preferred: ordered assets (image 1–10, video exactly 1).
+   * Preferred: ordered assets (image 1–10, comic 1–80, video exactly 1).
    * When set, top-level publicId/resourceType/dims are not required.
    */
   assets?: CreateMediaAssetInput[];

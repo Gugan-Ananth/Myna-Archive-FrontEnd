@@ -9,6 +9,7 @@ import {
 } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import type { OriginalCharacter } from "../lib/types";
+import { HomeBackdrop } from "./home-backdrop";
 import { HomeFiltersNotice } from "./home-filters-notice";
 import { OcGrid } from "./oc-grid";
 import { StatusCallout } from "./status-callout";
@@ -222,6 +223,8 @@ export function OcHome({
 
   return (
     <main className="relative flex w-full flex-1 flex-col px-2 pt-3 pb-24 sm:px-3 md:pb-6 lg:px-4">
+      <HomeBackdrop view="oc" />
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col">
       <HomeFiltersNotice query={liveQuery} tags={[]} created={created} />
       {errorBody ? (
         <StatusCallout
@@ -244,7 +247,7 @@ export function OcHome({
           emptyHint={emptyHint}
         />
         {hasMore && !loadError ? (
-          <div className="mt-2 flex justify-center pt-2">
+          <div className="relative z-10 mt-2 flex justify-center pt-2">
             <button
               type="button"
               onClick={() => void loadMore()}
@@ -255,6 +258,7 @@ export function OcHome({
             </button>
           </div>
         ) : null}
+      </div>
       </div>
     </main>
   );

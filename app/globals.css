@@ -14,6 +14,42 @@
   --surface: #ffffff;
   --surface-muted: #f3eefc;
   --surface-elevated: #ffffff;
+  /* Rail: opaque enough that menu chips don't sit on the canvas wash */
+  --nav: #ffffff;
+  --nav-from: #ffffff;
+  --nav-via: #f4eefc;
+  --nav-to: #eadfff;
+  --nav-glow: rgb(167 139 250 / 0.42);
+  --nav-canvas:
+    radial-gradient(
+      ellipse 120% 42% at 50% -8%,
+      var(--nav-glow) 0%,
+      transparent 70%
+    ),
+    linear-gradient(
+      180deg,
+      var(--nav-from) 0%,
+      var(--nav-via) 52%,
+      var(--nav-to) 100%
+    );
+
+  /* Cards: same family as the rail, diagonal so it reads on short panels */
+  --card-from: #ffffff;
+  --card-via: #f6f0fc;
+  --card-to: #ece3ff;
+  --card-glow: rgb(167 139 250 / 0.34);
+  --card-canvas:
+    radial-gradient(
+      ellipse 85% 65% at 0% 0%,
+      var(--card-glow) 0%,
+      transparent 64%
+    ),
+    linear-gradient(
+      165deg,
+      var(--card-from) 0%,
+      var(--card-via) 48%,
+      var(--card-to) 100%
+    );
 
   /* Brand purple scale */
   --primary: #7c3aed;
@@ -45,6 +81,28 @@
   --canvas-glow-1: rgb(196 181 253 / 0.72);
   --canvas-glow-2: rgb(167 139 250 / 0.48);
   --canvas-glow-3: rgb(124 58 237 / 0.2);
+  --app-canvas:
+    radial-gradient(
+      ellipse 85% 55% at 0% -8%,
+      var(--canvas-glow-1) 0%,
+      transparent 58%
+    ),
+    radial-gradient(
+      ellipse 75% 50% at 100% 0%,
+      var(--canvas-glow-2) 0%,
+      transparent 54%
+    ),
+    radial-gradient(
+      ellipse 90% 42% at 50% 112%,
+      var(--canvas-glow-3) 0%,
+      transparent 58%
+    ),
+    linear-gradient(
+      165deg,
+      var(--canvas-from) 0%,
+      var(--canvas-via) 48%,
+      var(--canvas-to) 100%
+    );
 }
 
 /*
@@ -59,6 +117,15 @@
   --surface: #1a1722;
   --surface-muted: #221f2c;
   --surface-elevated: #2a2636;
+  --nav: #2a2636;
+  --nav-from: #332c44;
+  --nav-via: #241e32;
+  --nav-to: #16111f;
+  --nav-glow: rgb(124 58 237 / 0.32);
+  --card-from: #302848;
+  --card-via: #221c32;
+  --card-to: #17121f;
+  --card-glow: rgb(124 58 237 / 0.28);
 
   /* Brand purple — luminous on dark, same family as light */
   --primary: #b8a4ff;
@@ -95,6 +162,7 @@
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
   --color-surface-elevated: var(--surface-elevated);
+  --color-nav: var(--nav);
 
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
@@ -143,28 +211,81 @@
 html {
   background-color: var(--canvas-via);
   background-attachment: fixed;
+  background-image: var(--app-canvas);
+}
+
+/* Left menu: vertical brand wash, tokens swap with light/dark. */
+.app-nav-rail {
+  background-color: var(--nav);
+  background-image: var(--nav-canvas);
+}
+
+/* Panels and chooser/empty/tag cards share this wash. */
+.app-card {
+  background-color: var(--surface);
+  background-image: var(--card-canvas);
+}
+
+.app-card-interactive:hover,
+.app-card-interactive:focus-visible {
   background-image:
-    radial-gradient(
-      ellipse 85% 55% at 0% -8%,
-      var(--canvas-glow-1) 0%,
-      transparent 58%
-    ),
-    radial-gradient(
-      ellipse 75% 50% at 100% 0%,
-      var(--canvas-glow-2) 0%,
-      transparent 54%
-    ),
-    radial-gradient(
-      ellipse 90% 42% at 50% 112%,
-      var(--canvas-glow-3) 0%,
-      transparent 58%
-    ),
     linear-gradient(
-      165deg,
-      var(--canvas-from) 0%,
-      var(--canvas-via) 48%,
-      var(--canvas-to) 100%
+      color-mix(in srgb, var(--accent-soft) 48%, transparent),
+      color-mix(in srgb, var(--accent-soft) 48%, transparent)
+    ),
+    var(--card-canvas);
+}
+
+.app-card-interactive.is-active {
+  background-image:
+    linear-gradient(
+      color-mix(in srgb, var(--accent-soft) 62%, transparent),
+      color-mix(in srgb, var(--accent-soft) 62%, transparent)
+    ),
+    var(--card-canvas);
+}
+
+/*
+  Sign-in: the same fixed canvas as html, masked so art on the left (or
+  top on phones) dissolves into the login column. One gradient, no seam.
+*/
+.login-scene-fade {
+  background-color: var(--canvas-via);
+  background-attachment: fixed;
+  background-image: var(--app-canvas);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    transparent 58%,
+    rgb(0 0 0 / 0.4) 86%,
+    black 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    transparent 58%,
+    rgb(0 0 0 / 0.4) 86%,
+    black 100%
+  );
+}
+
+@media (min-width: 1024px) {
+  .login-scene-fade {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0%,
+      transparent 62%,
+      rgb(0 0 0 / 0.35) 88%,
+      black 100%
     );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0%,
+      transparent 62%,
+      rgb(0 0 0 / 0.35) 88%,
+      black 100%
+    );
+  }
 }
 
 @keyframes mascot-float {
@@ -295,14 +416,14 @@ html {
 }
 
 .story-doc h1 {
-  font-size: 2rem;
+  font-size: clamp(1.5rem, 5.5vw, 2rem);
   font-weight: 600;
   line-height: 1.25;
   margin: 1.1em 0 0.45em;
 }
 
 .story-doc h2 {
-  font-size: 1.45rem;
+  font-size: clamp(1.2rem, 4vw, 1.45rem);
   font-weight: 600;
   line-height: 1.3;
   margin: 1em 0 0.4em;
@@ -332,9 +453,15 @@ html {
 .story-read {
   color: var(--foreground);
   font-family: var(--font-playfair), "Playfair", Georgia, serif;
-  font-size: 1.2rem;
+  font-size: 1.05rem;
   line-height: 1.8;
   word-break: break-word;
+}
+
+@media (min-width: 640px) {
+  .story-read {
+    font-size: 1.2rem;
+  }
 }
 
 @media (min-width: 1024px) {
@@ -350,14 +477,14 @@ html {
 }
 
 .story-read h1 {
-  font-size: 2.15rem;
+  font-size: clamp(1.65rem, 6vw, 2.15rem);
   font-weight: 600;
   line-height: 1.2;
   margin: 1.15em 0 0.5em;
 }
 
 .story-read h2 {
-  font-size: 1.5rem;
+  font-size: clamp(1.25rem, 4.5vw, 1.5rem);
   font-weight: 600;
   line-height: 1.3;
   margin: 1.05em 0 0.4em;

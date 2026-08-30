@@ -53,7 +53,7 @@ export function OcDetail({ oc }: OcDetailProps) {
         <BackButton href="/?view=oc" />
       </div>
       <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-4 py-16 sm:px-6 lg:flex-row lg:items-start lg:gap-10 lg:py-20">
-        <div className="relative mx-auto w-full max-w-sm overflow-hidden rounded-2xl bg-surface-muted ring-1 ring-border lg:mx-0 lg:w-[18rem] lg:shrink-0">
+        <div className="relative mx-auto w-full max-w-[14rem] overflow-hidden rounded-2xl bg-surface-muted ring-1 ring-border sm:max-w-sm lg:mx-0 lg:w-[18rem] lg:max-w-none lg:shrink-0">
           <Image
             src={src}
             alt=""
@@ -64,7 +64,7 @@ export function OcDetail({ oc }: OcDetailProps) {
             className="h-auto w-full object-contain"
           />
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="app-card min-w-0 flex-1 rounded-2xl border border-border p-5 shadow-sm sm:p-6">
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
             {t("navOC")}
           </p>
@@ -93,7 +93,7 @@ export function OcDetail({ oc }: OcDetailProps) {
           <div className="mt-8 flex flex-wrap gap-2">
             <Link
               href={`/oc/${oc.id}/edit`}
-              className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
+              className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
             >
               {t("edit")}
             </Link>
@@ -101,7 +101,7 @@ export function OcDetail({ oc }: OcDetailProps) {
               type="button"
               onClick={() => void onDelete()}
               disabled={deleting}
-              className="inline-flex h-10 items-center justify-center rounded-full border border-border px-5 text-sm font-medium text-foreground-muted transition-colors hover:border-danger/40 hover:bg-danger/5 hover:text-danger disabled:opacity-50"
+              className="inline-flex h-11 items-center justify-center rounded-full border border-border px-6 text-sm font-medium text-foreground-muted transition-colors hover:border-danger/40 hover:bg-danger/5 hover:text-danger disabled:opacity-50"
             >
               {deleting ? t("deleting") : t("delete")}
             </button>

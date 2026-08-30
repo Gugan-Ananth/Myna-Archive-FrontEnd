@@ -1,6 +1,7 @@
 /** Fullscreen flows hide the archive header and side menu. */
 export function shouldHideAppChrome(pathname: string): boolean {
   return (
+    pathname === "/login" ||
     pathname === "/create" ||
     pathname.startsWith("/create/") ||
     pathname.startsWith("/item/") ||

@@ -1,5 +1,5 @@
 /** Media kind stored in the archive. */
-export type MediaType = "image" | "video" | "story";
+export type MediaType = "image" | "video" | "story" | "comic";
 
 /** One uploaded binary within an Archive Item (cover or carousel slide). */
 export type MediaAsset = {
@@ -12,7 +12,7 @@ export type MediaAsset = {
   blurHash: string | null;
 };
 
-/** A single archived media item (image, image group, or video). */
+/** A single archived media item (image, image group, video, story, or comic). */
 export type ArchiveItem = {
   id: string;
   name: string;
@@ -28,7 +28,7 @@ export type ArchiveItem = {
   tags: string[];
   /** Decimal score 0.0–10.0; higher ranks first on the home grid. */
   rating: number;
-  /** Whether this item is an image, a video, or a written story. */
+  /** Whether this item is an image, a video, a written story, or a comic. */
   mediaType: MediaType;
   /** Root story id when this row is a later chapter; null for the series. */
   seriesId?: string | null;
@@ -51,13 +51,19 @@ export type ArchiveItem = {
   blurHash: string | null;
   /**
    * Ordered media assets. Length 1 for single image/video;
-   * 2–10 for an image group (cover is always index 0).
+   * 2–25 for an image group; 1–80 for a comic (cover is always index 0).
    */
   mediaAssets: MediaAsset[];
 };
 
-/** Max images in one image-group Archive Item (ADR 0009). */
-export const MAX_IMAGE_ASSETS = 10;
+/** Min images in one image-group Archive Item. */
+export const MIN_IMAGE_GROUP_ASSETS = 2;
+
+/** Max images in one image-group Archive Item. */
+export const MAX_IMAGE_ASSETS = 25;
+
+/** Max pages in one comic Archive Item (ADR 0012). */
+export const MAX_COMIC_ASSETS = 80;
 
 /** Max inline images in one written story. */
 export const MAX_STORY_ASSETS = 20;

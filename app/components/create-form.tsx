@@ -6,6 +6,7 @@ import {
   type DragEvent,
   type FormEvent,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -16,6 +17,7 @@ import {
   type CreateMediaAssetInput,
 } from "../lib/api";
 import { isUploadAborted, uploadToBunny } from "../lib/bunny-upload";
+import { clearCreateFiles } from "../lib/pending-create-files";
 import { captureVideoPoster } from "../lib/capture-video-poster";
 import {
   captureImageDisplayMetadata,
@@ -26,15 +28,23 @@ import { useI18n } from "../lib/i18n";
 import {
   detectMediaType,
   formatBytes,
+  IMAGE_ACCEPT,
   maxBytesFor,
   normalizeMime,
+  VIDEO_ACCEPT,
 } from "../lib/media-constraints";
-import { MAX_IMAGE_ASSETS, type MediaType } from "../lib/types";
+import { CHOOSER_SCENE } from "../lib/stickers";
+import {
+  MAX_IMAGE_ASSETS,
+  MIN_IMAGE_GROUP_ASSETS,
+  type MediaType,
+} from "../lib/types";
 import { BackButton } from "./back-button";
-import { OcIcon } from "./create-oc-form";
 import { CategoryTagPicker } from "./category-tag-picker";
 import { RatingInput } from "./rating-input";
+import { SceneFigure } from "./scene-figure";
 import { StatusCallout } from "./status-callout";
+import { useStashedCreateFiles } from "./use-stashed-create-files";
 import { VideoPlayer } from "./video-player";
 
 type SubmitPhase =
@@ -55,16 +65,33 @@ type PendingMedia = {
   posterUrl?: string | null;
 };
 
+export type CreateMediaIntent = "photo" | "collection" | "video";
+
+type CreateFormProps = {
+  /** Dedicated drop page for a home section. Omit for the 4-option chooser. */
+  intent?: CreateMediaIntent;
+};
+
 /**
  * Fullscreen Add flow: pick image(s) or one video → metadata →
  * direct Bunny upload(s) → Nest finalize (image groups via assets[]).
  */
-export function CreateForm() {
+export function CreateForm({ intent }: CreateFormProps = {}) {
   const { t } = useI18n();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const metaJobRef = useRef(0);
+  const stashView =
+    intent === "photo"
+      ? "photos"
+      : intent === "collection"
+        ? "collections"
+        : intent === "video"
+          ? "videos"
+          : null;
+  const stashedFiles = useStashedCreateFiles(stashView);
+  const stashAppliedRef = useRef(false);
 
   const [pending, setPending] = useState<PendingMedia[]>([]);
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -156,6 +183,48 @@ export function CreateForm() {
 
     const hasVideo = typed.some((x) => x.type === "video");
     const hasImage = typed.some((x) => x.type === "image");
+
+    if (intent === "photo") {
+      const images = typed.filter((x) => x.type === "image");
+      if (images.length === 0 || hasVideo) {
+        setError(t("cannotAddVideoHere"));
+        return;
+      }
+      if (images.length > 1) {
+        setError(t("photoMustBeSingle"));
+        return;
+      }
+      if (pending.length > 0) clearPending();
+      setError(null);
+      void pushItems([images[0]!], true);
+      return;
+    }
+
+    if (intent === "video") {
+      const videos = typed.filter((x) => x.type === "video");
+      if (videos.length === 0 || hasImage) {
+        setError(t("cannotAddImageHere"));
+        return;
+      }
+      if (videos.length > 1 || typed.length > 1) {
+        setError(t("videoMustBeSingle"));
+        return;
+      }
+      if (pending.length > 0) clearPending();
+      setError(null);
+      void pushItems([videos[0]!], true);
+      return;
+    }
+
+    if (intent === "collection") {
+      if (hasVideo) {
+        setError(t("cannotAddVideoHere"));
+        return;
+      }
+      appendImages(typed);
+      return;
+    }
+
     if (hasVideo && hasImage) {
       setError(t("cannotMixImageVideo"));
       return;
@@ -181,7 +250,10 @@ export function CreateForm() {
       return;
     }
 
-    // Image group: append up to MAX_IMAGE_ASSETS
+    appendImages(typed);
+  }
+
+  function appendImages(typed: { file: File; type: "image" | "video" }[]) {
     const room = MAX_IMAGE_ASSETS - pending.length;
     if (room <= 0) {
       setError(t("maxImagesReached", { max: MAX_IMAGE_ASSETS }));
@@ -295,6 +367,11 @@ export function CreateForm() {
     event.preventDefault();
     if (pending.length === 0 || !mediaType || !ratingValid) return;
 
+    if (intent === "collection" && pending.length < MIN_IMAGE_GROUP_ASSETS) {
+      setError(t("collectionNeedsMoreImages"));
+      return;
+    }
+
     if (tags.length === 0) {
       setError(t("addAtLeastOneTag"));
       return;
@@ -385,7 +462,11 @@ export function CreateForm() {
       setPhase("done");
       abortRef.current = null;
       const home =
-        mediaType === "video" ? "/?view=videos&created=1" : "/?created=1";
+        mediaType === "video"
+          ? "/?view=videos&created=1"
+          : isGroup
+            ? "/?view=collections&created=1"
+            : "/?created=1";
       router.push(home);
       router.refresh();
     } catch (err) {
@@ -423,8 +504,15 @@ export function CreateForm() {
         mediaType &&
         name.trim() &&
         tags.length > 0 &&
-        ratingValid,
+        ratingValid &&
+        (intent !== "collection" || pending.length >= MIN_IMAGE_GROUP_ASSETS),
     ) && !busy;
+
+  const allowMoreImages =
+    !isVideo &&
+    pending.length < MAX_IMAGE_ASSETS &&
+    intent !== "photo" &&
+    intent !== "video";
 
   function onDropFile(event: DragEvent) {
     event.preventDefault();
@@ -435,11 +523,30 @@ export function CreateForm() {
     }
   }
 
-  const acceptAttr = isVideo
-    ? "video/mp4,video/webm,video/quicktime"
-    : pending.length > 0 && mediaType === "image"
-      ? "image/jpeg,image/png,image/webp,image/gif"
-      : "image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime";
+  const acceptAttr =
+    intent === "video" || isVideo
+      ? VIDEO_ACCEPT
+      : intent === "photo" ||
+          intent === "collection" ||
+          (pending.length > 0 && mediaType === "image")
+        ? IMAGE_ACCEPT
+        : `${IMAGE_ACCEPT},${VIDEO_ACCEPT}`;
+  const allowMultiple =
+    intent === "collection" ||
+    (!intent && mediaType !== "video");
+
+  useLayoutEffect(() => {
+    if (stashedFiles.length === 0) return;
+    if (!stashAppliedRef.current) {
+      stashAppliedRef.current = true;
+      addFiles(stashedFiles);
+    }
+    if (!stashView) return;
+    const timer = window.setTimeout(() => clearCreateFiles(stashView), 400);
+    return () => window.clearTimeout(timer);
+    // First paint's addFiles sees empty pending; ignore addFiles identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- stash hand-off
+  }, [stashedFiles, stashView]);
 
   return (
     <div className="relative flex min-h-full flex-1 flex-col">
@@ -451,7 +558,7 @@ export function CreateForm() {
         ref={fileInputRef}
         type="file"
         accept={acceptAttr}
-        multiple={mediaType !== "video"}
+        multiple={allowMultiple}
         className="sr-only"
         onChange={(e) => {
           if (e.target.files?.length) addFiles(e.target.files);
@@ -460,8 +567,80 @@ export function CreateForm() {
       />
 
       {pending.length === 0 ? (
-        <div className="flex min-h-full flex-1 flex-col items-center justify-center px-4 py-16">
-          <div className="grid w-full max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        stashedFiles.length > 0 && !error ? (
+          <div className="flex min-h-full flex-1 flex-col" />
+        ) : intent ? (
+          <div className="flex min-h-full flex-1 flex-col items-center justify-start px-4 pt-16 pb-8 sm:justify-center sm:py-16">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              onDragEnter={(e) => {
+                e.preventDefault();
+                setDragOver(true);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                const next = e.relatedTarget as Node | null;
+                if (!next || !e.currentTarget.contains(next)) {
+                  setDragOver(false);
+                }
+              }}
+              onDrop={onDropFile}
+              className={[
+                DROP_ZONE_CLASS,
+                dragOver
+                  ? "is-active scale-[1.01] border-primary shadow-md"
+                  : "border-border-strong hover:border-primary",
+              ].join(" ")}
+            >
+              <SceneFigure
+                sticker={
+                  intent === "video"
+                    ? CHOOSER_SCENE.video
+                    : intent === "collection"
+                      ? CHOOSER_SCENE.collection
+                      : CHOOSER_SCENE.photo
+                }
+                size="chooser"
+                float
+              />
+              <span className="text-base font-medium text-foreground">
+                {dragOver
+                  ? t("dropToUpload")
+                  : intent === "video"
+                    ? t("clickOrDragVideo")
+                    : intent === "collection"
+                      ? t("clickOrDragCollection")
+                      : t("clickOrDragPhoto")}
+              </span>
+              <span className="text-sm text-foreground-subtle">
+                {intent === "video"
+                  ? t("acceptedVideoFormats")
+                  : t("acceptedImageFormats")}
+              </span>
+              <span className="text-xs text-foreground-subtle">
+                {intent === "video"
+                  ? t("videoUploadHint", {
+                      max: formatBytes(MAX_VIDEO_HINT),
+                    })
+                  : intent === "collection"
+                    ? t("collectionUploadHint", { max: MAX_IMAGE_ASSETS })
+                    : t("photoUploadHint")}
+              </span>
+            </button>
+            {error ? (
+              <div className="mt-4 max-w-xl">
+                <StatusCallout title={error} compact />
+              </div>
+            ) : null}
+          </div>
+        ) : (
+        <div className="relative flex min-h-full flex-1 flex-col items-center justify-start px-4 pt-16 pb-8 sm:justify-center sm:py-16">
+          <div className="grid w-full max-w-3xl gap-4 sm:grid-cols-2">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -484,18 +663,15 @@ export function CreateForm() {
               className={[
                 CHOOSER_CARD_CLASS,
                 dragOver
-                  ? "scale-[1.01] border-primary bg-accent-soft/50 shadow-md"
-                  : "border-border-strong hover:border-primary hover:bg-accent-soft/40",
+                  ? "is-active scale-[1.01] border-primary shadow-md"
+                  : "border-border-strong hover:border-primary",
               ].join(" ")}
             >
-              <span
-                className={[
-                  "flex h-14 w-14 items-center justify-center rounded-2xl text-primary ring-1 ring-border transition-colors",
-                  dragOver ? "bg-primary/15" : "bg-accent-soft",
-                ].join(" ")}
-              >
-                <UploadIcon className="h-7 w-7" />
-              </span>
+              <SceneFigure
+                sticker={CHOOSER_SCENE.media}
+                size="chooser"
+                float
+              />
               <span className="text-base font-medium text-foreground">
                 {dragOver ? t("dropToUpload") : t("clickOrDrag")}
               </span>
@@ -513,10 +689,26 @@ export function CreateForm() {
               </span>
             </button>
 
-            <Link href="/create/story" className={CHOOSER_CARD_CLASS}>
-              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-soft text-primary ring-1 ring-border">
-                <StoryIcon className="h-7 w-7" />
+            <Link href="/create/comic" className={CHOOSER_CARD_CLASS}>
+              <SceneFigure
+                sticker={CHOOSER_SCENE.comic}
+                size="chooser"
+                float
+              />
+              <span className="text-base font-medium text-foreground">
+                {t("addAComic")}
               </span>
+              <span className="text-sm text-foreground-subtle">
+                {t("addAComicHint")}
+              </span>
+            </Link>
+
+            <Link href="/create/story" className={CHOOSER_CARD_CLASS}>
+              <SceneFigure
+                sticker={CHOOSER_SCENE.story}
+                size="chooser"
+                float
+              />
               <span className="text-base font-medium text-foreground">
                 {t("writeAStory")}
               </span>
@@ -526,9 +718,11 @@ export function CreateForm() {
             </Link>
 
             <Link href="/create/oc" className={CHOOSER_CARD_CLASS}>
-              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-soft text-primary ring-1 ring-border">
-                <OcIcon className="h-7 w-7" />
-              </span>
+              <SceneFigure
+                sticker={CHOOSER_SCENE.oc}
+                size="chooser"
+                float
+              />
               <span className="text-base font-medium text-foreground">
                 {t("createOc")}
               </span>
@@ -543,12 +737,13 @@ export function CreateForm() {
             </div>
           ) : null}
         </div>
+        )
       ) : (
         <form
           onSubmit={onSubmit}
           className="flex min-h-full flex-1 flex-col lg:min-h-0 lg:flex-row lg:overflow-hidden"
         >
-          <div className="relative min-h-[min(42vh,22rem)] min-w-0 flex-1 bg-surface-muted lg:min-h-full">
+          <div className="relative min-h-[min(38vh,20rem)] min-w-0 flex-1 bg-surface-muted sm:min-h-[min(42vh,22rem)] lg:min-h-full">
             {isVideo && active ? (
               <div className="absolute inset-0 pt-14 sm:pt-16">
                 <VideoPlayer
@@ -571,117 +766,95 @@ export function CreateForm() {
               </div>
             ) : null}
 
-            {/* Thumbnail strip for image groups */}
-            {!isVideo && pending.length > 1 ? (
-              <div className="pointer-events-auto absolute inset-x-0 bottom-14 z-20 flex justify-center gap-2 overflow-x-auto px-4">
-                {pending.map((item, i) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    disabled={busy}
-                    onClick={() => setPreviewIndex(i)}
-                    className={[
-                      "relative h-14 w-14 shrink-0 overflow-hidden rounded-lg ring-2 transition",
-                      i === previewIndex
-                        ? "ring-primary"
-                        : "ring-border hover:ring-border-strong",
-                    ].join(" ")}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={item.previewUrl}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                    {i === 0 ? (
-                      <span className="absolute bottom-0 inset-x-0 bg-primary/90 py-0.5 text-[9px] font-medium text-primary-foreground">
-                        {t("cover")}
-                      </span>
-                    ) : null}
-                  </button>
-                ))}
-              </div>
-            ) : null}
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col gap-2 bg-gradient-to-t from-black/40 via-black/20 to-transparent px-3 pb-3 pt-12 sm:px-4">
+              {!isVideo && pending.length > 1 ? (
+                <div className="pointer-events-auto flex justify-center gap-2 overflow-x-auto">
+                  {pending.map((item, i) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setPreviewIndex(i)}
+                      className={[
+                        "relative h-12 w-12 shrink-0 overflow-hidden rounded-lg ring-2 transition sm:h-14 sm:w-14",
+                        i === previewIndex
+                          ? "ring-primary"
+                          : "ring-border hover:ring-border-strong",
+                      ].join(" ")}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={item.previewUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                      {i === 0 ? (
+                        <span className="absolute inset-x-0 bottom-0 bg-primary/90 py-0.5 text-[9px] font-medium text-primary-foreground">
+                          {t("cover")}
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
 
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-end justify-between gap-3 bg-gradient-to-t from-black/25 to-transparent p-4 pt-12">
-              <span className="pointer-events-none max-w-[50%] truncate rounded-full bg-surface/90 px-2.5 py-1 text-xs text-foreground-muted shadow-sm ring-1 ring-border backdrop-blur">
-                {isGroup
-                  ? t("photoCount", { count: pending.length })
-                  : active?.file.name}
-              </span>
-              <div className="pointer-events-auto flex flex-wrap justify-end gap-2">
-                {!isVideo && pending.length < MAX_IMAGE_ASSETS ? (
+              <div className="flex items-end justify-between gap-2">
+                <span className="pointer-events-none min-w-0 max-w-[40%] truncate rounded-full bg-surface/90 px-2.5 py-1 text-xs text-foreground-muted shadow-sm ring-1 ring-border backdrop-blur">
+                  {isGroup
+                    ? t("photoCount", { count: pending.length })
+                    : active?.file.name}
+                </span>
+                <div className="pointer-events-auto flex flex-wrap justify-end gap-2">
+                  {allowMoreImages ? (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => fileInputRef.current?.click()}
+                      className="rounded-full border border-border bg-surface/95 px-3 py-2 text-xs font-medium text-foreground shadow-sm backdrop-blur transition-colors hover:bg-accent-soft hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 sm:px-3.5 sm:text-sm"
+                    >
+                      {t("addMoreImages")}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => fileInputRef.current?.click()}
-                    className="rounded-full border border-border bg-surface/95 px-3.5 py-2 text-sm font-medium text-foreground shadow-sm backdrop-blur transition-colors hover:bg-accent-soft hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => {
+                      if (isVideo || pending.length === 1) {
+                        clearPending();
+                        fileInputRef.current?.click();
+                      } else if (active) {
+                        removePending(active.id);
+                        setPreviewIndex(0);
+                      }
+                    }}
+                    className="rounded-full border border-border bg-surface/95 px-3 py-2 text-xs font-medium text-foreground shadow-sm backdrop-blur transition-colors hover:bg-accent-soft hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 sm:px-3.5 sm:text-sm"
                   >
-                    {t("addMoreImages")}
+                    {isVideo || pending.length === 1
+                      ? t("changeMedia", { media: mediaLabel })
+                      : t("removeImage")}
                   </button>
-                ) : null}
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    if (isVideo || pending.length === 1) {
-                      clearPending();
-                      fileInputRef.current?.click();
-                    } else if (active) {
-                      removePending(active.id);
-                      setPreviewIndex(0);
-                    }
-                  }}
-                  className="rounded-full border border-border bg-surface/95 px-3.5 py-2 text-sm font-medium text-foreground shadow-sm backdrop-blur transition-colors hover:bg-accent-soft hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isVideo || pending.length === 1
-                    ? t("changeMedia", { media: mediaLabel })
-                    : t("removeImage")}
-                </button>
+                </div>
               </div>
             </div>
           </div>
 
-          <aside className="flex w-full shrink-0 flex-col border-t border-border bg-surface lg:h-full lg:w-[min(26rem,40%)] lg:border-l lg:border-t-0">
-            <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5 pt-6 sm:p-8 lg:pt-16">
-              <div className="flex flex-wrap items-center gap-2">
-                <span
-                  className={[
-                    "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
-                    isVideo
-                      ? "bg-accent-soft text-primary ring-1 ring-border"
-                      : "bg-surface-muted text-foreground-muted ring-1 ring-border",
-                  ].join(" ")}
-                >
-                  {isVideo ? (
-                    <FilmIcon className="h-3.5 w-3.5" />
-                  ) : (
-                    <ImageIcon className="h-3.5 w-3.5" />
-                  )}
-                  {isVideo
-                    ? t("video")
-                    : isGroup
-                      ? t("imageGroup")
-                      : t("image")}
-                </span>
-                <span className="text-xs text-foreground-subtle">
-                  {formatBytes(
-                    pending.reduce((sum, p) => sum + p.file.size, 0),
-                  )}
-                  {isGroup
-                    ? ` · ${t("photoCount", { count: pending.length })}`
-                    : ""}
-                </span>
-              </div>
-
+          <aside className="app-card flex w-full shrink-0 flex-col border-t border-border lg:h-full lg:w-[min(26rem,40%)] lg:border-l lg:border-t-0">
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4 pt-5 sm:p-5 lg:pt-14">
               {isGroup ? (
-                <p className="text-xs leading-relaxed text-foreground-subtle">
+                <p className="text-sm leading-snug text-foreground-subtle">
                   {t("imageGroupCreateHint")}
                 </p>
               ) : null}
 
-              <label className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium uppercase tracking-wide text-foreground-muted">
+              {intent === "collection" &&
+              pending.length < MIN_IMAGE_GROUP_ASSETS ? (
+                <p className="text-sm leading-snug text-foreground-subtle">
+                  {t("collectionNeedsMoreImages")}
+                </p>
+              ) : null}
+
+              <label className="flex flex-col gap-1">
+                <span className="text-sm font-medium uppercase tracking-wide text-foreground-muted">
                   {t("name")}
                 </span>
                 <input
@@ -689,13 +862,13 @@ export function CreateForm() {
                   value={name}
                   disabled={busy}
                   onChange={(e) => setName(e.target.value)}
-                  className="rounded-xl border border-border bg-background px-3 py-2.5 text-base font-medium outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
+                  className="rounded-xl border border-border bg-background px-3 py-2 text-lg font-medium outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
                   placeholder={t("nameThis", { media: mediaLabel })}
                 />
               </label>
 
               <div>
-                <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-foreground-muted">
+                <p className="mb-1 text-sm font-medium uppercase tracking-wide text-foreground-muted">
                   {t("tags")}{" "}
                   <span className="normal-case text-foreground-subtle">
                     {t("required")}
@@ -709,7 +882,7 @@ export function CreateForm() {
               </div>
 
               <div>
-                <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-foreground-muted">
+                <p className="mb-1 text-sm font-medium uppercase tracking-wide text-foreground-muted">
                   {t("rating")}
                 </p>
                 <RatingInput
@@ -720,17 +893,17 @@ export function CreateForm() {
                 />
               </div>
 
-              <label className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium uppercase tracking-wide text-foreground-muted">
+              <label className="flex flex-col gap-1">
+                <span className="text-sm font-medium uppercase tracking-wide text-foreground-muted">
                   {t("description")}
                 </span>
                 <textarea
                   value={description}
                   disabled={busy}
                   onChange={(e) => setDescription(e.target.value)}
-                  rows={4}
+                  rows={3}
                   placeholder={t("optionalNotes", { media: mediaLabel })}
-                  className="h-28 max-h-40 min-h-[6.5rem] resize-y rounded-xl border border-border bg-background px-3 py-2.5 text-sm leading-relaxed outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
+                  className="h-24 max-h-36 min-h-[5.5rem] resize-y rounded-xl border border-border bg-background px-3 py-2 text-base leading-relaxed outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
                 />
               </label>
 
@@ -738,7 +911,7 @@ export function CreateForm() {
 
               {busy && (
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs font-medium text-foreground-muted">
+                  <div className="flex items-center justify-between text-sm font-medium text-foreground-muted">
                     <span>
                       {phase === "signing" &&
                         (uploadLabel || t("preparingUpload"))}
@@ -768,12 +941,12 @@ export function CreateForm() {
                     />
                   </div>
                   {isVideo && phase === "uploading" && uploadPercent >= 95 ? (
-                    <p className="text-xs leading-relaxed text-foreground-subtle">
+                    <p className="text-sm leading-snug text-foreground-subtle">
                       {t("videoUploadAlmostDone")}
                     </p>
                   ) : null}
                   {isVideo && phase === "saving" ? (
-                    <p className="text-xs leading-relaxed text-foreground-subtle">
+                    <p className="text-sm leading-snug text-foreground-subtle">
                       {t("videoSavingHint")}
                     </p>
                   ) : null}
@@ -781,11 +954,11 @@ export function CreateForm() {
               )}
             </div>
 
-            <div className="flex shrink-0 flex-col gap-2 border-t border-border bg-surface p-5 sm:px-8 sm:pb-8 sm:pt-4">
+            <div className="flex shrink-0 flex-col gap-2 border-t border-border p-4 sm:px-5 sm:pb-5 sm:pt-3">
               <button
                 type="submit"
                 disabled={!canSubmit}
-                className="inline-flex h-11 w-full items-center justify-center rounded-full bg-primary text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-11 w-full items-center justify-center rounded-full bg-primary text-base font-medium text-primary-foreground transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {busy ? t("saving") : t("saveToArchive")}
               </button>
@@ -793,7 +966,7 @@ export function CreateForm() {
                 <button
                   type="button"
                   onClick={cancelUpload}
-                  className="inline-flex h-10 w-full items-center justify-center rounded-full border border-border text-sm font-medium text-foreground-muted transition-colors hover:border-danger/40 hover:bg-danger/5 hover:text-danger"
+                  className="inline-flex h-11 w-full items-center justify-center rounded-full border border-border text-base font-medium text-foreground-muted transition-colors hover:border-danger/40 hover:bg-danger/5 hover:text-danger"
                 >
                   {t("cancelUpload")}
                 </button>
@@ -809,82 +982,14 @@ export function CreateForm() {
 const MAX_IMAGE_HINT = 50 * 1024 * 1024;
 const MAX_VIDEO_HINT = 1024 * 1024 * 1024;
 
-const CHOOSER_CARD_CLASS = [
-  "flex w-full flex-col items-center justify-center gap-3 rounded-2xl border border-dashed bg-surface px-6 py-14 text-center shadow-sm transition-all",
-  "border-border-strong hover:border-primary hover:bg-accent-soft/40",
+const DROP_ZONE_CLASS = [
+  "app-card app-card-interactive flex w-full max-w-xl flex-col items-center justify-center gap-3 rounded-2xl border border-dashed px-5 py-10 text-center shadow-sm transition-all sm:px-6 sm:py-16",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 ].join(" ");
 
-function UploadIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M12 16V4" />
-      <path d="m7 9 5-5 5 5" />
-      <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-    </svg>
-  );
-}
+const CHOOSER_CARD_CLASS = [
+  "app-card app-card-interactive flex w-full flex-col items-center justify-center gap-3 rounded-2xl border border-dashed px-5 py-8 text-center shadow-sm transition-all sm:px-6 sm:py-10",
+  "border-border-strong hover:border-primary",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+].join(" ");
 
-function FilmIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <rect x="3" y="5" width="18" height="14" rx="2" />
-      <path d="M7 5v14M17 5v14M3 9.5h4M3 14.5h4M17 9.5h4M17 14.5h4" />
-    </svg>
-  );
-}
-
-function StoryIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M12 20h9" />
-      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
-    </svg>
-  );
-}
-
-function ImageIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <circle cx="9" cy="9" r="1.5" />
-      <path d="m21 15-4.5-4.5L9 18" />
-    </svg>
-  );
-}

@@ -103,12 +103,12 @@ export function SearchBar({
       className={[
         "group/search relative flex min-w-0 flex-1 items-center",
         "transition-[max-width,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-        focused ? "max-w-full scale-[1.01]" : "max-w-full scale-100",
+        focused ? "max-w-full sm:scale-[1.01]" : "max-w-full scale-100",
       ].join(" ")}
     >
       <div
         className={[
-          "relative flex h-10 w-full min-w-0 items-center overflow-hidden rounded-full",
+          "relative flex h-11 w-full min-w-0 items-center overflow-hidden rounded-full",
           "border bg-background transition-[border-color,box-shadow,background-color] duration-300 ease-out",
           focused
             ? "border-primary bg-surface shadow-[0_0_0_3px_var(--accent-soft),0_8px_24px_-8px_rgba(124,58,237,0.35)]"
@@ -143,6 +143,7 @@ export function SearchBar({
           ref={inputRef}
           id={inputId}
           type="search"
+          size={1}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onFocus={() => setFocused(true)}
@@ -200,7 +201,7 @@ export function SearchBar({
           onMouseUp={() => setPressed(false)}
           onMouseLeave={() => setPressed(false)}
           className={[
-            "relative z-10 mr-1 inline-flex h-8 w-10 shrink-0 items-center justify-center rounded-full",
+            "relative z-10 mr-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full sm:w-10",
             "text-foreground-muted transition-all duration-200 ease-out",
             "hover:bg-primary hover:text-primary-foreground hover:shadow-sm",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
@@ -212,7 +213,7 @@ export function SearchBar({
           ].join(" ")}
           aria-label={t("search")}
         >
-          <SearchIcon className="h-4 w-4" />
+          <SearchIcon className="h-5 w-5" />
         </button>
       </div>
     </form>

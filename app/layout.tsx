@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Playfair } from "next/font/google";
 import { cookies } from "next/headers";
 import { Suspense } from "react";
@@ -39,6 +39,12 @@ export const metadata: Metadata = {
   },
   description:
     "A personal media archive — store, tag, and find the images and videos you love.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 async function readRequestLocale(): Promise<Locale> {
@@ -88,7 +94,7 @@ export default async function RootLayout({
             <div className="flex min-h-0 flex-1">
               <Suspense
                 fallback={
-                  <aside className="hidden h-dvh w-14 shrink-0 border-r border-border md:block" />
+                  <aside className="app-nav-rail hidden h-dvh w-[4.5rem] shrink-0 border-r border-border md:block" />
                 }
               >
                 <AppNavRail />
@@ -96,7 +102,7 @@ export default async function RootLayout({
               <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                 <Suspense
                   fallback={
-                    <header className="h-14 border-b border-transparent bg-transparent" />
+                    <header className="h-16 border-b border-transparent bg-transparent" />
                   }
                 >
                   <ConditionalHeader />

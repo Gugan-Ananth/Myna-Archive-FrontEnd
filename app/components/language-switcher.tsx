@@ -46,7 +46,7 @@ export function LanguageSwitcher({
   }
 
   return (
-    <div className="relative" ref={rootRef}>
+    <div className="relative justify-self-center" ref={rootRef}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -58,14 +58,14 @@ export function LanguageSwitcher({
         className={
           tone === "rail"
             ? [
-                "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
-                "text-foreground-muted transition-colors duration-150",
-                "hover:bg-accent-soft hover:text-primary",
+                "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full md:h-12 md:w-12",
+                "bg-surface-muted text-foreground ring-1 ring-border transition-colors duration-150",
+                "hover:bg-accent-soft hover:text-primary hover:ring-border-strong",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                open ? "bg-accent-soft text-primary" : "",
+                open ? "bg-accent-soft text-primary ring-border-strong" : "",
               ].join(" ")
             : [
-                "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
+                "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full",
                 "border border-border bg-surface text-foreground shadow-sm",
                 "transition-all duration-200 hover:border-border-strong hover:bg-accent-soft hover:text-primary",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
@@ -73,7 +73,7 @@ export function LanguageSwitcher({
               ].join(" ")
         }
       >
-        <GlobeIcon className="h-5 w-5" />
+        <GlobeIcon className="h-5 w-5 md:h-6 md:w-6" />
         <span className="sr-only">
           {LOCALE_META[locale].nativeLabel}
         </span>
@@ -85,7 +85,7 @@ export function LanguageSwitcher({
           role="listbox"
           aria-label={t("language")}
           className={[
-            "absolute z-50 min-w-[11.5rem] overflow-hidden rounded-2xl border border-border bg-surface py-1.5 shadow-[0_12px_40px_-12px_rgba(30,27,46,0.28)]",
+            "absolute z-50 min-w-[11.5rem] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-border bg-surface py-1.5 shadow-[0_12px_40px_-12px_rgba(30,27,46,0.28)]",
             "animate-[search-panel-in_140ms_ease-out]",
             menu === "rail"
               ? "bottom-0 left-[calc(100%+0.5rem)] origin-bottom-left"

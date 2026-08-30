@@ -12,6 +12,9 @@ export const VIDEO_MIME_TYPES = [
   "video/quicktime",
 ] as const;
 
+export const IMAGE_ACCEPT = IMAGE_MIME_TYPES.join(",");
+export const VIDEO_ACCEPT = VIDEO_MIME_TYPES.join(",");
+
 export const MAX_IMAGE_BYTES = 50 * 1024 * 1024; // 50 MB
 export const MAX_VIDEO_BYTES = 1024 * 1024 * 1024; // 1 GB
 

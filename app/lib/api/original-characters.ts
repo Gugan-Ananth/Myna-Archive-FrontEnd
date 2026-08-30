@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiFetch, type FetchCacheOptions } from "./client";
 import {
   buildQueryCacheKey,
   cachedQuery,
@@ -30,7 +30,7 @@ function listCacheKey(params: ListOriginalCharactersParams): string {
 
 export async function listOriginalCharacters(
   params: ListOriginalCharactersParams = {},
-  options?: { cache?: RequestCache; next?: NextFetchRequestConfig },
+  options?: FetchCacheOptions,
 ): Promise<PaginatedOriginalCharacters> {
   const key = listCacheKey(params);
 
@@ -48,6 +48,7 @@ export async function listOriginalCharacters(
         (isBrowser()
           ? undefined
           : { revalidate: SERVER_LIST_REVALIDATE, tags: [OCS_TAG] }),
+      accessToken: options?.accessToken,
     });
 
   if (isBrowser()) {
@@ -63,7 +64,7 @@ export async function listOriginalCharacters(
 
 export async function getOriginalCharacter(
   id: string,
-  options?: { cache?: RequestCache; next?: NextFetchRequestConfig },
+  options?: FetchCacheOptions,
 ): Promise<OriginalCharacter> {
   const key = buildQueryCacheKey("oc", { id });
   const fetchItem = () =>
@@ -75,6 +76,7 @@ export async function getOriginalCharacter(
         (isBrowser()
           ? undefined
           : { revalidate: SERVER_LIST_REVALIDATE, tags: [OCS_TAG] }),
+      accessToken: options?.accessToken,
     });
 
   if (isBrowser()) {

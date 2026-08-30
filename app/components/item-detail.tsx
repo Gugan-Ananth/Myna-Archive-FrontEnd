@@ -16,6 +16,7 @@ import { formatTagLabel } from "../lib/taxonomy";
 import type { ArchiveItem } from "../lib/types";
 import { BackButton } from "./back-button";
 import { CategoryTagPicker } from "./category-tag-picker";
+import { ComicReader } from "./comic-reader";
 import { ImageGroupCarousel } from "./image-group-carousel";
 import { RatingInput } from "./rating-input";
 import { StatusCallout } from "./status-callout";
@@ -56,6 +57,14 @@ export function ItemDetail({ item }: ItemDetailProps) {
 
   const isVideo = draft.mediaType === "video";
   const isStory = draft.mediaType === "story";
+  const isComic = draft.mediaType === "comic";
+  const isGroup =
+    !isVideo && !isStory && !isComic && itemMediaAssets(draft).length > 1;
+  const homeHref = isComic
+    ? "/?view=comics"
+    : isGroup
+      ? "/?view=collections"
+      : "/";
   const busy = saving || deleting;
 
   useEffect(() => {
@@ -165,7 +174,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
         )[0];
         router.push(`/item/${next?.id ?? ""}`);
       } else {
-        router.push(isStory ? "/?view=stories" : "/");
+        router.push(isStory ? "/?view=stories" : homeHref);
       }
       router.refresh();
     } catch (err) {
@@ -181,7 +190,6 @@ export function ItemDetail({ item }: ItemDetailProps) {
   }
 
   const mediaAssets = itemMediaAssets(draft);
-  const isGroup = !isVideo && !isStory && mediaAssets.length > 1;
 
   return (
     <div
@@ -193,8 +201,8 @@ export function ItemDetail({ item }: ItemDetailProps) {
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         {isStory ? (
           <>
-            <header className="relative z-30 flex w-full shrink-0 items-center justify-between gap-3 px-5 py-3 sm:px-8 lg:px-10">
-              <BackButton />
+            <header className="relative z-30 flex w-full shrink-0 items-center justify-between gap-3 px-3 py-3 sm:px-8 lg:px-10">
+              <BackButton href={homeHref} />
               <DetailsToggle
                 open={panelOpen}
                 hideLabel={t("hideDetails")}
@@ -203,7 +211,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
               />
             </header>
             <div className="min-h-0 flex-1 overflow-y-auto">
-              <div className="w-full px-5 pb-24 pt-2 sm:px-8 lg:px-10">
+              <div className="w-full px-4 pb-10 pt-2 sm:px-8 lg:px-10">
                 {chapters.length > 1 ? (
                   <nav
                     aria-label={t("storyChapters")}
@@ -216,7 +224,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
                           key={chapter.id}
                           href={`/item/${chapter.id}`}
                           className={[
-                            "inline-flex h-8 items-center rounded-full px-3 text-sm font-medium transition-colors",
+                            "inline-flex h-9 items-center rounded-full px-3.5 text-sm font-medium transition-colors",
                             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                             active
                               ? "bg-primary text-primary-foreground"
@@ -229,7 +237,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
                     })}
                   </nav>
                 ) : null}
-                <h1 className="w-full text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-[2.6rem] lg:leading-[1.15]">
+                <h1 className="w-full text-2xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-[2.6rem] lg:leading-[1.15]">
                   {draft.name}
                 </h1>
                 <article
@@ -249,6 +257,13 @@ export function ItemDetail({ item }: ItemDetailProps) {
                 title={draft.name}
                 className="absolute inset-0 h-full w-full"
               />
+            ) : isComic ? (
+              <ComicReader
+                assets={mediaAssets}
+                title={draft.name}
+                className="absolute inset-0 h-full w-full"
+                onIndexChange={handleGroupIndexChange}
+              />
             ) : (
               <ImageGroupCarousel
                 assets={mediaAssets}
@@ -259,19 +274,23 @@ export function ItemDetail({ item }: ItemDetailProps) {
             )}
             <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start justify-between p-3 sm:p-4">
               <div className="pointer-events-auto">
-                <BackButton />
+                <BackButton href={homeHref} />
               </div>
-              <div className="pointer-events-auto flex items-center gap-2">
+              <div className="pointer-events-auto flex max-w-[70%] flex-wrap items-center justify-end gap-2">
                 {isVideo && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-surface/90 px-2.5 py-1.5 text-xs font-medium text-primary shadow-sm ring-1 ring-border backdrop-blur-md">
                     <FilmIcon className="h-3.5 w-3.5" />
                     {t("video")}
                   </span>
                 )}
-                {isGroup && (
+                {(isGroup || isComic) && (
                   <span
                     className="inline-flex items-center gap-1.5 rounded-full bg-surface/90 px-2.5 py-1.5 text-xs font-medium text-primary shadow-sm ring-1 ring-border backdrop-blur-md"
-                    title={t("photoCount", { count: mediaAssets.length })}
+                    title={
+                      isComic
+                        ? t("pageCount", { count: mediaAssets.length })
+                        : t("photoCount", { count: mediaAssets.length })
+                    }
                   >
                     <StackIcon className="h-3.5 w-3.5 shrink-0" />
                     <span className="tabular-nums">
@@ -298,14 +317,14 @@ export function ItemDetail({ item }: ItemDetailProps) {
 
       <aside
         className={[
-          "z-20 shrink-0 overflow-hidden bg-surface transition-[width,max-height,opacity] duration-300 ease-out",
+          "app-card z-20 shrink-0 overflow-hidden transition-[width,max-height,opacity] duration-300 ease-out",
           panelOpen
             ? "max-h-[50vh] w-full opacity-100 lg:max-h-none lg:w-[min(24rem,38%)]"
             : "pointer-events-none max-h-0 w-full opacity-0 lg:max-h-none lg:w-0",
         ].join(" ")}
         aria-hidden={!panelOpen}
       >
-        <div className="flex h-full max-h-[50vh] w-full flex-col gap-5 overflow-y-auto p-5 sm:p-6 lg:max-h-none lg:min-w-[min(24rem,100%)] lg:pt-6">
+        <div className="flex h-full max-h-[50vh] w-full flex-col gap-5 overflow-y-auto p-4 sm:p-6 lg:max-h-none lg:min-w-[min(24rem,100%)] lg:pt-6">
           <div className="flex items-start justify-between gap-3">
             {editing ? (
               <label className="flex min-w-0 flex-1 flex-col gap-1">
@@ -328,26 +347,26 @@ export function ItemDetail({ item }: ItemDetailProps) {
             )}
 
             {!editing &&
-              (isStory ? (
+              (isStory || isComic ? (
                 <Link
                   href={`/item/${saved.id}/edit`}
-                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-foreground-muted transition-colors hover:bg-accent-soft hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={t("editStory")}
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-foreground shadow-sm transition-colors hover:bg-accent-soft hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={isComic ? t("editComic") : t("editStory")}
                   title={t("edit")}
                 >
-                  <EditIcon className="h-4 w-4" />
+                  <EditIcon className="h-5 w-5" />
                 </Link>
               ) : (
                 <button
                   type="button"
                   onClick={startEdit}
-                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-foreground-muted transition-colors hover:bg-accent-soft hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-foreground shadow-sm transition-colors hover:bg-accent-soft hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label={
                     isVideo ? t("editVideoDetails") : t("editImageDetails")
                   }
                   title={t("edit")}
                 >
-                  <EditIcon className="h-4 w-4" />
+                  <EditIcon className="h-5 w-5" />
                 </button>
               ))}
           </div>
@@ -430,7 +449,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
                 type="button"
                 onClick={() => void saveEdit()}
                 disabled={!ratingValid || busy}
-                className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {saving ? t("saving") : t("save")}
               </button>
@@ -438,7 +457,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
                 type="button"
                 onClick={cancelEdit}
                 disabled={busy}
-                className="inline-flex h-10 items-center justify-center rounded-full border border-border px-5 text-sm font-medium text-foreground hover:bg-surface-muted disabled:opacity-50"
+                className="inline-flex h-11 items-center justify-center rounded-full border border-border px-6 text-sm font-medium text-foreground hover:bg-surface-muted disabled:opacity-50"
               >
                 {t("cancel")}
               </button>
@@ -446,7 +465,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
                 type="button"
                 onClick={() => void onDelete()}
                 disabled={busy}
-                className="ml-auto inline-flex h-10 items-center justify-center rounded-full border border-danger/30 px-5 text-sm font-medium text-danger hover:bg-danger/10 disabled:opacity-50"
+                className="ml-auto inline-flex h-11 items-center justify-center rounded-full border border-danger/30 px-6 text-sm font-medium text-danger hover:bg-danger/10 disabled:opacity-50"
               >
                 {deleting
                   ? t("deleting")
@@ -461,7 +480,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
                 type="button"
                 onClick={() => void onDelete()}
                 disabled={busy}
-                className="inline-flex h-10 items-center justify-center rounded-full border border-border px-5 text-sm font-medium text-foreground-muted transition-colors hover:border-danger/40 hover:bg-danger/5 hover:text-danger disabled:opacity-50"
+                className="inline-flex h-11 items-center justify-center rounded-full border border-border px-6 text-sm font-medium text-foreground-muted transition-colors hover:border-danger/40 hover:bg-danger/5 hover:text-danger disabled:opacity-50"
               >
                 {deleting
                   ? t("deleting")
@@ -495,7 +514,7 @@ function DetailsToggle({
       aria-label={open ? hideLabel : showLabel}
       aria-expanded={open}
       className={[
-        "inline-flex h-10 w-10 items-center justify-center rounded-full",
+        "inline-flex h-11 w-11 items-center justify-center rounded-full",
         "bg-surface/90 text-foreground shadow-sm ring-1 ring-border backdrop-blur-md",
         "transition-colors hover:bg-accent-soft hover:text-primary",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
