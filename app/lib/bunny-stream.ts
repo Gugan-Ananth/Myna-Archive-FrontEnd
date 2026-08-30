@@ -6,7 +6,11 @@
  * @see https://bunny.net/docs/stream/premium-encoding
  */
 
-import { itemMediaAssets } from "./media-display";
+import {
+  itemMediaAssets,
+  orientationFromSize,
+  type ImageOrientation,
+} from "./media-display";
 import type { ArchiveItem } from "./types";
 
 const VIDEO_GUID_RE =
@@ -33,9 +37,38 @@ export type BunnyEmbedOptions = {
   autoplay?: boolean;
   muted?: boolean;
   preload?: boolean;
+  /**
+   * When false, the host sizes the iframe to the video aspect (portrait vs
+   * landscape). Default false — we frame the stage ourselves.
+   */
+  responsive?: boolean;
+  /** Compact Bunny chrome — more room for portrait frames. */
+  compactControls?: boolean;
   /** Start at t seconds (Bunny `t` query). */
   startSeconds?: number;
 };
+
+export type VideoFrameSize = {
+  width: number;
+  height: number;
+  orientation: ImageOrientation;
+};
+
+/**
+ * Natural frame for the detail stage from stored dims.
+ * Falls back to 16:9 only when dimensions were never captured.
+ */
+export function videoFrameSize(
+  item: Pick<ArchiveItem, "width" | "height">,
+): VideoFrameSize {
+  const width = item.width && item.width > 0 ? item.width : 16;
+  const height = item.height && item.height > 0 ? item.height : 9;
+  return {
+    width,
+    height,
+    orientation: orientationFromSize(width, height),
+  };
+}
 
 /**
  * Official Bunny embed URL — required for Premium JIT instant playback.
@@ -54,7 +87,14 @@ export function bunnyEmbedUrl(
   url.searchParams.set("autoplay", options.autoplay ? "true" : "false");
   url.searchParams.set("muted", options.muted ? "true" : "false");
   url.searchParams.set("preload", options.preload === false ? "false" : "true");
-  url.searchParams.set("responsive", "true");
+  url.searchParams.set(
+    "responsive",
+    options.responsive === true ? "true" : "false",
+  );
+  url.searchParams.set("playsinline", "true");
+  if (options.compactControls) {
+    url.searchParams.set("compactControls", "true");
+  }
   if (options.startSeconds != null && options.startSeconds > 0) {
     url.searchParams.set("t", `${Math.floor(options.startSeconds)}s`);
   }
