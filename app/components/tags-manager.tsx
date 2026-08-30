@@ -264,34 +264,6 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
     return bestId;
   }
 
-  function liveReorder(kind: DragKind, id: string, overId: string, categorySlug: string | null) {
-    if (kind === "category") {
-      const current = categoriesRef.current;
-      const from = current.findIndex((category) => category.slug === id);
-      const to = current.findIndex((category) => category.slug === overId);
-      const next = moveItem(current, from, to);
-      if (next === current) return;
-      categoriesRef.current = next;
-      setCategories(next);
-      return;
-    }
-    if (!categorySlug) return;
-    const current = categoriesRef.current;
-    let changed = false;
-    const next = current.map((category) => {
-      if (category.slug !== categorySlug) return category;
-      const from = category.tags.findIndex((tag) => tag.slug === id);
-      const to = category.tags.findIndex((tag) => tag.slug === overId);
-      const tags = moveItem(category.tags, from, to);
-      if (tags === category.tags) return category;
-      changed = true;
-      return { ...category, tags };
-    });
-    if (!changed) return;
-    categoriesRef.current = next;
-    setCategories(next);
-  }
-
   function startDrag(
     event: PointerEvent<HTMLButtonElement>,
     kind: DragKind,
@@ -305,7 +277,7 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
     event.currentTarget.setPointerCapture(event.pointerId);
 
     const rect = source.getBoundingClientRect();
-    const scale = kind === "category" ? 1.055 : 1.12;
+    const scale = kind === "category" ? 1.06 : 1.12;
     const clone = liftSource(source, rect, scale);
     const snapshot = categoriesRef.current;
     const next: ActiveDrag = {
@@ -322,15 +294,38 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
       snapshot,
       clone,
       moved: false,
-      detachEscape: () => {},
+      detachListeners: () => {},
+    };
+
+    const onMove = (pointer: globalThis.PointerEvent) => {
+      if (pointer.pointerId !== next.pointerId) return;
+      pointer.preventDefault();
+      updateDragOver(pointer);
+    };
+    const onUp = (pointer: globalThis.PointerEvent) => {
+      if (pointer.pointerId !== next.pointerId) return;
+      finishDrag(pointer);
+    };
+    const onCancel = (pointer: globalThis.PointerEvent) => {
+      if (pointer.pointerId !== next.pointerId) return;
+      abortDrag();
     };
     const onEscape = (keyboard: globalThis.KeyboardEvent) => {
       if (keyboard.key !== "Escape") return;
       keyboard.preventDefault();
       abortDrag();
     };
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
     window.addEventListener("keydown", onEscape);
-    next.detachEscape = () => window.removeEventListener("keydown", onEscape);
+    next.detachListeners = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+      window.removeEventListener("keydown", onEscape);
+    };
+
     dragRef.current = next;
     setDrag({
       kind,
@@ -342,7 +337,11 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
     lockPageForDrag();
   }
 
-  function updateDragOver(event: PointerEvent<HTMLButtonElement>) {
+  function updateDragOver(event: {
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+  }) {
     const current = dragRef.current;
     if (!current || event.pointerId !== current.pointerId) return;
     const dx = event.clientX - current.startX;
@@ -354,24 +353,31 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
       current.kind,
       current.categorySlug,
     );
-    if (!overId || overId === current.id) return;
+    if (!overId || overId === current.overId) return;
     current.overId = overId;
-    liveReorder(current.kind, current.id, overId, current.categorySlug);
+    setDrag({
+      kind: current.kind,
+      categorySlug: current.categorySlug,
+      id: current.id,
+      overId,
+      pointerId: current.pointerId,
+    });
   }
 
-  function finishDrag(event: PointerEvent<HTMLButtonElement>) {
+  function finishDrag(event: { pointerId: number }) {
     const current = dragRef.current;
     if (!current || event.pointerId !== current.pointerId) return;
+    const overId = current.overId;
     dragRef.current = null;
     setDrag(null);
     teardownLift(current);
-    const next = categoriesRef.current;
+    if (!overId || overId === current.id) return;
     if (current.kind === "category") {
-      void persistCategoryList(next, current.snapshot);
+      void persistCategoryOrder(current.id, overId);
       return;
     }
     if (current.categorySlug) {
-      void persistTagList(current.categorySlug, next, current.snapshot);
+      void persistTagOrder(current.categorySlug, current.id, overId);
     }
   }
 
@@ -381,14 +387,6 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
     dragRef.current = null;
     setDrag(null);
     teardownLift(current);
-    categoriesRef.current = current.snapshot;
-    setCategories(current.snapshot);
-  }
-
-  function cancelDrag(event: PointerEvent<HTMLButtonElement>) {
-    const current = dragRef.current;
-    if (!current || event.pointerId !== current.pointerId) return;
-    abortDrag();
   }
 
   async function persistCategoryList(
@@ -635,6 +633,10 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
             const addingHere = addingTagFor === category.slug;
             const categoryDragging =
               drag?.kind === "category" && drag.id === category.slug;
+            const categoryDropTarget =
+              drag?.kind === "category" &&
+              drag.overId === category.slug &&
+              drag.id !== category.slug;
             return (
               <li
                 key={category.slug}
@@ -644,8 +646,10 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
                   "app-card min-w-0 rounded-2xl border p-4 shadow-sm sm:p-5",
                   "transition-[opacity,border-color,box-shadow] duration-200",
                   categoryDragging
-                    ? "border-dashed border-primary/50 opacity-35 shadow-none"
-                    : "border-border",
+                    ? "pointer-events-none border-dashed border-primary/50 opacity-25 shadow-none"
+                    : categoryDropTarget
+                      ? "border-primary ring-2 ring-ring/40"
+                      : "border-border",
                 ].join(" ")}
               >
                 <div className="flex min-w-0 items-center gap-1.5 border-b border-border pb-3">
@@ -692,10 +696,6 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
                           onPointerDown={(event) =>
                             startDrag(event, "category", category.slug, null)
                           }
-                          onPointerMove={updateDragOver}
-                          onPointerUp={finishDrag}
-                          onPointerCancel={cancelDrag}
-                          onLostPointerCapture={cancelDrag}
                           onKeyDown={(event) => {
                             if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
                               event.preventDefault();
@@ -767,6 +767,11 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
                       drag?.kind === "tag" &&
                       drag.categorySlug === category.slug &&
                       drag.id === tag.slug;
+                    const tagDropTarget =
+                      drag?.kind === "tag" &&
+                      drag.categorySlug === category.slug &&
+                      drag.overId === tag.slug &&
+                      drag.id !== tag.slug;
                     const showTagHandle =
                       !searching && category.tags.length > 1 && !editing;
                     return (
@@ -777,7 +782,7 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
                         data-drop-id={tag.slug}
                         className={[
                           "relative min-w-0",
-                          tagDragging ? "opacity-35" : "",
+                          tagDragging ? "pointer-events-none opacity-25" : "",
                         ].join(" ")}
                       >
                         {editing ? (
@@ -810,10 +815,11 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
                             className={[
                               "inline-flex items-center gap-0.5 rounded-full border bg-surface py-1 pr-1.5 shadow-sm",
                               showTagHandle ? "pl-1" : "pl-3.5",
-                              moving || tagDragging
+                              moving || tagDragging || tagDropTarget
                                 ? "border-primary"
                                 : "border-border",
                               tagDragging ? "border-dashed shadow-none" : "",
+                              tagDropTarget ? "ring-2 ring-ring/40" : "",
                             ].join(" ")}
                           >
                             {showTagHandle ? (
@@ -830,10 +836,6 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
                                     category.slug,
                                   )
                                 }
-                                onPointerMove={updateDragOver}
-                                onPointerUp={finishDrag}
-                                onPointerCancel={cancelDrag}
-                                onLostPointerCapture={cancelDrag}
                                 onKeyDown={(event) => {
                                   if (
                                     event.key === "ArrowLeft" ||
@@ -986,7 +988,7 @@ type ActiveDrag = DragState & {
   snapshot: TaxonomyCategoryDto[];
   clone: HTMLElement | null;
   moved: boolean;
-  detachEscape: () => void;
+  detachListeners: () => void;
 };
 
 const LIFT_PX = 8;
@@ -1023,7 +1025,8 @@ function liftSource(
   clone.style.height = `${rect.height}px`;
   clone.style.margin = "0";
   clone.style.listStyle = "none";
-  clone.style.zIndex = "70";
+  clone.style.zIndex = "9999";
+  clone.style.isolation = "isolate";
   clone.style.pointerEvents = "none";
   clone.style.cursor = "grabbing";
   clone.style.transformOrigin = "center center";
@@ -1074,7 +1077,7 @@ function unlockPageForDrag() {
 
 function teardownLift(drag: ActiveDrag | null) {
   if (!drag) return;
-  drag.detachEscape();
+  drag.detachListeners();
   drag.clone?.remove();
   drag.clone = null;
   unlockPageForDrag();
@@ -1102,10 +1105,6 @@ function ReorderHandle({
   disabled = false,
   compact = false,
   onPointerDown,
-  onPointerMove,
-  onPointerUp,
-  onPointerCancel,
-  onLostPointerCapture,
   onKeyDown,
 }: {
   label: string;
@@ -1113,10 +1112,6 @@ function ReorderHandle({
   disabled?: boolean;
   compact?: boolean;
   onPointerDown: (event: PointerEvent<HTMLButtonElement>) => void;
-  onPointerMove: (event: PointerEvent<HTMLButtonElement>) => void;
-  onPointerUp: (event: PointerEvent<HTMLButtonElement>) => void;
-  onPointerCancel: (event: PointerEvent<HTMLButtonElement>) => void;
-  onLostPointerCapture: (event: PointerEvent<HTMLButtonElement>) => void;
   onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
 }) {
   return (
@@ -1127,10 +1122,6 @@ function ReorderHandle({
       aria-grabbed={dragging}
       disabled={disabled}
       onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerCancel}
-      onLostPointerCapture={onLostPointerCapture}
       onKeyDown={onKeyDown}
       className={[
         "inline-flex shrink-0 touch-none select-none items-center justify-center rounded-full text-foreground-subtle",
