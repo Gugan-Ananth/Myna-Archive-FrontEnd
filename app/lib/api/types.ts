@@ -47,6 +47,11 @@ export type TaxonomyTagResponse = {
   };
 };
 
+export type ReorderTaxonomyInput = {
+  categorySlugs?: string[];
+  tags?: Array<{ categorySlug: string; tagSlugs: string[] }>;
+};
+
 export type ListArchiveItemsParams = {
   q?: string;
   tag?: string[];

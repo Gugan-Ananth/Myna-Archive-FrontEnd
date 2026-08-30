@@ -135,7 +135,9 @@ const en = {
   filterByCategory: "Filter by {category}",
   manageTags: "Manage tags",
   manageTagsHint:
-    "Add, rename, move, and delete categories and the tags under them.",
+    "Add, rename, reorder, move, and delete categories and the tags under them.",
+  reorderCategory: "Reorder category",
+  reorderTag: "Reorder tag",
   searchManageTags: "Search categories and tags",
   noTaxonomyYet: "No categories yet. Add one to start organizing tags.",
   editCategory: "Edit category",
@@ -483,7 +485,9 @@ const es: Record<MessageKey, string> = {
   filterByCategory: "Filtrar por {category}",
   manageTags: "Gestionar etiquetas",
   manageTagsHint:
-    "Añade, renombra, mueve y elimina categorías y las etiquetas que contienen.",
+    "Añade, renombra, reordena, mueve y elimina categorías y las etiquetas que contienen.",
+  reorderCategory: "Reordenar categoría",
+  reorderTag: "Reordenar etiqueta",
   searchManageTags: "Buscar categorías y etiquetas",
   noTaxonomyYet: "Aún no hay categorías. Añade una para organizar etiquetas.",
   editCategory: "Editar categoría",
@@ -828,7 +832,9 @@ const ca: Record<MessageKey, string> = {
   filterByCategory: "Filtra per {category}",
   manageTags: "Gestiona les etiquetes",
   manageTagsHint:
-    "Afegeix, reanomena, mou i elimina categories i les etiquetes que contenen.",
+    "Afegeix, reanomena, reordena, mou i elimina categories i les etiquetes que contenen.",
+  reorderCategory: "Reordena la categoria",
+  reorderTag: "Reordena l'etiqueta",
   searchManageTags: "Cerca categories i etiquetes",
   noTaxonomyYet: "Encara no hi ha categories. Afegeix-ne una per organitzar etiquetes.",
   editCategory: "Edita la categoria",

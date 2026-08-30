@@ -8,6 +8,7 @@ import {
 } from "./query-cache";
 import { revalidateArchiveDataCache } from "./revalidate-archive";
 import type {
+  ReorderTaxonomyInput,
   TaxonomyCategoryDto,
   TaxonomyCategoryResponse,
   TaxonomyListResponse,
@@ -157,6 +158,19 @@ export async function deleteTaxonomyTag(
     },
   );
   await bustTaxonomyCaches();
+}
+
+/** Persist category and/or tag display order. */
+export async function reorderTaxonomy(
+  input: ReorderTaxonomyInput,
+): Promise<TaxonomyCategoryDto[]> {
+  const result = await apiFetch<TaxonomyListResponse>("/taxonomy/reorder", {
+    method: "PATCH",
+    body: input,
+    cache: "no-store",
+  });
+  await bustTaxonomyCaches();
+  return result.data ?? [];
 }
 
 export function seedTaxonomyCache(categories: TaxonomyCategoryDto[]): void {

@@ -1,12 +1,20 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import {
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+} from "react";
 import {
   ApiError,
   createTaxonomyCategory,
   createTaxonomyTag,
   deleteTaxonomyCategory,
   deleteTaxonomyTag,
+  reorderTaxonomy,
   updateTaxonomyCategory,
   updateTaxonomyTag,
 } from "../lib/api";
@@ -22,7 +30,7 @@ type TagsManagerProps = {
 
 /**
  * Outline of categories (1, 2, 3) with indented tags (a, b, c).
- * Tag chips keep inline edit / move / delete.
+ * Tag chips keep inline edit / move / delete. Drag handles reorder.
  */
 export function TagsManager({ initialCategories }: TagsManagerProps) {
   const { t } = useI18n();
@@ -43,6 +51,13 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [tagDraft, setTagDraft] = useState("");
   const [movingKey, setMovingKey] = useState<string | null>(null);
+  const dragRef = useRef<DragState | null>(null);
+  const persistLock = useRef(false);
+  const [drag, setDrag] = useState<DragState | null>(null);
+
+  const searching = Boolean(query.trim());
+  const canReorder = !busy && !searching;
+  const showCategoryHandles = !searching && categories.length > 1;
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -210,6 +225,177 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
     });
   }
 
+  function dropIdFromPoint(
+    x: number,
+    y: number,
+    kind: DragKind,
+    categorySlug: string | null,
+  ): string | null {
+    const stack = document.elementsFromPoint(x, y);
+    for (const node of stack) {
+      if (!(node instanceof Element)) continue;
+      const target = node.closest("[data-drop-kind]");
+      if (!(target instanceof HTMLElement)) continue;
+      if (target.dataset.dropKind !== kind) continue;
+      if (kind === "tag" && target.dataset.dropCategory !== categorySlug) {
+        continue;
+      }
+      return target.dataset.dropId ?? null;
+    }
+    return null;
+  }
+
+  function startDrag(
+    event: PointerEvent<HTMLButtonElement>,
+    kind: DragKind,
+    id: string,
+    categorySlug: string | null,
+  ) {
+    if (!canReorder || event.button !== 0) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const next: DragState = {
+      kind,
+      categorySlug,
+      id,
+      overId: id,
+      pointerId: event.pointerId,
+    };
+    dragRef.current = next;
+    setDrag(next);
+  }
+
+  function updateDragOver(event: PointerEvent<HTMLButtonElement>) {
+    const current = dragRef.current;
+    if (!current || event.pointerId !== current.pointerId) return;
+    const overId = dropIdFromPoint(
+      event.clientX,
+      event.clientY,
+      current.kind,
+      current.categorySlug,
+    );
+    if (overId === current.overId) return;
+    const next = { ...current, overId };
+    dragRef.current = next;
+    setDrag(next);
+  }
+
+  function finishDrag(event: PointerEvent<HTMLButtonElement>) {
+    const current = dragRef.current;
+    if (!current || event.pointerId !== current.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    dragRef.current = null;
+    setDrag(null);
+    if (!current.overId || current.overId === current.id) return;
+    if (current.kind === "category") {
+      void persistCategoryOrder(current.id, current.overId);
+      return;
+    }
+    if (current.categorySlug) {
+      void persistTagOrder(
+        current.categorySlug,
+        current.id,
+        current.overId,
+      );
+    }
+  }
+
+  function cancelDrag(event: PointerEvent<HTMLButtonElement>) {
+    const current = dragRef.current;
+    if (!current || event.pointerId !== current.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    dragRef.current = null;
+    setDrag(null);
+  }
+
+  async function persistCategoryOrder(fromId: string, toId: string) {
+    if (persistLock.current) return;
+    const from = categories.findIndex((category) => category.slug === fromId);
+    const to = categories.findIndex((category) => category.slug === toId);
+    const next = moveItem(categories, from, to);
+    if (next === categories) return;
+    persistLock.current = true;
+    const previous = categories;
+    setCategories(next);
+    try {
+      await run(async () => {
+        try {
+          const saved = await reorderTaxonomy({
+            categorySlugs: next.map((category) => category.slug),
+          });
+          setCategories(saved);
+        } catch (err) {
+          setCategories(previous);
+          throw err;
+        }
+      });
+    } finally {
+      persistLock.current = false;
+    }
+  }
+
+  async function persistTagOrder(
+    categorySlug: string,
+    fromId: string,
+    toId: string,
+  ) {
+    if (persistLock.current) return;
+    const category = categories.find((entry) => entry.slug === categorySlug);
+    if (!category) return;
+    const from = category.tags.findIndex((tag) => tag.slug === fromId);
+    const to = category.tags.findIndex((tag) => tag.slug === toId);
+    const tags = moveItem(category.tags, from, to);
+    if (tags === category.tags) return;
+    persistLock.current = true;
+    const previous = categories;
+    const next = categories.map((entry) =>
+      entry.slug === categorySlug ? { ...entry, tags } : entry,
+    );
+    setCategories(next);
+    try {
+      await run(async () => {
+        try {
+          const saved = await reorderTaxonomy({
+            tags: [
+              {
+                categorySlug,
+                tagSlugs: tags.map((tag) => tag.slug),
+              },
+            ],
+          });
+          setCategories(saved);
+        } catch (err) {
+          setCategories(previous);
+          throw err;
+        }
+      });
+    } finally {
+      persistLock.current = false;
+    }
+  }
+
+  function nudgeCategory(slug: string, delta: number) {
+    if (!canReorder) return;
+    const from = categories.findIndex((category) => category.slug === slug);
+    const target = categories[from + delta];
+    if (!target) return;
+    void persistCategoryOrder(slug, target.slug);
+  }
+
+  function nudgeTag(categorySlug: string, tagSlug: string, delta: number) {
+    if (!canReorder) return;
+    const category = categories.find((entry) => entry.slug === categorySlug);
+    if (!category) return;
+    const from = category.tags.findIndex((tag) => tag.slug === tagSlug);
+    const target = category.tags[from + delta];
+    if (!target) return;
+    void persistTagOrder(categorySlug, tagSlug, target.slug);
+  }
+
   function applyTagMove(
     fromSlug: string,
     fromTagSlug: string,
@@ -338,14 +524,34 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
           mood={query ? "no-match" : "empty"}
         />
       ) : (
-        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 xl:grid-cols-3">
+        <ul
+          className={[
+            "grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 xl:grid-cols-3",
+            drag ? "select-none" : "",
+          ].join(" ")}
+        >
           {visible.map((category) => {
             const editingCat = editingCategorySlug === category.slug;
             const addingHere = addingTagFor === category.slug;
+            const categoryDragging =
+              drag?.kind === "category" && drag.id === category.slug;
+            const categoryDropTarget =
+              drag?.kind === "category" &&
+              drag.overId === category.slug &&
+              drag.id !== category.slug;
             return (
               <li
                 key={category.slug}
-                className="app-card min-w-0 rounded-2xl border border-border p-4 shadow-sm sm:p-5"
+                data-drop-kind="category"
+                data-drop-id={category.slug}
+                className={[
+                  "app-card min-w-0 rounded-2xl border p-4 shadow-sm sm:p-5",
+                  categoryDragging
+                    ? "border-primary opacity-60"
+                    : categoryDropTarget
+                      ? "border-primary ring-2 ring-ring/35"
+                      : "border-border",
+                ].join(" ")}
               >
                 <div className="flex min-w-0 items-center gap-1.5 border-b border-border pb-3">
                   {editingCat ? (
@@ -383,6 +589,38 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
                     </>
                   ) : (
                     <>
+                      {showCategoryHandles ? (
+                        <ReorderHandle
+                          label={t("reorderCategory")}
+                          disabled={busy}
+                          dragging={categoryDragging}
+                          onPointerDown={(event) =>
+                            startDrag(event, "category", category.slug, null)
+                          }
+                          onPointerMove={updateDragOver}
+                          onPointerUp={finishDrag}
+                          onPointerCancel={cancelDrag}
+                          onLostPointerCapture={cancelDrag}
+                          onKeyDown={(event) => {
+                            if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+                              event.preventDefault();
+                              nudgeCategory(category.slug, -1);
+                            }
+                            if (
+                              event.key === "ArrowRight" ||
+                              event.key === "ArrowDown"
+                            ) {
+                              event.preventDefault();
+                              nudgeCategory(category.slug, 1);
+                            }
+                            if (event.key === "Escape" && drag) {
+                              event.preventDefault();
+                              dragRef.current = null;
+                              setDrag(null);
+                            }
+                          }}
+                        />
+                      ) : null}
                       <h2 className="min-w-0 truncate text-base font-semibold tracking-tight text-foreground">
                         {category.label}
                       </h2>
@@ -431,8 +669,28 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
                     const key = `${category.slug}:${tag.slug}`;
                     const editing = editingKey === key;
                     const moving = movingKey === key;
+                    const tagDragging =
+                      drag?.kind === "tag" &&
+                      drag.categorySlug === category.slug &&
+                      drag.id === tag.slug;
+                    const tagDropTarget =
+                      drag?.kind === "tag" &&
+                      drag.categorySlug === category.slug &&
+                      drag.overId === tag.slug &&
+                      drag.id !== tag.slug;
+                    const showTagHandle =
+                      !searching && category.tags.length > 1 && !editing;
                     return (
-                      <li key={key} className="relative min-w-0">
+                      <li
+                        key={key}
+                        data-drop-kind="tag"
+                        data-drop-category={category.slug}
+                        data-drop-id={tag.slug}
+                        className={[
+                          "relative min-w-0",
+                          tagDragging ? "opacity-60" : "",
+                        ].join(" ")}
+                      >
                         {editing ? (
                           <div className="flex items-center gap-1.5 rounded-full border border-primary bg-surface py-1 pr-1.5 pl-3.5">
                             <input
@@ -461,10 +719,55 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
                         ) : (
                           <div
                             className={[
-                              "inline-flex items-center gap-0.5 rounded-full border bg-surface py-1 pr-1.5 pl-3.5 shadow-sm",
-                              moving ? "border-primary" : "border-border",
+                              "inline-flex items-center gap-0.5 rounded-full border bg-surface py-1 pr-1.5 shadow-sm",
+                              showTagHandle ? "pl-1" : "pl-3.5",
+                              moving || tagDropTarget
+                                ? "border-primary"
+                                : "border-border",
+                              tagDropTarget ? "ring-2 ring-ring/35" : "",
                             ].join(" ")}
                           >
+                            {showTagHandle ? (
+                              <ReorderHandle
+                                compact
+                                label={t("reorderTag")}
+                                disabled={busy}
+                                dragging={tagDragging}
+                                onPointerDown={(event) =>
+                                  startDrag(
+                                    event,
+                                    "tag",
+                                    tag.slug,
+                                    category.slug,
+                                  )
+                                }
+                                onPointerMove={updateDragOver}
+                                onPointerUp={finishDrag}
+                                onPointerCancel={cancelDrag}
+                                onLostPointerCapture={cancelDrag}
+                                onKeyDown={(event) => {
+                                  if (
+                                    event.key === "ArrowLeft" ||
+                                    event.key === "ArrowUp"
+                                  ) {
+                                    event.preventDefault();
+                                    nudgeTag(category.slug, tag.slug, -1);
+                                  }
+                                  if (
+                                    event.key === "ArrowRight" ||
+                                    event.key === "ArrowDown"
+                                  ) {
+                                    event.preventDefault();
+                                    nudgeTag(category.slug, tag.slug, 1);
+                                  }
+                                  if (event.key === "Escape" && drag) {
+                                    event.preventDefault();
+                                    dragRef.current = null;
+                                    setDrag(null);
+                                  }
+                                }}
+                              />
+                            ) : null}
                             <span className="max-w-[11rem] truncate text-sm font-medium text-foreground">
                               {tag.label}
                             </span>
@@ -576,6 +879,82 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
   );
 }
 
+type DragKind = "category" | "tag";
+
+type DragState = {
+  kind: DragKind;
+  categorySlug: string | null;
+  id: string;
+  overId: string | null;
+  pointerId: number;
+};
+
+function moveItem<T>(items: T[], from: number, to: number): T[] {
+  if (
+    from === to ||
+    from < 0 ||
+    to < 0 ||
+    from >= items.length ||
+    to >= items.length
+  ) {
+    return items;
+  }
+  const next = [...items];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
+
+function ReorderHandle({
+  label,
+  dragging,
+  disabled = false,
+  compact = false,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
+  onLostPointerCapture,
+  onKeyDown,
+}: {
+  label: string;
+  dragging: boolean;
+  disabled?: boolean;
+  compact?: boolean;
+  onPointerDown: (event: PointerEvent<HTMLButtonElement>) => void;
+  onPointerMove: (event: PointerEvent<HTMLButtonElement>) => void;
+  onPointerUp: (event: PointerEvent<HTMLButtonElement>) => void;
+  onPointerCancel: (event: PointerEvent<HTMLButtonElement>) => void;
+  onLostPointerCapture: (event: PointerEvent<HTMLButtonElement>) => void;
+  onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      aria-grabbed={dragging}
+      disabled={disabled}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      onLostPointerCapture={onLostPointerCapture}
+      onKeyDown={onKeyDown}
+      className={[
+        "inline-flex shrink-0 touch-none select-none items-center justify-center rounded-full text-foreground-subtle",
+        "hover:bg-accent-soft hover:text-primary",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        compact ? "h-8 w-8" : "h-10 w-8",
+        dragging ? "cursor-grabbing" : "cursor-grab",
+        "disabled:cursor-default disabled:opacity-50",
+      ].join(" ")}
+    >
+      <GripIcon className={compact ? "h-4 w-4" : "h-5 w-5"} />
+    </button>
+  );
+}
+
 function IconButton({
   label,
   onClick,
@@ -680,6 +1059,24 @@ function TrashIcon({ className }: { className?: string }) {
       <path d="M4 7h16" />
       <path d="M9 7V5h6v2" />
       <path d="M6 7l1 13h10l1-13" />
+    </svg>
+  );
+}
+
+function GripIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      className={className}
+      fill="currentColor"
+      aria-hidden
+    >
+      <circle cx="7" cy="5" r="1.35" />
+      <circle cx="13" cy="5" r="1.35" />
+      <circle cx="7" cy="10" r="1.35" />
+      <circle cx="13" cy="10" r="1.35" />
+      <circle cx="7" cy="15" r="1.35" />
+      <circle cx="13" cy="15" r="1.35" />
     </svg>
   );
 }

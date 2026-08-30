@@ -143,12 +143,6 @@ export function buildTaxonomyFromApi(
       tags = tags.filter((t) => t.count > 0);
     }
 
-    tags.sort((a, b) => {
-      if (a.builtIn !== b.builtIn) return a.builtIn ? -1 : 1;
-      if (a.count !== b.count) return b.count - a.count;
-      return a.label.localeCompare(b.label);
-    });
-
     if (tags.length === 0 && !includeUnused) continue;
 
     categories.push({
