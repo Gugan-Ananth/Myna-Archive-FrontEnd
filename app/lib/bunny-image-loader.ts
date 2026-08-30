@@ -27,11 +27,12 @@ export default function bunnyImageLoader({
     }
 
     // Width-based responsive thumbs — let height follow aspect ratio.
-    url.searchParams.set("width", String(Math.min(Math.max(width, 64), 1920)));
+    const w = Math.min(Math.max(width, 64), 1920);
+    url.searchParams.set("width", String(w));
     url.searchParams.set("quality", String(quality ?? 72));
-    // Prefer modern formats when Optimizer supports it.
+    // AVIF only under Bunny’s ~4 MP encoder cap; small pins stay well under it.
     if (!url.searchParams.has("format")) {
-      url.searchParams.set("format", "webp");
+      url.searchParams.set("format", w <= 720 ? "avif" : "webp");
     }
     // Drop fixed height/aspect from stored thumbnail URLs so width drives size.
     url.searchParams.delete("height");

@@ -15,6 +15,7 @@ import {
   itemMediaAssets,
   gridMediaSrc,
   STORY_COVER_TEMPLATE,
+  videoPreviewUrl,
   videoThumbnailCandidates,
   withCacheBust,
 } from "../lib/media-display";
@@ -206,6 +207,12 @@ function VideoThumb({
     () => videoThumbnailCandidates(item),
     [item],
   );
+  const hoverPreview = useMemo(
+    () => videoPreviewUrl(item.mediaUrl),
+    [item.mediaUrl],
+  );
+  const [previewReady, setPreviewReady] = useState(false);
+  const [previewFailed, setPreviewFailed] = useState(false);
 
   const videoSrc = useMemo(() => {
     if (thumbCandidates.length === 0) return "";
@@ -290,6 +297,25 @@ function VideoThumb({
             setState("ready");
           }}
           onError={onVideoThumbError}
+        />
+      ) : null}
+
+      {/* Bunny Stream animated preview — Discord-style hover scrub. */}
+      {ready && hoverPreview && !previewFailed ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={hoverPreview}
+          alt=""
+          decoding="async"
+          loading="lazy"
+          className={[
+            "pointer-events-none absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-200",
+            previewReady
+              ? "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+              : "opacity-0",
+          ].join(" ")}
+          onLoad={() => setPreviewReady(true)}
+          onError={() => setPreviewFailed(true)}
         />
       ) : null}
 

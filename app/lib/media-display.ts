@@ -185,12 +185,12 @@ export function withCacheBust(url: string, token: number | string): string {
   }
 }
 
-const PROGRESSIVE_HEIGHTS = [720, 480, 360, 240, 1080] as const;
+/** Prefer smaller ladders first so first frame arrives sooner (Discord-like). */
+const FAST_START_HEIGHTS = [360, 480, 240, 720, 1080] as const;
 
 /**
  * Bunny Stream progressive MP4s appear as renditions finish encoding.
- * Prefer the stored height first, then common lower/higher fallbacks so
- * playback can start before the default 720p rendition is ready.
+ * Try cheaper heights first so playback can start before 720p/1080p is ready.
  */
 export function alternateVideoSources(mediaUrl: string): string[] {
   if (!mediaUrl) return [];
@@ -200,12 +200,70 @@ export function alternateVideoSources(mediaUrl: string): string[] {
 
   const [, prefix, heightRaw, suffix, query = ""] = match;
   const preferred = Number(heightRaw);
-  const heights = [
-    preferred,
-    ...PROGRESSIVE_HEIGHTS.filter((h) => h !== preferred),
-  ];
+  const heights: number[] = [];
+  for (const height of FAST_START_HEIGHTS) {
+    if (!heights.includes(height)) heights.push(height);
+  }
+  // Keep exotic heights available, but never ahead of the fast-start ladder.
+  if (preferred > 0 && !heights.includes(preferred)) {
+    heights.push(preferred);
+  }
 
   return heights.map((height) => `${prefix}${height}${suffix}${query}`);
+}
+
+/** `…/play_720p.mp4` → `…/playlist.m3u8` (adaptive HLS). */
+export function videoPlaylistUrl(mediaUrl: string): string | null {
+  if (!mediaUrl) return null;
+  try {
+    const url = new URL(mediaUrl);
+    const replaced = url.pathname.replace(
+      /\/play_\d+p\.mp4$/i,
+      "/playlist.m3u8",
+    );
+    if (replaced === url.pathname) return null;
+    url.pathname = replaced;
+    url.search = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+/** Bunny Stream hover animation (WebP) — Discord-style pin preview. */
+export function videoPreviewUrl(mediaUrl: string): string | null {
+  if (!mediaUrl) return null;
+  try {
+    const url = new URL(mediaUrl);
+    const replaced = url.pathname.replace(
+      /\/play_\d+p\.mp4$/i,
+      "/preview.webp",
+    );
+    if (replaced === url.pathname) return null;
+    url.pathname = replaced;
+    url.search = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Playback ladder: HLS first (fast start + ABR), then progressive MP4s.
+ */
+export function videoPlaybackCandidates(mediaUrl: string): string[] {
+  if (!mediaUrl) return [];
+  const urls: string[] = [];
+  const playlist = videoPlaylistUrl(mediaUrl);
+  if (playlist) urls.push(playlist);
+  for (const src of alternateVideoSources(mediaUrl)) {
+    if (!urls.includes(src)) urls.push(src);
+  }
+  return urls;
+}
+
+export function isHlsUrl(url: string): boolean {
+  return /\.m3u8(?:$|\?)/i.test(url);
 }
 
 /**
