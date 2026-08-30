@@ -18,7 +18,7 @@ export function OcGrid({
   emptyMessage,
   emptyHint,
   emptyHref,
-  priorityCount = 8,
+  priorityCount = 6,
 }: OcGridProps) {
   const { t } = useI18n();
 

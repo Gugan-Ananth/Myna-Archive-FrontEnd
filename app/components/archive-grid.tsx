@@ -28,7 +28,7 @@ export function ArchiveGrid({
   items,
   emptyMessage,
   emptyHint,
-  priorityCount = 8,
+  priorityCount = 6,
   emptyKind,
   emptyHref,
 }: ArchiveGridProps) {

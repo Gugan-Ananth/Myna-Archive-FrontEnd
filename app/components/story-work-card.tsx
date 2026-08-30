@@ -4,12 +4,10 @@ import Image from "next/image";
 import Link from "next/link";
 import bunnyImageLoader from "../lib/bunny-image-loader";
 import { useI18n } from "../lib/i18n";
-import {
-  originalMediaUrl,
-  STORY_COVER_TEMPLATE,
-} from "../lib/media-display";
+import { gridMediaSrc, STORY_COVER_TEMPLATE } from "../lib/media-display";
 import { storyCardBlurb } from "../lib/story-content";
 import type { ArchiveItem } from "../lib/types";
+import { warmArchiveItem } from "../lib/warm-preview";
 
 type StoryWorkCardProps = {
   item: ArchiveItem;
@@ -23,7 +21,7 @@ export function StoryWorkCard({ item }: StoryWorkCardProps) {
   const { t } = useI18n();
   const cover = item.mediaUrl || item.thumbnailUrl;
   const hasCover = Boolean(cover);
-  const src = hasCover ? originalMediaUrl(cover) : STORY_COVER_TEMPLATE.src;
+  const src = hasCover ? gridMediaSrc(item) : STORY_COVER_TEMPLATE.src;
   const width =
     hasCover && item.width && item.width > 0
       ? item.width
@@ -40,6 +38,9 @@ export function StoryWorkCard({ item }: StoryWorkCardProps) {
     <Link
       href={`/item/${item.id}`}
       prefetch
+      onPointerEnter={() => warmArchiveItem(item)}
+      onFocus={() => warmArchiveItem(item)}
+      onPointerDown={() => warmArchiveItem(item)}
       className="group block h-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
       <article className="app-card flex h-full flex-row overflow-hidden rounded-2xl ring-1 ring-border transition-[box-shadow,transform] duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:ring-border-strong">

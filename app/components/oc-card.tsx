@@ -10,6 +10,7 @@ import {
 } from "../lib/display-metadata";
 import { ocGridSrc } from "../lib/media-display";
 import type { OriginalCharacter } from "../lib/types";
+import { warmOriginalCharacter } from "../lib/warm-preview";
 
 type OcCardProps = {
   oc: OriginalCharacter;
@@ -53,6 +54,9 @@ export function OcCard({ oc, priority = false }: OcCardProps) {
     <Link
       href={`/oc/${oc.id}`}
       prefetch
+      onPointerEnter={() => warmOriginalCharacter(oc)}
+      onFocus={() => warmOriginalCharacter(oc)}
+      onPointerDown={() => warmOriginalCharacter(oc)}
       className="group block h-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
       <article className="app-card flex h-full flex-col overflow-hidden rounded-2xl ring-1 ring-border transition-[box-shadow,transform] duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:ring-border-strong [content-visibility:auto] [contain-intrinsic-size:auto_320px]">
@@ -78,10 +82,7 @@ export function OcCard({ oc, priority = false }: OcCardProps) {
             decoding="async"
             placeholder="blur"
             blurDataURL={blurDataUrl}
-            className={[
-              "object-cover object-center transition-[transform,opacity] duration-300 ease-out group-hover:scale-[1.03]",
-              loaded ? "opacity-100" : "opacity-0",
-            ].join(" ")}
+            className="object-cover object-center transition-transform duration-300 ease-out group-hover:scale-[1.03]"
             onLoad={() => setLoaded(true)}
           />
         </div>

@@ -46,10 +46,14 @@ export function originalMediaUrl(url: string): string {
 export const GRID_THUMB_WIDTH = 480;
 export const GRID_THUMB_QUALITY = 72;
 
+/** Viewport-sized derivative for the detail stage (not the original file). */
+export const DETAIL_DISPLAY_WIDTH = 1600;
+export const DETAIL_DISPLAY_QUALITY = 80;
+
 /**
  * Homepage grid source — prefer CDN-optimized thumbnails (Pinterest-style).
  * Small edge-resized bytes beat full originals through any optimizer.
- * Detail page still uses `detailMediaSrc` (original file).
+ * Detail first paint uses `displayMediaSrc`; zoom uses `detailMediaSrc`.
  */
 export function gridMediaSrc(item: ArchiveItem): string {
   if (item.mediaType === "video") {
@@ -108,8 +112,54 @@ export const GRID_BLUR_DATA_URL =
   );
 
 /**
- * Detail / zoom: original uploaded file (jpg/png/…), no Next optimizer, no WebP.
- * Render with a native `<img>` so the browser loads the real asset bytes.
+ * Cached grid thumb for instant detail paint (blur-up under the display size).
+ */
+export function previewAssetSrc(asset: MediaAsset): string {
+  if (asset.thumbnailUrl) return asset.thumbnailUrl;
+  return withBunnyResize(originalMediaUrl(asset.mediaUrl), {
+    width: GRID_THUMB_WIDTH,
+    quality: GRID_THUMB_QUALITY,
+  });
+}
+
+export function previewMediaSrc(item: ArchiveItem): string {
+  if (item.mediaType === "video") {
+    return item.thumbnailUrl || item.mediaUrl;
+  }
+  if (item.thumbnailUrl) return item.thumbnailUrl;
+  const cover = itemMediaAssets(item)[0];
+  if (cover) return previewAssetSrc(cover);
+  return withBunnyResize(originalMediaUrl(item.mediaUrl), {
+    width: GRID_THUMB_WIDTH,
+    quality: GRID_THUMB_QUALITY,
+  });
+}
+
+/**
+ * Detail first paint: viewport-sized WebP from Bunny Optimizer.
+ * Originals (up to 50 MB) wait until the user zooms.
+ */
+export function displayAssetSrc(asset: MediaAsset): string {
+  return withBunnyResize(originalMediaUrl(asset.mediaUrl), {
+    width: DETAIL_DISPLAY_WIDTH,
+    quality: DETAIL_DISPLAY_QUALITY,
+  });
+}
+
+export function displayMediaSrc(item: ArchiveItem): string {
+  if (item.mediaType === "video") {
+    return item.thumbnailUrl || item.mediaUrl;
+  }
+  const cover = itemMediaAssets(item)[0];
+  if (cover) return displayAssetSrc(cover);
+  return withBunnyResize(originalMediaUrl(item.mediaUrl), {
+    width: DETAIL_DISPLAY_WIDTH,
+    quality: DETAIL_DISPLAY_QUALITY,
+  });
+}
+
+/**
+ * Full uploaded file (jpg/png/…). Only for zoom / download — not first paint.
  */
 export function detailMediaSrc(item: ArchiveItem): string {
   return originalMediaUrl(item.mediaUrl);

@@ -13,8 +13,12 @@ import { useI18n } from "../lib/i18n";
 type Mode = "contain" | "fill-width";
 
 type ImageZoomViewerProps = {
-  /** Prefer the original asset URL (jpg/png/…), not an optimized webp transform. */
+  /** Viewport-sized Bunny derivative for first paint. */
   src: string;
+  /** Grid thumb already in the browser cache — shown until `src` decodes. */
+  previewSrc?: string;
+  /** Original upload; fetched only after the user zooms past 1×. */
+  originalSrc?: string;
   alt: string;
   className?: string;
   /**
@@ -74,6 +78,8 @@ function containSize(
  */
 export function ImageZoomViewer({
   src,
+  previewSrc,
+  originalSrc,
   alt,
   className = "",
   controlsClassName = "",
@@ -82,7 +88,8 @@ export function ImageZoomViewer({
   clickTogglesZoom = true,
 }: ImageZoomViewerProps) {
   const { t } = useI18n();
-  const [loaded, setLoaded] = useState(false);
+  const [activeSrc, setActiveSrc] = useState(previewSrc || src);
+  const [loaded, setLoaded] = useState(() => Boolean(previewSrc));
   const [failed, setFailed] = useState(false);
   const [mode, setMode] = useState<Mode>(initialMode);
   const [extraScale, setExtraScale] = useState(MIN_EXTRA);
@@ -114,8 +121,70 @@ export function ImageZoomViewer({
 
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const movedRef = useRef(false);
+  const activeSrcRef = useRef(activeSrc);
 
   const isZoomed = mode !== "contain";
+  const needsOriginal = extraScale > MIN_EXTRA;
+
+  useEffect(() => {
+    activeSrcRef.current = activeSrc;
+  }, [activeSrc]);
+
+  // Decode the viewport-sized file off-screen, then swap over the cached thumb.
+  useEffect(() => {
+    const opening = previewSrc || src;
+    if (!src || src === opening) return;
+
+    let cancelled = false;
+    const img = new Image();
+    img.decoding = "async";
+    const reveal = () => {
+      if (cancelled) return;
+      setActiveSrc(src);
+      setLoaded(true);
+    };
+    img.onload = () => {
+      if (typeof img.decode === "function") {
+        void img.decode().then(reveal).catch(reveal);
+      } else {
+        reveal();
+      }
+    };
+    img.onerror = () => {
+      if (cancelled) return;
+      if (!previewSrc) {
+        setFailed(true);
+        setLoaded(true);
+      }
+    };
+    img.src = src;
+    return () => {
+      cancelled = true;
+    };
+  }, [src, previewSrc]);
+
+  // Original bytes only when the user actually zooms (not fill-width layout).
+  useEffect(() => {
+    if (!needsOriginal || !originalSrc) return;
+    if (originalSrc === activeSrcRef.current) return;
+    let cancelled = false;
+    const img = new Image();
+    img.decoding = "async";
+    const reveal = () => {
+      if (!cancelled) setActiveSrc(originalSrc);
+    };
+    img.onload = () => {
+      if (typeof img.decode === "function") {
+        void img.decode().then(reveal).catch(reveal);
+      } else {
+        reveal();
+      }
+    };
+    img.src = originalSrc;
+    return () => {
+      cancelled = true;
+    };
+  }, [needsOriginal, originalSrc]);
 
   useEffect(() => {
     onZoomChange?.(isZoomed);
@@ -481,7 +550,7 @@ export function ImageZoomViewer({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           ref={imgRef}
-          src={src}
+          src={activeSrc}
           alt={alt}
           draggable={false}
           decoding="async"
@@ -491,6 +560,10 @@ export function ImageZoomViewer({
             setLoaded(true);
           }}
           onError={() => {
+            if (previewSrc && activeSrc !== previewSrc) {
+              setActiveSrc(previewSrc);
+              return;
+            }
             setFailed(true);
             setLoaded(true);
           }}

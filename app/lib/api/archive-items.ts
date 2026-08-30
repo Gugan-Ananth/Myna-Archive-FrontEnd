@@ -2,6 +2,7 @@ import { apiFetch, type FetchCacheOptions } from "./client";
 import {
   buildQueryCacheKey,
   cachedQuery,
+  getQueryCacheEntry,
   invalidateQueryCache,
   isBrowser,
   setQueryCache,
@@ -267,6 +268,30 @@ export function seedListCache(
     ttlMs: LIST_TTL_MS,
     staleMs: LIST_STALE_MS,
   });
+  seedItemCacheFromList(data.data);
+}
+
+/** Synchronous read of a cached list page (for instant tab switches). */
+export function peekListCache(
+  params: ListArchiveItemsParams,
+): PaginatedArchiveItems | null {
+  if (!isBrowser()) return null;
+  return (
+    getQueryCacheEntry<PaginatedArchiveItems>(listCacheKey(params))?.data ??
+    null
+  );
+}
+
+export function seedItemCache(item: ArchiveItem): void {
+  if (!isBrowser() || !item.id) return;
+  setQueryCache(buildQueryCacheKey("item", { id: item.id }), item, {
+    ttlMs: LIST_TTL_MS,
+    staleMs: LIST_STALE_MS,
+  });
+}
+
+export function seedItemCacheFromList(items: ArchiveItem[]): void {
+  for (const item of items) seedItemCache(item);
 }
 
 export function seedTagsCache(

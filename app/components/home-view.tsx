@@ -5,10 +5,12 @@ import { useSearchParams } from "next/navigation";
 import {
   ApiError,
   listArchiveItems,
+  peekListCache,
   seedListCache,
   seedTagsCache,
   seedTaxonomyCache,
 } from "../lib/api";
+import { prefetchIdleCollectionViews } from "../lib/prefetch-collection";
 import {
   createHrefForView,
   listParamsForView,
@@ -31,6 +33,15 @@ import { StatusCallout } from "./status-callout";
 import { StoryWorksList } from "./story-works-list";
 
 const PAGE_SIZE = 40;
+
+type ViewSnap = {
+  filterKey: string;
+  items: ArchiveItem[];
+  total: number;
+  page: number;
+  loadError: string | null;
+  usedFallback: boolean;
+};
 
 function sectionListParams(
   view: CollectionView,
@@ -161,69 +172,95 @@ export function HomeView({
   );
 
   /**
-   * Client-owned snapshot for filters that differ from the SSR payload.
-   * When the live URL matches the server snapshot we read props directly
-   * (no effect-driven setState).
+   * Per-section snapshots so Photos → Collections does not wipe the wall.
+   * Prefetched lists are also readable synchronously via `peekListCache`.
    */
-  const [clientSnap, setClientSnap] = useState<{
-    filterKey: string;
-    items: ArchiveItem[];
-    total: number;
-    page: number;
-    loadError: string | null;
-    usedFallback: boolean;
-  } | null>(null);
+  const [viewSnaps, setViewSnaps] = useState<
+    Partial<Record<CollectionView, ViewSnap>>
+  >({});
 
   const [isFiltering, setIsFiltering] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const requestIdRef = useRef(0);
   const matchesServer = filterKey === initialFilterKey;
-  const useClient =
-    clientSnap !== null && clientSnap.filterKey === filterKey;
-  const sameViewAsSnap =
-    clientSnap !== null && viewOfFilterKey(clientSnap.filterKey) === liveView;
+  const snap = viewSnaps[liveView];
+  const peeked =
+    snap?.filterKey === filterKey || liveView === "oc"
+      ? null
+      : peekListCache(sectionListParams(liveView, liveQuery, liveTags, 1));
 
-  const items = useClient
-    ? clientSnap.items
-    : matchesServer
-      ? initialItems
-      : sameViewAsSnap
-        ? clientSnap.items
-        : [];
-  const total = useClient
-    ? clientSnap.total
-    : matchesServer
-      ? initialTotal
-      : sameViewAsSnap
-        ? clientSnap.total
-        : 0;
-  const page = useClient
-    ? clientSnap.page
-    : matchesServer
-      ? 1
-      : sameViewAsSnap
-        ? clientSnap.page
-        : 1;
-  const loadError = useClient
-    ? clientSnap.loadError
-    : matchesServer
-      ? initialLoadError
-      : sameViewAsSnap
-        ? clientSnap.loadError
-        : null;
-  const usedFallback = useClient
-    ? clientSnap.usedFallback
-    : matchesServer
-      ? usedFallbackError
-      : sameViewAsSnap
-        ? clientSnap.usedFallback
-        : false;
+  const resolved = useMemo(() => {
+    const snapMatches = snap != null && snap.filterKey === filterKey;
+    const sameViewAsSnap =
+      snap != null && viewOfFilterKey(snap.filterKey) === liveView;
+    const items = snapMatches
+      ? snap.items
+      : matchesServer
+        ? initialItems
+        : peeked
+          ? peeked.data
+          : sameViewAsSnap
+            ? snap.items
+            : [];
+    return {
+      items,
+      total: snapMatches
+        ? snap.total
+        : matchesServer
+          ? initialTotal
+          : peeked
+            ? peeked.meta.total
+            : sameViewAsSnap
+              ? snap.total
+              : 0,
+      page: snapMatches
+        ? snap.page
+        : matchesServer
+          ? 1
+          : sameViewAsSnap
+            ? snap.page
+            : 1,
+      loadError: snapMatches
+        ? snap.loadError
+        : matchesServer
+          ? initialLoadError
+          : sameViewAsSnap
+            ? snap.loadError
+            : null,
+      usedFallback: snapMatches
+        ? snap.usedFallback
+        : matchesServer
+          ? usedFallbackError
+          : sameViewAsSnap
+            ? snap.usedFallback
+            : false,
+      hasInstantItems:
+        snapMatches ||
+        matchesServer ||
+        Boolean(peeked) ||
+        (sameViewAsSnap && items.length > 0),
+    };
+  }, [
+    filterKey,
+    initialItems,
+    initialLoadError,
+    initialTotal,
+    liveView,
+    matchesServer,
+    peeked,
+    snap,
+    usedFallbackError,
+  ]);
+
+  const { items, total, page, loadError, usedFallback, hasInstantItems } =
+    resolved;
 
   const hasMore = items.length < total && total > 0;
 
   // Seed browser cache from SSR so tag toggles / revisits skip network when fresh.
   useEffect(() => {
+    if (initialView === "oc") return;
     seedListCache(
       sectionListParams(initialView, initialQuery, initialTags, 1),
       {
@@ -238,21 +275,58 @@ export function HomeView({
     );
     seedTagsCache(tagSummaries, listParamsForView(initialView));
     seedTaxonomyCache(taxonomy);
+    setViewSnaps((prev) => {
+      const current = prev[initialView];
+      if (current?.filterKey === initialFilterKey && current.page > 1) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [initialView]: {
+          filterKey: initialFilterKey,
+          items: initialItems,
+          total: initialTotal,
+          page: 1,
+          loadError: initialLoadError,
+          usedFallback: usedFallbackError,
+        },
+      };
+    });
   }, [
+    initialFilterKey,
     initialItems,
+    initialLoadError,
     initialQuery,
     initialTags,
     initialTotal,
     initialView,
     tagSummaries,
     taxonomy,
+    usedFallbackError,
   ]);
+
+  // Warm the other rail sections after first paint.
+  useEffect(() => {
+    let idleId: number | undefined;
+    let timer: number | undefined;
+    const run = () => prefetchIdleCollectionViews(liveView);
+    if (typeof window.requestIdleCallback === "function") {
+      idleId = window.requestIdleCallback(run, { timeout: 1500 });
+    } else {
+      timer = window.setTimeout(run, 400);
+    }
+    return () => {
+      if (idleId != null && typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timer != null) window.clearTimeout(timer);
+    };
+  }, [liveView]);
 
   // Re-fetch page 1 whenever live filters leave the SSR snapshot (cached when possible).
   useEffect(() => {
     if (liveView === "oc") return;
     if (filterKey === initialFilterKey) {
-      // Prefer SSR props; clear a stale client snap only if it was for another filter.
       requestIdRef.current += 1;
       return;
     }
@@ -260,35 +334,50 @@ export function HomeView({
     const requestId = ++requestIdRef.current;
     let cancelled = false;
 
-    // Stale-while-revalidate: keep the previous grid; only dim slightly.
-    setIsFiltering(true);
+    const alreadyHavePage = Boolean(
+      peekListCache(sectionListParams(liveView, liveQuery, liveTags, 1)),
+    );
 
     void (async () => {
+      if (!alreadyHavePage) setIsFiltering(true);
       try {
         const result = await listArchiveItems(
           sectionListParams(liveView, liveQuery, liveTags, 1),
         );
         if (cancelled || requestId !== requestIdRef.current) return;
-        setClientSnap({
-          filterKey,
-          items: result.data,
-          total: result.meta.total,
-          page: 1,
-          loadError: null,
-          usedFallback: false,
+        setViewSnaps((prev) => {
+          const current = prev[liveView];
+          // Keep extra pages the user already loaded for this exact filter.
+          if (current?.filterKey === filterKey && current.page > 1) {
+            return prev;
+          }
+          return {
+            ...prev,
+            [liveView]: {
+              filterKey,
+              items: result.data,
+              total: result.meta.total,
+              page: 1,
+              loadError: null,
+              usedFallback: false,
+            },
+          };
         });
       } catch (error) {
         if (cancelled || requestId !== requestIdRef.current) return;
         const message =
           error instanceof ApiError ? error.message : "fallback";
-        setClientSnap({
-          filterKey,
-          items: [],
-          total: 0,
-          page: 1,
-          loadError: message,
-          usedFallback: !(error instanceof ApiError),
-        });
+        setViewSnaps((prev) => ({
+          ...prev,
+          [liveView]: {
+            filterKey,
+            items: [],
+            total: 0,
+            page: 1,
+            loadError: message,
+            usedFallback: !(error instanceof ApiError),
+          },
+        }));
       } finally {
         if (!cancelled && requestId === requestIdRef.current) {
           setIsFiltering(false);
@@ -311,34 +400,44 @@ export function HomeView({
       const result = await listArchiveItems(
         sectionListParams(liveView, liveQuery, liveTags, nextPage),
       );
-      setClientSnap((prev) => {
+      setViewSnaps((prev) => {
+        const current = prev[liveView];
         const baseItems =
-          prev?.filterKey === filterKey
-            ? prev.items
+          current?.filterKey === filterKey
+            ? current.items
             : matchesServer
               ? initialItems
-              : (prev?.items ?? initialItems);
+              : (current?.items ?? initialItems);
         const seen = new Set(baseItems.map((i) => i.id));
         const appended = result.data.filter((i) => !seen.has(i.id));
         return {
-          filterKey,
-          items: [...baseItems, ...appended],
-          total: result.meta.total,
-          page: nextPage,
-          loadError: null,
-          usedFallback: false,
+          ...prev,
+          [liveView]: {
+            filterKey,
+            items: [...baseItems, ...appended],
+            total: result.meta.total,
+            page: nextPage,
+            loadError: null,
+            usedFallback: false,
+          },
         };
       });
     } catch (error) {
-      setClientSnap((prev) => ({
-        filterKey,
-        items: prev?.filterKey === filterKey ? prev.items : items,
-        total: prev?.filterKey === filterKey ? prev.total : total,
-        page: prev?.filterKey === filterKey ? prev.page : page,
-        loadError:
-          error instanceof ApiError ? error.message : "fallback",
-        usedFallback: !(error instanceof ApiError),
-      }));
+      setViewSnaps((prev) => {
+        const current = prev[liveView];
+        return {
+          ...prev,
+          [liveView]: {
+            filterKey,
+            items: current?.filterKey === filterKey ? current.items : items,
+            total: current?.filterKey === filterKey ? current.total : total,
+            page: current?.filterKey === filterKey ? current.page : page,
+            loadError:
+              error instanceof ApiError ? error.message : "fallback",
+            usedFallback: !(error instanceof ApiError),
+          },
+        };
+      });
     } finally {
       setIsLoadingMore(false);
     }
@@ -424,7 +523,7 @@ export function HomeView({
       <div
         className={[
           "relative flex min-h-[8rem] flex-1 flex-col transition-opacity duration-150",
-          isFiltering ? "opacity-70" : "opacity-100",
+          isFiltering && !hasInstantItems ? "opacity-70" : "opacity-100",
         ].join(" ")}
         aria-busy={isFiltering || isLoadingMore}
       >

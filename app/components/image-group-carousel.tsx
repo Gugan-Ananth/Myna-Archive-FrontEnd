@@ -9,7 +9,13 @@ import {
   type TouchEvent as ReactTouchEvent,
 } from "react";
 import { useI18n } from "../lib/i18n";
-import { detailAssetSrc, withBunnyResize } from "../lib/media-display";
+import {
+  detailAssetSrc,
+  displayAssetSrc,
+  previewAssetSrc,
+  withBunnyResize,
+} from "../lib/media-display";
+import { prefetchMediaUrl } from "../lib/prefetch-media";
 import type { MediaAsset } from "../lib/types";
 import { ImageZoomViewer } from "./image-zoom-viewer";
 
@@ -83,6 +89,13 @@ export function ImageGroupCarousel({
   }, [safeIndex]);
 
   useEffect(() => {
+    const neighbors = [assets[safeIndex + 1], assets[safeIndex - 1]];
+    for (const asset of neighbors) {
+      if (asset) prefetchMediaUrl(displayAssetSrc(asset));
+    }
+  }, [assets, safeIndex]);
+
+  useEffect(() => {
     if (count <= 1) return;
     function onKey(event: KeyboardEvent) {
       const tag = (event.target as HTMLElement | null)?.tagName;
@@ -112,7 +125,9 @@ export function ImageGroupCarousel({
     );
   }
 
-  const src = detailAssetSrc(current);
+  const src = displayAssetSrc(current);
+  const previewSrc = previewAssetSrc(current);
+  const originalSrc = detailAssetSrc(current);
   const isGroup = count > 1;
 
   function onStageTouchStart(event: ReactTouchEvent) {
@@ -151,6 +166,8 @@ export function ImageGroupCarousel({
       <ImageZoomViewer
         key={`${current.publicId}:${src}`}
         src={src}
+        previewSrc={previewSrc}
+        originalSrc={originalSrc}
         alt={
           isGroup
             ? t("imageOfGroup", { name: title, n: safeIndex + 1, total: count })

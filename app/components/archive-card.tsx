@@ -19,6 +19,7 @@ import {
   withCacheBust,
 } from "../lib/media-display";
 import type { ArchiveItem } from "../lib/types";
+import { warmArchiveItem } from "../lib/warm-preview";
 
 /** True only after client hydration — avoids BlurHash canvas SSR mismatch. */
 function useIsClient() {
@@ -89,6 +90,9 @@ export function ArchiveCard({ item, priority = false }: ArchiveCardProps) {
     <Link
       href={`/item/${item.id}`}
       prefetch
+      onPointerEnter={() => warmArchiveItem(item)}
+      onFocus={() => warmArchiveItem(item)}
+      onPointerDown={() => warmArchiveItem(item)}
       className="group block w-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
       <article className="overflow-hidden rounded-2xl bg-surface ring-1 ring-border transition-[box-shadow,transform] duration-200 group-hover:shadow-md group-hover:ring-border-strong [content-visibility:auto] [contain-intrinsic-size:auto_280px]">
@@ -134,10 +138,7 @@ export function ArchiveCard({ item, priority = false }: ArchiveCardProps) {
               decoding="async"
               placeholder="blur"
               blurDataURL={blurDataUrl}
-              className={[
-                "object-cover object-center transition-[transform,opacity] duration-300 ease-out will-change-transform group-hover:scale-[1.03]",
-                loaded ? "opacity-100" : "opacity-0",
-              ].join(" ")}
+              className="object-cover object-center transition-transform duration-300 ease-out will-change-transform group-hover:scale-[1.03]"
               onLoad={(event) => {
                 const img = event.currentTarget;
                 applyNaturalSize(img.naturalWidth, img.naturalHeight);

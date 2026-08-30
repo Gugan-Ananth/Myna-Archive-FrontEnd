@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "../lib/i18n";
-import { detailAssetSrc } from "../lib/media-display";
+import {
+  detailAssetSrc,
+  displayAssetSrc,
+  previewAssetSrc,
+} from "../lib/media-display";
+import { prefetchMediaUrl } from "../lib/prefetch-media";
 import type { MediaAsset } from "../lib/types";
 import { ImageZoomViewer } from "./image-zoom-viewer";
 
@@ -49,6 +54,13 @@ export function ComicReader({
   }, [safeIndex, count, onIndexChange]);
 
   useEffect(() => {
+    const neighbors = [assets[safeIndex + 1], assets[safeIndex - 1]];
+    for (const asset of neighbors) {
+      if (asset) prefetchMediaUrl(displayAssetSrc(asset));
+    }
+  }, [assets, safeIndex]);
+
+  useEffect(() => {
     function onKey(event: KeyboardEvent) {
       const tag = (event.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
@@ -83,7 +95,9 @@ export function ComicReader({
     );
   }
 
-  const src = detailAssetSrc(current);
+  const src = displayAssetSrc(current);
+  const previewSrc = previewAssetSrc(current);
+  const originalSrc = detailAssetSrc(current);
   const many = count > 1;
 
   return (
@@ -91,6 +105,8 @@ export function ComicReader({
       <ImageZoomViewer
         key={`${current.publicId}:${src}:${safeIndex}`}
         src={src}
+        previewSrc={previewSrc}
+        originalSrc={originalSrc}
         alt={t("imageOfGroup", {
           name: title,
           n: safeIndex + 1,

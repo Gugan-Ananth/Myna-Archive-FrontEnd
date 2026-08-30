@@ -7,6 +7,7 @@ import {
   parseCollectionView,
   type CollectionView,
 } from "../lib/collection-view";
+import { prefetchCollectionView } from "../lib/prefetch-collection";
 import type { MessageKey } from "../lib/i18n";
 import { useI18n } from "../lib/i18n";
 import { shouldHideAppChrome } from "./chrome";
@@ -157,6 +158,8 @@ function NavButtons({ variant }: { variant: "rail" | "dock" }) {
           );
         }
 
+        const view = item.id;
+
         return (
           <button
             key={item.id}
@@ -164,10 +167,9 @@ function NavButtons({ variant }: { variant: "rail" | "dock" }) {
             aria-label={label}
             aria-current={active ? "page" : undefined}
             title={label}
-            onClick={() => {
-              if (item.id === "edit-tags") return;
-              goToView(item.id);
-            }}
+            onPointerEnter={() => prefetchCollectionView(view)}
+            onFocus={() => prefetchCollectionView(view)}
+            onClick={() => goToView(view)}
             className={className}
           >
             <Icon className="h-6 w-6" />
