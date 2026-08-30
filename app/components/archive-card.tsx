@@ -51,9 +51,12 @@ function initialDims(item: ArchiveItem): { w: number; h: number } {
   return PLACEHOLDER;
 }
 
-/** How long we keep auto-retrying a Stream thumbnail before soft-fail. */
-const VIDEO_THUMB_MAX_ATTEMPTS = 18;
-const VIDEO_THUMB_RETRY_MS = 5000;
+/**
+ * Premium JIT usually has a still within ~10–15s. Retry more often, fewer
+ * total attempts, so pins recover quickly without long “processing” spins.
+ */
+const VIDEO_THUMB_MAX_ATTEMPTS = 12;
+const VIDEO_THUMB_RETRY_MS = 2000;
 
 type VideoThumbState = "loading" | "ready" | "processing" | "failed";
 

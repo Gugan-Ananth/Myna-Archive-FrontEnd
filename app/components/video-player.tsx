@@ -41,9 +41,12 @@ function formatTime(seconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-/** Backoff while Bunny Stream encodes progressive MP4s (seconds). */
-const RETRY_DELAYS_MS = [3_000, 5_000, 8_000, 10_000, 12_000, 15_000];
-const MAX_AUTO_ROUNDS = 16;
+/**
+ * Fallback path when Bunny embed is unavailable. Premium JIT often lands in
+ * ~10–15s — poll faster and give up sooner than free-encoding queues.
+ */
+const RETRY_DELAYS_MS = [1_500, 2_000, 3_000, 4_000, 5_000, 8_000];
+const MAX_AUTO_ROUNDS = 10;
 
 /**
  * Full-bleed video stage with white/purple custom controls.
@@ -412,7 +415,7 @@ export function VideoPlayer({
   }, [streamIssue, trackProcessing, loadToken]);
 
   // Soft timeout: remote Stream that never reaches metadata → processing UI.
-  // (Ready videos load within this window and never show the overlay.)
+  // Premium JIT often responds in a few seconds; keep this short.
   useEffect(() => {
     if (!trackProcessing) return;
     if (streamIssue === "unavailable" || streamIssue === "processing") return;
@@ -423,7 +426,7 @@ export function VideoPlayer({
         prev === "unavailable" ? prev : "processing",
       );
       setRetrying(false);
-    }, 5_000);
+    }, 3_000);
     return () => window.clearTimeout(timer);
   }, [trackProcessing, streamIssue, loadToken, sourceIndex, ready]);
 

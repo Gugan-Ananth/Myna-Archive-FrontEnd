@@ -20,7 +20,7 @@ import { ComicReader } from "./comic-reader";
 import { ImageGroupCarousel } from "./image-group-carousel";
 import { RatingInput } from "./rating-input";
 import { StatusCallout } from "./status-callout";
-import { VideoPlayer } from "./video-player";
+import { BunnyStreamEmbed } from "./bunny-stream-embed";
 
 type ItemDetailProps = {
   item: ArchiveItem;
@@ -250,10 +250,9 @@ export function ItemDetail({ item }: ItemDetailProps) {
         ) : (
           <>
             {isVideo ? (
-              <VideoPlayer
+              <BunnyStreamEmbed
                 key={draft.mediaUrl}
-                src={draft.mediaUrl}
-                poster={draft.thumbnailUrl}
+                item={draft}
                 title={draft.name}
                 className="absolute inset-0 h-full w-full"
               />
