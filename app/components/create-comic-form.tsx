@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import {
+  type ClipboardEvent,
   type DragEvent,
   type FormEvent,
   useEffect,
@@ -25,6 +26,7 @@ import {
 import { useI18n } from "../lib/i18n";
 import {
   detectMediaType,
+  filesFromClipboard,
   formatBytes,
   maxBytesFor,
   normalizeMime,
@@ -420,6 +422,15 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
     }
   }
 
+  function onPaste(event: ClipboardEvent<HTMLDivElement>) {
+    if (busy) return;
+    const files = filesFromClipboard(event.clipboardData);
+    if (files.length === 0) return;
+
+    event.preventDefault();
+    addFiles(files);
+  }
+
   useLayoutEffect(() => {
     if (isEditing || stashedFiles.length === 0) return;
     if (!stashAppliedRef.current) {
@@ -433,7 +444,10 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
   }, [stashedFiles, isEditing]);
 
   return (
-    <div className="relative flex min-h-full flex-1 flex-col">
+    <div
+      className="relative flex min-h-full flex-1 flex-col"
+      onPaste={onPaste}
+    >
       <div className="absolute left-3 top-3 z-20 sm:left-4 sm:top-4">
         <BackButton
           href={

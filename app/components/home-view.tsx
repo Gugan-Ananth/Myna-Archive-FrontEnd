@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ApiError,
   listArchiveItems,
@@ -13,11 +13,14 @@ import {
 import { prefetchIdleCollectionViews } from "../lib/prefetch-collection";
 import {
   createHrefForView,
+  filePickerForView,
   listParamsForView,
   parseCollectionView,
   type CollectionView,
 } from "../lib/collection-view";
 import { useI18n } from "../lib/i18n";
+import { filesFromClipboard } from "../lib/media-constraints";
+import { stashCreateFiles } from "../lib/pending-create-files";
 import type {
   ArchiveItem,
   OriginalCharacter,
@@ -143,6 +146,7 @@ export function HomeView({
   ocsTotal = 0,
 }: HomeViewProps) {
   const { t } = useI18n();
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   const searchKey = searchParams.toString();
@@ -257,6 +261,24 @@ export function HomeView({
     resolved;
 
   const hasMore = items.length < total && total > 0;
+
+  // Let paste start the same create flow as the Add control. The create page
+  // then validates and previews the files before the user saves the item.
+  useEffect(() => {
+    if (!filePickerForView(liveView)) return;
+
+    function onPaste(event: ClipboardEvent) {
+      const files = filesFromClipboard(event.clipboardData);
+      if (files.length === 0) return;
+
+      event.preventDefault();
+      stashCreateFiles(liveView, files);
+      router.push(createHrefForView(liveView));
+    }
+
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [liveView, router]);
 
   // Seed browser cache from SSR so tag toggles / revisits skip network when fresh.
   useEffect(() => {

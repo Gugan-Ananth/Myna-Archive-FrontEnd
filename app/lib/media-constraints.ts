@@ -25,6 +25,22 @@ export function detectMediaType(file: File): "image" | "video" | null {
   return null;
 }
 
+/**
+ * Read files from a clipboard paste. Browsers expose pasted media either via
+ * `files` or via file items, depending on the source and browser.
+ */
+export function filesFromClipboard(clipboardData: DataTransfer | null): File[] {
+  if (!clipboardData) return [];
+
+  const files = Array.from(clipboardData.files);
+  if (files.length > 0) return files;
+
+  return Array.from(clipboardData.items)
+    .filter((item) => item.kind === "file")
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file !== null);
+}
+
 export function normalizeMime(type: string, fileName?: string): string {
   const raw = (type || "").toLowerCase().trim();
   if (raw === "image/jpg") return "image/jpeg";
