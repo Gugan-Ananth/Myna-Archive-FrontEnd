@@ -22,7 +22,9 @@ export function AppHeader() {
   const query = draftQuery ?? searchParams.get("q") ?? "";
   const view = parseCollectionView(searchParams.get("view"));
   const searchPlaceholder =
-    view === "videos"
+    view === "top-10"
+      ? t("searchArchive")
+      : view === "videos"
       ? t("searchVideos")
       : view === "comics"
         ? t("searchComics")
@@ -32,6 +34,8 @@ export function AppHeader() {
             ? t("searchOcs")
             : view === "collections"
               ? t("searchCollections")
+              : view === "cute-things"
+                ? t("searchCuteThings")
               : t("searchPhotos");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const urlQuery = searchParams.get("q") ?? "";
@@ -118,7 +122,9 @@ export function AppHeader() {
               placeholder={searchPlaceholder}
             />
           </div>
-          {view === "oc" ? null : <TagChipBar variant="header" />}
+          {view === "oc" || view === "top-10" ? null : (
+            <TagChipBar variant="header" />
+          )}
         </div>
 
         <div className="flex shrink-0 items-center justify-self-end">

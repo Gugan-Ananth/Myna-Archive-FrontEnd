@@ -2,6 +2,7 @@ import { apiFetch, type FetchCacheOptions } from "./client";
 import {
   buildQueryCacheKey,
   cachedQuery,
+  getQueryCacheEntry,
   invalidateQueryCache,
   isBrowser,
   setQueryCache,
@@ -37,6 +38,8 @@ function listCacheKey(params: ListArchiveItemsParams): string {
     q: params.q,
     tag: params.tag,
     mediaType: params.mediaType,
+    section: params.section,
+    starred: params.starred,
     imageGroup: params.imageGroup,
     storyRoot: params.storyRoot,
     page: params.page ?? 1,
@@ -47,6 +50,7 @@ function listCacheKey(params: ListArchiveItemsParams): string {
 function tagsCacheKey(params: ListTagSummariesParams = {}): string {
   return buildQueryCacheKey("tags", {
     mediaType: params.mediaType,
+    section: params.section,
     imageGroup: params.imageGroup,
   });
 }
@@ -68,6 +72,8 @@ export async function listArchiveItems(
         q: params.q,
         tag: params.tag,
         mediaType: params.mediaType,
+        section: params.section,
+        starred: params.starred,
         imageGroup: params.imageGroup,
         storyRoot: params.storyRoot,
         page: params.page,
@@ -195,6 +201,7 @@ export async function listTagSummaries(
     const result = await apiFetch<TagsListResponse>("/tags", {
       query: {
         mediaType: params.mediaType,
+        section: params.section,
         imageGroup: params.imageGroup,
       },
       cache:
@@ -267,6 +274,30 @@ export function seedListCache(
     ttlMs: LIST_TTL_MS,
     staleMs: LIST_STALE_MS,
   });
+  seedItemCacheFromList(data.data);
+}
+
+/** Synchronous read of a cached list page (for instant tab switches). */
+export function peekListCache(
+  params: ListArchiveItemsParams,
+): PaginatedArchiveItems | null {
+  if (!isBrowser()) return null;
+  return (
+    getQueryCacheEntry<PaginatedArchiveItems>(listCacheKey(params))?.data ??
+    null
+  );
+}
+
+export function seedItemCache(item: ArchiveItem): void {
+  if (!isBrowser() || !item.id) return;
+  setQueryCache(buildQueryCacheKey("item", { id: item.id }), item, {
+    ttlMs: LIST_TTL_MS,
+    staleMs: LIST_STALE_MS,
+  });
+}
+
+export function seedItemCacheFromList(items: ArchiveItem[]): void {
+  for (const item of items) seedItemCache(item);
 }
 
 export function seedTagsCache(

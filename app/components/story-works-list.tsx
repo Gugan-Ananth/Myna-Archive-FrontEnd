@@ -6,12 +6,15 @@ import { useI18n } from "../lib/i18n";
 import type { ArchiveItem } from "../lib/types";
 import { EmptyBoard } from "./empty-board";
 import { StoryWorkCard } from "./story-work-card";
+import { TopTenRank } from "./top-ten-rank";
 
 type StoryWorksListProps = {
   items: ArchiveItem[];
   emptyMessage?: string;
   emptyHint?: string | null;
   emptyHref?: string;
+  showRank?: boolean;
+  onStarChange?: (item: ArchiveItem) => void;
 };
 
 /**
@@ -23,6 +26,8 @@ export function StoryWorksList({
   emptyMessage,
   emptyHint,
   emptyHref,
+  showRank = false,
+  onStarChange,
 }: StoryWorksListProps) {
   const { t } = useI18n();
   const works = useMemo(() => items.filter(isStorySeriesRoot), [items]);
@@ -47,10 +52,17 @@ export function StoryWorksList({
   }
 
   return (
-    <ul className="grid list-none grid-cols-1 gap-6 2xl:grid-cols-2 2xl:gap-7">
-      {works.map((item) => (
+    <ul className="grid list-none grid-cols-1 gap-6 lg:grid-cols-2 2xl:gap-7">
+      {works.map((item, index) => (
         <li key={item.id} className="min-w-0">
-          <StoryWorkCard item={item} />
+          <div className="relative">
+            {showRank ? <TopTenRank rank={index + 1} /> : null}
+            <StoryWorkCard
+              item={item}
+              priority={index < 2}
+              onStarChange={onStarChange}
+            />
+          </div>
         </li>
       ))}
     </ul>

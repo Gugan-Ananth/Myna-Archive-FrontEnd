@@ -8,13 +8,18 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { endGlobalLoading, startGlobalLoading } from "../lib/loading-events";
 import { useI18n } from "../lib/i18n";
 
 type Mode = "contain" | "fill-width";
 
 type ImageZoomViewerProps = {
-  /** Prefer the original asset URL (jpg/png/…), not an optimized webp transform. */
+  /** Viewport-sized Bunny derivative for first paint. */
   src: string;
+  /** Grid thumb already in the browser cache — shown until `src` decodes. */
+  previewSrc?: string;
+  /** Original upload; fetched only after the user zooms past 1×. */
+  originalSrc?: string;
   alt: string;
   className?: string;
   /**
@@ -74,6 +79,8 @@ function containSize(
  */
 export function ImageZoomViewer({
   src,
+  previewSrc,
+  originalSrc,
   alt,
   className = "",
   controlsClassName = "",
@@ -82,7 +89,8 @@ export function ImageZoomViewer({
   clickTogglesZoom = true,
 }: ImageZoomViewerProps) {
   const { t } = useI18n();
-  const [loaded, setLoaded] = useState(false);
+  const [activeSrc, setActiveSrc] = useState(previewSrc || src);
+  const [loaded, setLoaded] = useState(() => Boolean(previewSrc));
   const [failed, setFailed] = useState(false);
   const [mode, setMode] = useState<Mode>(initialMode);
   const [extraScale, setExtraScale] = useState(MIN_EXTRA);
@@ -114,8 +122,113 @@ export function ImageZoomViewer({
 
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const movedRef = useRef(false);
+  const activeSrcRef = useRef(activeSrc);
+  const displayLoadingIdRef = useRef<string | null>(null);
 
   const isZoomed = mode !== "contain";
+  const needsOriginal = extraScale > MIN_EXTRA;
+
+  useEffect(() => {
+    activeSrcRef.current = activeSrc;
+  }, [activeSrc]);
+
+  const finishDisplayLoading = useCallback(() => {
+    const id = displayLoadingIdRef.current;
+    if (!id) return;
+    displayLoadingIdRef.current = null;
+    endGlobalLoading(id, "image");
+  }, []);
+
+  // If there is no cached preview, track the image that is rendered directly
+  // in the isolated viewer instead of blocking the rest of the page.
+  useEffect(() => {
+    if (!activeSrc || loaded || previewSrc) return;
+    const id = startGlobalLoading("image");
+    displayLoadingIdRef.current = id;
+    const frame = window.requestAnimationFrame(() => {
+      if (imgRef.current?.complete) finishDisplayLoading();
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      finishDisplayLoading();
+    };
+  }, [activeSrc, finishDisplayLoading, loaded, previewSrc]);
+
+  // Decode the viewport-sized file off-screen, then swap over the cached thumb.
+  useEffect(() => {
+    const opening = previewSrc || src;
+    if (!src || src === opening) return;
+
+    let cancelled = false;
+    const loadingId = startGlobalLoading("image");
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      endGlobalLoading(loadingId, "image");
+    };
+    const img = new Image();
+    img.decoding = "async";
+    const reveal = () => {
+      if (cancelled) return;
+      finish();
+      setActiveSrc(src);
+      setLoaded(true);
+    };
+    img.onload = () => {
+      if (typeof img.decode === "function") {
+        void img.decode().then(reveal).catch(reveal);
+      } else {
+        reveal();
+      }
+    };
+    img.onerror = () => {
+      finish();
+      if (cancelled) return;
+      if (!previewSrc) {
+        setFailed(true);
+        setLoaded(true);
+      }
+    };
+    img.src = src;
+    return () => {
+      cancelled = true;
+      finish();
+    };
+  }, [src, previewSrc]);
+
+  // Original bytes only when the user actually zooms (not fill-width layout).
+  useEffect(() => {
+    if (!needsOriginal || !originalSrc) return;
+    if (originalSrc === activeSrcRef.current) return;
+    let cancelled = false;
+    const loadingId = startGlobalLoading("image");
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      endGlobalLoading(loadingId, "image");
+    };
+    const img = new Image();
+    img.decoding = "async";
+    const reveal = () => {
+      finish();
+      if (!cancelled) setActiveSrc(originalSrc);
+    };
+    img.onload = () => {
+      if (typeof img.decode === "function") {
+        void img.decode().then(reveal).catch(reveal);
+      } else {
+        reveal();
+      }
+    };
+    img.onerror = finish;
+    img.src = originalSrc;
+    return () => {
+      cancelled = true;
+      finish();
+    };
+  }, [needsOriginal, originalSrc]);
 
   useEffect(() => {
     onZoomChange?.(isZoomed);
@@ -481,7 +594,7 @@ export function ImageZoomViewer({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           ref={imgRef}
-          src={src}
+          src={activeSrc}
           alt={alt}
           draggable={false}
           decoding="async"
@@ -491,6 +604,10 @@ export function ImageZoomViewer({
             setLoaded(true);
           }}
           onError={() => {
+            if (previewSrc && activeSrc !== previewSrc) {
+              setActiveSrc(previewSrc);
+              return;
+            }
             setFailed(true);
             setLoaded(true);
           }}

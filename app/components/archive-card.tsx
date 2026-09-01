@@ -1,8 +1,15 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { updateArchiveItem } from "../lib/api";
 import bunnyImageLoader from "../lib/bunny-image-loader";
 import {
   blurHashPlaceholderFallback,
@@ -15,10 +22,15 @@ import {
   itemMediaAssets,
   gridMediaSrc,
   STORY_COVER_TEMPLATE,
+  videoPreviewUrl,
   videoThumbnailCandidates,
   withCacheBust,
 } from "../lib/media-display";
 import type { ArchiveItem } from "../lib/types";
+import { endGlobalLoading, startGlobalLoading } from "../lib/loading-events";
+import { warmArchiveItem } from "../lib/warm-preview";
+import { LoadingImage } from "./global-loading";
+import { StarButton } from "./star-button";
 
 /** True only after client hydration — avoids BlurHash canvas SSR mismatch. */
 function useIsClient() {
@@ -33,6 +45,7 @@ type ArchiveCardProps = {
   item: ArchiveItem;
   /** First viewport pins: preload + high fetch priority (Pinterest above-the-fold). */
   priority?: boolean;
+  onStarChange?: (item: ArchiveItem) => void;
 };
 
 /** Default portrait-leaning frame until natural size is known. */
@@ -49,9 +62,12 @@ function initialDims(item: ArchiveItem): { w: number; h: number } {
   return PLACEHOLDER;
 }
 
-/** How long we keep auto-retrying a Stream thumbnail before soft-fail. */
-const VIDEO_THUMB_MAX_ATTEMPTS = 18;
-const VIDEO_THUMB_RETRY_MS = 5000;
+/**
+ * Premium JIT usually has a still within ~10–15s. Retry more often, fewer
+ * total attempts, so pins recover quickly without long “processing” spins.
+ */
+const VIDEO_THUMB_MAX_ATTEMPTS = 12;
+const VIDEO_THUMB_RETRY_MS = 2000;
 
 type VideoThumbState = "loading" | "ready" | "processing" | "failed";
 
@@ -60,7 +76,11 @@ type VideoThumbState = "loading" | "ready" | "processing" | "failed";
  * Images use next/image + Bunny edge resize (WebP). Videos use a native img
  * so we can cache-bust and recover once Bunny Stream finishes the still frame.
  */
-export function ArchiveCard({ item, priority = false }: ArchiveCardProps) {
+export function ArchiveCard({
+  item,
+  priority = false,
+  onStarChange,
+}: ArchiveCardProps) {
   const { t } = useI18n();
   const isVideo = item.mediaType === "video";
   const isStory = item.mediaType === "story";
@@ -86,16 +106,24 @@ export function ArchiveCard({ item, priority = false }: ArchiveCardProps) {
   }
 
   return (
-    <Link
-      href={`/item/${item.id}`}
-      prefetch
-      className="group block w-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-    >
-      <article className="overflow-hidden rounded-2xl bg-surface ring-1 ring-border transition-[box-shadow,transform] duration-200 group-hover:shadow-md group-hover:ring-border-strong [content-visibility:auto] [contain-intrinsic-size:auto_280px]">
-        <div
-          className="relative w-full overflow-hidden bg-surface-muted"
-          style={{ aspectRatio: `${dims.w} / ${dims.h}` }}
-        >
+    <div className="relative w-full">
+      <Link
+        href={`/item/${item.id}`}
+        prefetch
+        // Keep simple pointer movement cheap; media warming happens on an
+        // intentional focus or pointer-down before navigation.
+        onPointerEnter={() =>
+          warmArchiveItem(item, { prefetchMedia: false })
+        }
+        onFocus={() => warmArchiveItem(item)}
+        onPointerDown={() => warmArchiveItem(item)}
+        className="group block w-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      >
+        <article className="overflow-hidden rounded-2xl bg-surface ring-1 ring-border transition-[box-shadow,transform] duration-200 group-hover:shadow-md group-hover:ring-border-strong [content-visibility:auto] [contain-intrinsic-size:auto_280px]">
+          <div
+            className="relative w-full overflow-hidden bg-surface-muted"
+            style={{ aspectRatio: `${dims.w} / ${dims.h}` }}
+          >
           {/* Image skeleton */}
           {!isVideo && !isStory && !loaded && !failed && (
             <div
@@ -112,21 +140,23 @@ export function ArchiveCard({ item, priority = false }: ArchiveCardProps) {
               onNaturalSize={applyNaturalSize}
             />
           ) : isStory && !storyCover ? (
-            <Image
+            <LoadingImage
               src={STORY_COVER_TEMPLATE.src}
               alt=""
               fill
+              trackLoading={priority}
               unoptimized
-              sizes="(max-width: 540px) 100vw, (max-width: 900px) 50vw, (max-width: 1280px) 33vw, (max-width: 1680px) 25vw, 20vw"
+              sizes="(max-width: 539px) 100vw, (max-width: 899px) 50vw, (max-width: 1279px) 33vw, (max-width: 1679px) 25vw, 20vw"
               className="object-cover object-center transition-transform duration-300 ease-out group-hover:scale-[1.03]"
             />
           ) : (
-            <Image
+            <LoadingImage
               src={imageSrc}
               alt=""
               fill
+              trackLoading={priority}
               loader={bunnyImageLoader}
-              sizes="(max-width: 540px) 100vw, (max-width: 900px) 50vw, (max-width: 1280px) 33vw, (max-width: 1680px) 25vw, 20vw"
+              sizes="(max-width: 539px) 100vw, (max-width: 899px) 50vw, (max-width: 1279px) 33vw, (max-width: 1679px) 25vw, 20vw"
               quality={72}
               // Next 16: `preload` replaces deprecated `priority`.
               preload={priority}
@@ -134,10 +164,7 @@ export function ArchiveCard({ item, priority = false }: ArchiveCardProps) {
               decoding="async"
               placeholder="blur"
               blurDataURL={blurDataUrl}
-              className={[
-                "object-cover object-center transition-[transform,opacity] duration-300 ease-out will-change-transform group-hover:scale-[1.03]",
-                loaded ? "opacity-100" : "opacity-0",
-              ].join(" ")}
+              className="object-cover object-center transition-transform duration-300 ease-out group-hover:scale-[1.03]"
               onLoad={(event) => {
                 const img = event.currentTarget;
                 applyNaturalSize(img.naturalWidth, img.naturalHeight);
@@ -158,27 +185,36 @@ export function ArchiveCard({ item, priority = false }: ArchiveCardProps) {
 
           {!isVideo && (isImageGroup(item) || isComic(item)) ? (
             <span
-              className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-full bg-surface/95 px-2 py-1 text-[11px] font-medium text-primary shadow-sm ring-1 ring-border backdrop-blur-sm"
+              className="absolute right-2 top-14 z-10 inline-flex items-center gap-1 rounded-full bg-surface/95 px-2 py-1 text-[11px] font-medium text-primary shadow-sm ring-1 ring-border backdrop-blur-sm"
               aria-hidden
             >
               <StackBadgeIcon className="h-3 w-3" />
               {itemMediaAssets(item).length}
             </span>
           ) : null}
-        </div>
-      </article>
-      <span className="sr-only">
-        {isVideo
-          ? t("video")
-          : isStory
-            ? t("navStories")
-            : isComic(item)
-              ? t("pageCount", { count: itemMediaAssets(item).length })
-              : isImageGroup(item)
-                ? t("photoCount", { count: itemMediaAssets(item).length })
-                : t("image")}
-      </span>
-    </Link>
+          </div>
+        </article>
+        <span className="sr-only">
+          {isVideo
+            ? t("video")
+            : isStory
+              ? t("navStories")
+              : isComic(item)
+                ? t("pageCount", { count: itemMediaAssets(item).length })
+                : isImageGroup(item)
+                  ? t("photoCount", { count: itemMediaAssets(item).length })
+                  : t("image")}
+        </span>
+      </Link>
+      <StarButton
+        starred={item.starred}
+        onToggle={async (starred) => {
+          const updated = await updateArchiveItem(item.id, { starred });
+          onStarChange?.(updated);
+        }}
+        className="absolute right-2 top-2 z-20"
+      />
+    </div>
   );
 }
 
@@ -205,6 +241,38 @@ function VideoThumb({
     () => videoThumbnailCandidates(item),
     [item],
   );
+  const hoverPreview = useMemo(
+    () => videoPreviewUrl(item.mediaUrl),
+    [item.mediaUrl],
+  );
+  const [previewReady, setPreviewReady] = useState(false);
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const thumbLoadingIdRef = useRef<string | null>(null);
+  const finishThumbLoading = useCallback(() => {
+    const id = thumbLoadingIdRef.current;
+    if (!id) return;
+    thumbLoadingIdRef.current = null;
+    endGlobalLoading(id, "image");
+  }, []);
+
+  useEffect(() => {
+    if (
+      !priority ||
+      thumbCandidates.length === 0 ||
+      state === "ready" ||
+      state === "failed"
+    ) {
+      return;
+    }
+    const id = startGlobalLoading("image");
+    thumbLoadingIdRef.current = id;
+    return finishThumbLoading;
+  }, [
+    finishThumbLoading,
+    priority,
+    state,
+    thumbCandidates.length,
+  ]);
 
   const videoSrc = useMemo(() => {
     if (thumbCandidates.length === 0) return "";
@@ -280,7 +348,7 @@ function VideoThumb({
           decoding="async"
           fetchPriority={priority ? "high" : "auto"}
           className={[
-            "absolute inset-0 h-full w-full object-cover object-center transition-[transform,opacity] duration-300 ease-out will-change-transform group-hover:scale-[1.03]",
+            "absolute inset-0 h-full w-full object-cover object-center transition-[transform,opacity] duration-300 ease-out group-hover:scale-[1.03]",
             ready ? "opacity-100" : "opacity-0",
           ].join(" ")}
           onLoad={(event) => {
@@ -289,6 +357,25 @@ function VideoThumb({
             setState("ready");
           }}
           onError={onVideoThumbError}
+        />
+      ) : null}
+
+      {/* Bunny Stream animated preview — Discord-style hover scrub. */}
+      {ready && hoverPreview && !previewFailed ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={hoverPreview}
+          alt=""
+          decoding="async"
+          loading="lazy"
+          className={[
+            "pointer-events-none absolute inset-0 h-full w-full object-cover object-center transition-opacity duration-200",
+            previewReady
+              ? "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+              : "opacity-0",
+          ].join(" ")}
+          onLoad={() => setPreviewReady(true)}
+          onError={() => setPreviewFailed(true)}
         />
       ) : null}
 

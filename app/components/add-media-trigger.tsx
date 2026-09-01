@@ -23,7 +23,7 @@ type AddMediaTriggerProps = {
 };
 
 /**
- * Add control for a home section. Photos, collections, comics, and videos open
+ * Add control for a home section. Photos, Cute Things, collections, comics, and videos open
  * the file picker on the same click, then go to the create form with files.
  * Stories and OCs still navigate straight to their forms.
  */

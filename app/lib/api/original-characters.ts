@@ -2,6 +2,7 @@ import { apiFetch, type FetchCacheOptions } from "./client";
 import {
   buildQueryCacheKey,
   cachedQuery,
+  getQueryCacheEntry,
   invalidateQueryCache,
   isBrowser,
   setQueryCache,
@@ -23,6 +24,7 @@ const OCS_TAG = "original-characters";
 function listCacheKey(params: ListOriginalCharactersParams): string {
   return buildQueryCacheKey("ocs", {
     q: params.q,
+    starred: params.starred,
     page: params.page ?? 1,
     pageSize: params.pageSize ?? 20,
   });
@@ -38,6 +40,7 @@ export async function listOriginalCharacters(
     apiFetch<PaginatedOriginalCharacters>("/original-characters", {
       query: {
         q: params.q,
+        starred: params.starred,
         page: params.page,
         pageSize: params.pageSize,
       },
@@ -148,6 +151,25 @@ export function seedOcListCache(
 ): void {
   if (!isBrowser()) return;
   setQueryCache(listCacheKey(params), data, {
+    ttlMs: LIST_TTL_MS,
+    staleMs: LIST_STALE_MS,
+  });
+  for (const oc of data.data) seedOcCache(oc);
+}
+
+export function peekOcListCache(
+  params: ListOriginalCharactersParams,
+): PaginatedOriginalCharacters | null {
+  if (!isBrowser()) return null;
+  return (
+    getQueryCacheEntry<PaginatedOriginalCharacters>(listCacheKey(params))
+      ?.data ?? null
+  );
+}
+
+export function seedOcCache(oc: OriginalCharacter): void {
+  if (!isBrowser() || !oc.id) return;
+  setQueryCache(buildQueryCacheKey("oc", { id: oc.id }), oc, {
     ttlMs: LIST_TTL_MS,
     staleMs: LIST_STALE_MS,
   });

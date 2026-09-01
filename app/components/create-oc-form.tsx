@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import {
+  type ClipboardEvent,
   type DragEvent,
   type FormEvent,
   useEffect,
@@ -19,6 +20,7 @@ import { captureImageDisplayMetadata } from "../lib/display-metadata";
 import { useI18n } from "../lib/i18n";
 import {
   detectMediaType,
+  filesFromClipboard,
   formatBytes,
   maxBytesFor,
   normalizeMime,
@@ -104,6 +106,15 @@ export function CreateOcForm({ oc }: CreateOcFormProps) {
     setDragOver(false);
     const file = event.dataTransfer.files?.[0];
     if (file) addPortrait(file);
+  }
+
+  function onPaste(event: ClipboardEvent<HTMLDivElement>) {
+    if (saving) return;
+    const file = filesFromClipboard(event.clipboardData)[0];
+    if (!file) return;
+
+    event.preventDefault();
+    addPortrait(file);
   }
 
   async function onSubmit(event: FormEvent) {
@@ -230,7 +241,10 @@ export function CreateOcForm({ oc }: CreateOcFormProps) {
   const preview = portrait?.previewUrl || existingSrc;
 
   return (
-    <div className="relative flex min-h-full flex-1 flex-col">
+    <div
+      className="relative flex min-h-full flex-1 flex-col"
+      onPaste={onPaste}
+    >
       <div className="absolute left-3 top-3 z-20 sm:left-4 sm:top-4">
         <BackButton href={oc ? `/oc/${oc.id}` : "/create"} />
       </div>
@@ -451,4 +465,3 @@ function Area({
     </label>
   );
 }
-

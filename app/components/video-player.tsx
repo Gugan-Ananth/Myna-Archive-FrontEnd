@@ -10,8 +10,13 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
+import type Hls from "hls.js";
 import { useI18n } from "../lib/i18n";
-import { alternateVideoSources, withCacheBust } from "../lib/media-display";
+import {
+  isHlsUrl,
+  videoPlaybackCandidates,
+  withCacheBust,
+} from "../lib/media-display";
 
 type VideoPlayerProps = {
   src: string;
@@ -36,14 +41,17 @@ function formatTime(seconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-/** Backoff while Bunny Stream encodes progressive MP4s (seconds). */
-const RETRY_DELAYS_MS = [3_000, 5_000, 8_000, 10_000, 12_000, 15_000];
-const MAX_AUTO_ROUNDS = 16;
+/**
+ * Fallback path when Bunny embed is unavailable. Premium JIT often lands in
+ * ~10–15s — poll faster and give up sooner than free-encoding queues.
+ */
+const RETRY_DELAYS_MS = [1_500, 2_000, 3_000, 4_000, 5_000, 8_000];
+const MAX_AUTO_ROUNDS = 10;
 
 /**
  * Full-bleed video stage with white/purple custom controls.
- * Remote Bunny Stream sources: multi-rendition fallback + calm processing UI
- * until progressive MP4 (and optional poster) become available.
+ * Remote Bunny Stream: HLS first (fast start + ABR), then progressive MP4
+ * ladders, with a calm processing UI while Stream finishes encoding.
  */
 export function VideoPlayer({
   src,
@@ -85,7 +93,7 @@ export function VideoPlayer({
 
   const sourceCandidates = useMemo(() => {
     if (!isRemoteSrc) return [src];
-    return alternateVideoSources(src);
+    return videoPlaybackCandidates(src);
   }, [src, isRemoteSrc]);
 
   const activeSrc = useMemo(() => {
@@ -209,8 +217,11 @@ export function VideoPlayer({
   );
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
+    const mediaEl = videoRef.current;
+    if (!mediaEl) return;
+
+    let cancelled = false;
+    let hls: Hls | null = null;
 
     setReady(false);
     setCurrentTime(0);
@@ -225,46 +236,16 @@ export function VideoPlayer({
       roundRef.current = 0;
     };
 
-    const onPlay = () => {
-      setPlaying(true);
-      scheduleHideControls();
-    };
-    const onPause = () => {
-      setPlaying(false);
-      setControlsVisible(true);
-      clearHideTimer();
-    };
-    const onTime = () => {
-      if (!seekingRef.current) setCurrentTime(video.currentTime);
-    };
-    const onMeta = () => {
-      setDuration(video.duration || 0);
-      markReady();
-    };
-    const onCanPlay = () => {
-      markReady();
-    };
-    const onProgress = () => {
-      if (video.buffered.length > 0) {
-        setBuffered(video.buffered.end(video.buffered.length - 1));
-      }
-    };
-    const onEnded = () => {
-      setPlaying(false);
-      setControlsVisible(true);
-    };
-    const onError = () => {
+    const advanceOrWait = () => {
       setReady(false);
       setPlaying(false);
       setRetrying(false);
 
-      // Compact create preview: local blob may be an unsupported codec.
       if (!trackProcessing) {
         if (!isRemoteSrc) setStreamIssue("unavailable");
         return;
       }
 
-      // Walk progressive heights (720 → 480 → …) before waiting on encode.
       const nextSource = sourceIndexRef.current + 1;
       if (nextSource < sourceCandidates.length) {
         sourceIndexRef.current = nextSource;
@@ -277,39 +258,121 @@ export function VideoPlayer({
       );
     };
 
-    video.addEventListener("play", onPlay);
-    video.addEventListener("pause", onPause);
-    video.addEventListener("timeupdate", onTime);
-    video.addEventListener("loadedmetadata", onMeta);
-    video.addEventListener("durationchange", onMeta);
-    video.addEventListener("canplay", onCanPlay);
-    video.addEventListener("progress", onProgress);
-    video.addEventListener("ended", onEnded);
-    video.addEventListener("error", onError);
-
-    video.load();
-
-    if (video.readyState >= 1) {
-      setDuration(video.duration || 0);
+    const onPlay = () => {
+      setPlaying(true);
+      scheduleHideControls();
+    };
+    const onPause = () => {
+      setPlaying(false);
+      setControlsVisible(true);
+      clearHideTimer();
+    };
+    const onTime = () => {
+      if (!seekingRef.current) setCurrentTime(mediaEl.currentTime);
+    };
+    const onMeta = () => {
+      setDuration(mediaEl.duration || 0);
       markReady();
+    };
+    const onCanPlay = () => {
+      markReady();
+    };
+    const onProgress = () => {
+      if (mediaEl.buffered.length > 0) {
+        setBuffered(mediaEl.buffered.end(mediaEl.buffered.length - 1));
+      }
+    };
+    const onEnded = () => {
+      setPlaying(false);
+      setControlsVisible(true);
+    };
+    const onError = () => {
+      advanceOrWait();
+    };
+
+    mediaEl.addEventListener("play", onPlay);
+    mediaEl.addEventListener("pause", onPause);
+    mediaEl.addEventListener("timeupdate", onTime);
+    mediaEl.addEventListener("loadedmetadata", onMeta);
+    mediaEl.addEventListener("durationchange", onMeta);
+    mediaEl.addEventListener("canplay", onCanPlay);
+    mediaEl.addEventListener("progress", onProgress);
+    mediaEl.addEventListener("ended", onEnded);
+    mediaEl.addEventListener("error", onError);
+
+    async function attachSource(el: HTMLVideoElement) {
+      if (isHlsUrl(activeSrc)) {
+        const { default: HlsCtor } = await import("hls.js");
+        if (cancelled) return;
+
+        if (HlsCtor.isSupported()) {
+          hls = new HlsCtor({
+            enableWorker: true,
+            // Lowest rung first → first frame ASAP, then ABR climbs.
+            startLevel: 0,
+            abrEwmaDefaultEstimate: 400_000,
+            maxBufferLength: 18,
+            maxMaxBufferLength: 36,
+          });
+          hls.loadSource(activeSrc);
+          hls.attachMedia(el);
+          hls.on(HlsCtor.Events.MANIFEST_PARSED, () => {
+            window.setTimeout(() => {
+              if (!hls || cancelled) return;
+              // Hand control back to ABR after the opening buffer fills.
+              hls.currentLevel = -1;
+            }, 1800);
+          });
+          hls.on(HlsCtor.Events.ERROR, (_event, data) => {
+            if (!data.fatal || cancelled) return;
+            hls?.destroy();
+            hls = null;
+            advanceOrWait();
+          });
+        } else if (el.canPlayType("application/vnd.apple.mpegurl")) {
+          el.src = activeSrc;
+          el.load();
+        } else {
+          advanceOrWait();
+          return;
+        }
+      } else {
+        el.src = activeSrc;
+        el.load();
+      }
+
+      if (cancelled) return;
+
+      if (el.readyState >= 1) {
+        setDuration(el.duration || 0);
+        markReady();
+      }
+
+      if (
+        autoPlay &&
+        streamIssue !== "processing" &&
+        streamIssue !== "unavailable"
+      ) {
+        el.muted = true;
+        setMuted(true);
+        void el.play().catch(() => undefined);
+      }
     }
 
-    if (autoPlay && streamIssue !== "processing" && streamIssue !== "unavailable") {
-      video.muted = true;
-      setMuted(true);
-      void video.play().catch(() => undefined);
-    }
+    void attachSource(mediaEl);
 
     return () => {
-      video.removeEventListener("play", onPlay);
-      video.removeEventListener("pause", onPause);
-      video.removeEventListener("timeupdate", onTime);
-      video.removeEventListener("loadedmetadata", onMeta);
-      video.removeEventListener("durationchange", onMeta);
-      video.removeEventListener("canplay", onCanPlay);
-      video.removeEventListener("progress", onProgress);
-      video.removeEventListener("ended", onEnded);
-      video.removeEventListener("error", onError);
+      cancelled = true;
+      hls?.destroy();
+      mediaEl.removeEventListener("play", onPlay);
+      mediaEl.removeEventListener("pause", onPause);
+      mediaEl.removeEventListener("timeupdate", onTime);
+      mediaEl.removeEventListener("loadedmetadata", onMeta);
+      mediaEl.removeEventListener("durationchange", onMeta);
+      mediaEl.removeEventListener("canplay", onCanPlay);
+      mediaEl.removeEventListener("progress", onProgress);
+      mediaEl.removeEventListener("ended", onEnded);
+      mediaEl.removeEventListener("error", onError);
       clearHideTimer();
     };
     // streamIssue intentionally omitted — only used for autoPlay gate
@@ -326,7 +389,7 @@ export function VideoPlayer({
     isRemoteSrc,
   ]);
 
-  // Auto-poll while Stream is still encoding progressive MP4.
+  // Auto-poll while Stream is still encoding HLS / progressive ladders.
   useEffect(() => {
     if (streamIssue !== "processing" || !trackProcessing) return;
 
@@ -352,7 +415,7 @@ export function VideoPlayer({
   }, [streamIssue, trackProcessing, loadToken]);
 
   // Soft timeout: remote Stream that never reaches metadata → processing UI.
-  // (Ready videos load within this window and never show the overlay.)
+  // Premium JIT often responds in a few seconds; keep this short.
   useEffect(() => {
     if (!trackProcessing) return;
     if (streamIssue === "unavailable" || streamIssue === "processing") return;
@@ -363,7 +426,7 @@ export function VideoPlayer({
         prev === "unavailable" ? prev : "processing",
       );
       setRetrying(false);
-    }, 5_000);
+    }, 3_000);
     return () => window.clearTimeout(timer);
   }, [trackProcessing, streamIssue, loadToken, sourceIndex, ready]);
 
@@ -433,12 +496,11 @@ export function VideoPlayer({
       onFocus={showControls}
     >
       <video
-        key={`${activeSrc}::${loadToken}`}
+        key={`${sourceIndex}::${loadToken}`}
         ref={videoRef}
-        src={activeSrc}
         poster={posterSrc}
         playsInline
-        preload="metadata"
+        preload={compact ? "metadata" : "auto"}
         className={[
           "absolute inset-0 h-full w-full object-contain transition-opacity duration-300",
           blocked ? "opacity-30" : "opacity-100",
@@ -454,7 +516,7 @@ export function VideoPlayer({
         }}
       />
 
-      {/* Poster still while Stream encodes progressive MP4 */}
+      {/* Poster still while Stream encodes */}
       {showStatusOverlay && posterSrc ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img

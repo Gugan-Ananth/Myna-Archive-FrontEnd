@@ -6,6 +6,7 @@ import type { ArchiveItem } from "../lib/types";
 import { useI18n } from "../lib/i18n";
 import { ArchiveCard } from "./archive-card";
 import { EmptyBoard } from "./empty-board";
+import { TopTenRank } from "./top-ten-rank";
 
 type ArchiveGridProps = {
   items: ArchiveItem[];
@@ -17,6 +18,9 @@ type ArchiveGridProps = {
   priorityCount?: number;
   emptyKind?: CollectionView;
   emptyHref?: string;
+  /** Show the category rank marker, used by Top 10. */
+  showRank?: boolean;
+  onStarChange?: (item: ArchiveItem) => void;
 };
 
 /**
@@ -28,22 +32,34 @@ export function ArchiveGrid({
   items,
   emptyMessage,
   emptyHint,
-  priorityCount = 8,
+  priorityCount = 6,
   emptyKind,
   emptyHref,
+  showRank = false,
+  onStarChange,
 }: ArchiveGridProps) {
   const { t } = useI18n();
   const { columnCount, ref: containerRef } = useColumnCount();
 
   const { columns, priorityIds } = useMemo(() => {
+    // Preload roughly two visible rows, but avoid six eager downloads on a
+    // one-column phone layout.
+    const preloadCount = Math.min(
+      priorityCount,
+      Math.max(2, columnCount * 2),
+    );
     const priority = new Set(
-      items.slice(0, Math.max(0, priorityCount)).map((item) => item.id),
+      items.slice(0, Math.max(0, preloadCount)).map((item) => item.id),
     );
     return {
       columns: distributeIntoColumns(items, columnCount),
       priorityIds: priority,
     };
   }, [items, columnCount, priorityCount]);
+  const rankById = useMemo(
+    () => new Map(items.map((item, index) => [item.id, index + 1])),
+    [items],
+  );
 
   // Width sentinel stays mounted on empty so view switches don't drop the observer.
   if (items.length === 0) {
@@ -81,10 +97,16 @@ export function ArchiveGrid({
         >
           {column.map((item) => (
             <li key={item.id} className="w-full">
-              <ArchiveCard
-                item={item}
-                priority={priorityIds.has(item.id)}
-              />
+              <div className="relative">
+                {showRank ? (
+                  <TopTenRank rank={rankById.get(item.id) ?? 0} />
+                ) : null}
+                <ArchiveCard
+                  item={item}
+                  priority={priorityIds.has(item.id)}
+                  onStarChange={onStarChange}
+                />
+              </div>
             </li>
           ))}
         </ul>

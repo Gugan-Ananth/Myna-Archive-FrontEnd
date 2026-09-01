@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* ThemeToggle controls the .dark class; do not fall back to system preference. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /*
   My Collection — purple brand design tokens.
   Light: soft white + lavender.
@@ -58,6 +61,18 @@
   --accent: #a78bfa;
   --accent-soft: #ede9fe;
   --accent-muted: #c4b5fd;
+
+  /* Favorite control: lavender in light mode. */
+  --star: #a78bfa;
+  --star-hover: #8b5cf6;
+  --star-foreground: #2e1065;
+  --star-muted: #ede9fe;
+  --star-muted-hover: #ddd6fe;
+  --star-muted-foreground: #6d28d9;
+  --star-ring: #c4b5fd;
+
+  /* Global loading animation: purple in light mode, white in dark mode. */
+  --loader-dot: #7c3aed;
 
   /* Text */
   --foreground: #1e1b2e;
@@ -135,6 +150,16 @@
   --accent-soft: #2a2638;
   --accent-muted: #7c6db0;
 
+  /* Favorite control: deep purple in dark mode. */
+  --star: #4c1d95;
+  --star-hover: #5b21b6;
+  --star-foreground: #ede9fe;
+  --star-muted: #2a2638;
+  --star-muted-hover: #392b5d;
+  --star-muted-foreground: #b8a4ff;
+  --star-ring: #6d28d9;
+  --loader-dot: #ffffff;
+
   /* Text: near-white, only a hint of lavender */
   --foreground: #f4f1fa;
   --foreground-muted: #b5afc2;
@@ -170,6 +195,13 @@
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-accent-muted: var(--accent-muted);
+  --color-star: var(--star);
+  --color-star-hover: var(--star-hover);
+  --color-star-foreground: var(--star-foreground);
+  --color-star-muted: var(--star-muted);
+  --color-star-muted-hover: var(--star-muted-hover);
+  --color-star-muted-foreground: var(--star-muted-foreground);
+  --color-star-ring: var(--star-ring);
 
   --color-foreground: var(--foreground);
   --color-foreground-muted: var(--foreground-muted);
@@ -300,6 +332,50 @@ html {
 
 .mascot-float {
   animation: mascot-float 3.4s ease-in-out infinite;
+}
+
+/* Code-generated orbit matching the archive's playful sticker motion. */
+.myna-loading-orbit {
+  position: relative;
+  width: 5.5rem;
+  height: 5.5rem;
+}
+
+.myna-loading-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin: -0.375rem;
+  border-radius: 999px;
+  background: var(--loader-dot);
+  box-shadow: 0 0 1rem color-mix(in srgb, var(--loader-dot) 38%, transparent);
+  transform: rotate(calc(var(--myna-dot-index) * 45deg)) translateY(-2.15rem)
+    scale(0.55);
+  animation: myna-loading-dot 1s ease-in-out infinite;
+  animation-delay: calc(var(--myna-dot-index) * -0.125s);
+}
+
+@keyframes myna-loading-dot {
+  0%,
+  100% {
+    opacity: 0.28;
+    transform: rotate(calc(var(--myna-dot-index) * 45deg)) translateY(-2.15rem)
+      scale(0.55);
+  }
+  50% {
+    opacity: 1;
+    transform: rotate(calc(var(--myna-dot-index) * 45deg)) translateY(-2.15rem)
+      scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .myna-loading-dot {
+    animation: none;
+    opacity: 0.8;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

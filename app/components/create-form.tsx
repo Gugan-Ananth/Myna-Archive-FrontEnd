@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  type ClipboardEvent,
   type DragEvent,
   type FormEvent,
   useEffect,
@@ -27,6 +28,7 @@ import {
 import { useI18n } from "../lib/i18n";
 import {
   detectMediaType,
+  filesFromClipboard,
   formatBytes,
   IMAGE_ACCEPT,
   maxBytesFor,
@@ -65,7 +67,11 @@ type PendingMedia = {
   posterUrl?: string | null;
 };
 
-export type CreateMediaIntent = "photo" | "collection" | "video";
+export type CreateMediaIntent =
+  | "photo"
+  | "cute-things"
+  | "collection"
+  | "video";
 
 type CreateFormProps = {
   /** Dedicated drop page for a home section. Omit for the 4-option chooser. */
@@ -87,9 +93,11 @@ export function CreateForm({ intent }: CreateFormProps = {}) {
       ? "photos"
       : intent === "collection"
         ? "collections"
-        : intent === "video"
-          ? "videos"
-          : null;
+        : intent === "cute-things"
+          ? "cute-things"
+          : intent === "video"
+            ? "videos"
+            : null;
   const stashedFiles = useStashedCreateFiles(stashView);
   const stashAppliedRef = useRef(false);
 
@@ -192,6 +200,22 @@ export function CreateForm({ intent }: CreateFormProps = {}) {
       }
       if (images.length > 1) {
         setError(t("photoMustBeSingle"));
+        return;
+      }
+      if (pending.length > 0) clearPending();
+      setError(null);
+      void pushItems([images[0]!], true);
+      return;
+    }
+
+    if (intent === "cute-things") {
+      const images = typed.filter((x) => x.type === "image");
+      if (images.length === 0 || hasVideo) {
+        setError(t("cannotAddVideoHere"));
+        return;
+      }
+      if (images.length > 1) {
+        setError(t("cuteThingsMustBeSingle"));
         return;
       }
       if (pending.length > 0) clearPending();
@@ -450,6 +474,7 @@ export function CreateForm({ intent }: CreateFormProps = {}) {
       await createArchiveItem(
         {
           mediaType,
+          section: intent === "cute-things" ? "cute-things" : "images",
           name: trimmedName,
           tags,
           rating,
@@ -464,9 +489,11 @@ export function CreateForm({ intent }: CreateFormProps = {}) {
       const home =
         mediaType === "video"
           ? "/?view=videos&created=1"
-          : isGroup
-            ? "/?view=collections&created=1"
-            : "/?created=1";
+          : intent === "cute-things"
+            ? "/?view=cute-things&created=1"
+            : isGroup
+              ? "/?view=collections&created=1"
+              : "/?created=1";
       router.push(home);
       router.refresh();
     } catch (err) {
@@ -494,9 +521,11 @@ export function CreateForm({ intent }: CreateFormProps = {}) {
 
   const mediaLabel = isVideo
     ? t("video").toLowerCase()
-    : isGroup
-      ? t("imageGroup").toLowerCase()
-      : t("image").toLowerCase();
+    : intent === "cute-things"
+      ? t("navCuteThings").toLowerCase()
+      : isGroup
+        ? t("imageGroup").toLowerCase()
+        : t("image").toLowerCase();
 
   const canSubmit =
     Boolean(
@@ -512,6 +541,7 @@ export function CreateForm({ intent }: CreateFormProps = {}) {
     !isVideo &&
     pending.length < MAX_IMAGE_ASSETS &&
     intent !== "photo" &&
+    intent !== "cute-things" &&
     intent !== "video";
 
   function onDropFile(event: DragEvent) {
@@ -523,10 +553,20 @@ export function CreateForm({ intent }: CreateFormProps = {}) {
     }
   }
 
+  function onPaste(event: ClipboardEvent<HTMLDivElement>) {
+    if (busy) return;
+    const files = filesFromClipboard(event.clipboardData);
+    if (files.length === 0) return;
+
+    event.preventDefault();
+    addFiles(files);
+  }
+
   const acceptAttr =
     intent === "video" || isVideo
       ? VIDEO_ACCEPT
       : intent === "photo" ||
+          intent === "cute-things" ||
           intent === "collection" ||
           (pending.length > 0 && mediaType === "image")
         ? IMAGE_ACCEPT
@@ -549,7 +589,10 @@ export function CreateForm({ intent }: CreateFormProps = {}) {
   }, [stashedFiles, stashView]);
 
   return (
-    <div className="relative flex min-h-full flex-1 flex-col">
+    <div
+      className="relative flex min-h-full flex-1 flex-col"
+      onPaste={onPaste}
+    >
       <div className="absolute left-3 top-3 z-20 sm:left-4 sm:top-4">
         <BackButton />
       </div>
@@ -599,11 +642,11 @@ export function CreateForm({ intent }: CreateFormProps = {}) {
             >
               <SceneFigure
                 sticker={
-                  intent === "video"
-                    ? CHOOSER_SCENE.video
-                    : intent === "collection"
-                      ? CHOOSER_SCENE.collection
-                      : CHOOSER_SCENE.photo
+                    intent === "video"
+                      ? CHOOSER_SCENE.video
+                      : intent === "collection"
+                        ? CHOOSER_SCENE.collection
+                        : CHOOSER_SCENE.photo
                 }
                 size="chooser"
                 float
@@ -615,7 +658,9 @@ export function CreateForm({ intent }: CreateFormProps = {}) {
                     ? t("clickOrDragVideo")
                     : intent === "collection"
                       ? t("clickOrDragCollection")
-                      : t("clickOrDragPhoto")}
+                      : intent === "cute-things"
+                        ? t("clickOrDragCuteThings")
+                        : t("clickOrDragPhoto")}
               </span>
               <span className="text-sm text-foreground-subtle">
                 {intent === "video"
@@ -629,7 +674,9 @@ export function CreateForm({ intent }: CreateFormProps = {}) {
                     })
                   : intent === "collection"
                     ? t("collectionUploadHint", { max: MAX_IMAGE_ASSETS })
-                    : t("photoUploadHint")}
+                    : intent === "cute-things"
+                      ? t("cuteThingsUploadHint")
+                      : t("photoUploadHint")}
               </span>
             </button>
             {error ? (
@@ -992,4 +1039,3 @@ const CHOOSER_CARD_CLASS = [
   "border-border-strong hover:border-primary",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 ].join(" ");
-

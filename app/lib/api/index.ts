@@ -1,4 +1,5 @@
 export { ApiError } from "./errors";
+export type { FetchCacheOptions } from "./client";
 export { getApiBaseUrl, getApiV1Url } from "./config";
 export {
   createArchiveItem,
@@ -9,6 +10,9 @@ export {
   listArchiveItems,
   listStoryChapters,
   listTagSummaries,
+  peekListCache,
+  seedItemCache,
+  seedItemCacheFromList,
   seedListCache,
   seedTagsCache,
   updateArchiveItem,
@@ -20,6 +24,7 @@ export {
   deleteTaxonomyTag,
   invalidateTaxonomyCache,
   listTaxonomy,
+  reorderTaxonomy,
   seedTaxonomyCache,
   updateTaxonomyCategory,
   updateTaxonomyTag,
@@ -29,11 +34,14 @@ export {
   deleteOriginalCharacter,
   getOriginalCharacter,
   listOriginalCharacters,
+  peekOcListCache,
+  seedOcCache,
   seedOcListCache,
   updateOriginalCharacter,
 } from "./original-characters";
 export { createUploadSignature } from "./media";
 export type {
+  ArchiveSection,
   ArchiveItem,
   BunnyUploadResult,
   CreateArchiveItemInput,
@@ -47,6 +55,7 @@ export type {
   OriginalCharacter,
   PaginatedArchiveItems,
   PaginatedOriginalCharacters,
+  ReorderTaxonomyInput,
   TagSummary,
   TagsListResponse,
   TaxonomyCategoryDto,

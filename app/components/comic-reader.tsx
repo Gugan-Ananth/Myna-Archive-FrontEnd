@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "../lib/i18n";
-import { detailAssetSrc } from "../lib/media-display";
+import {
+  detailAssetSrc,
+  displayAssetSrc,
+  previewAssetSrc,
+} from "../lib/media-display";
+import { prefetchMediaUrl } from "../lib/prefetch-media";
 import type { MediaAsset } from "../lib/types";
 import { ImageZoomViewer } from "./image-zoom-viewer";
 
@@ -14,8 +19,8 @@ type ComicReaderProps = {
 };
 
 /**
- * One-page comic reader: first page fills the stage (scroll the image),
- * left/right arrows move between pages.
+ * One-page comic reader: the page starts contained, a second click switches
+ * to fill-width zoom, and left/right arrows move between pages.
  */
 export function ComicReader({
   assets,
@@ -47,6 +52,13 @@ export function ComicReader({
   useEffect(() => {
     onIndexChange?.(safeIndex, count);
   }, [safeIndex, count, onIndexChange]);
+
+  useEffect(() => {
+    const neighbors = [assets[safeIndex + 1], assets[safeIndex - 1]];
+    for (const asset of neighbors) {
+      if (asset) prefetchMediaUrl(displayAssetSrc(asset));
+    }
+  }, [assets, safeIndex]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -83,7 +95,9 @@ export function ComicReader({
     );
   }
 
-  const src = detailAssetSrc(current);
+  const src = displayAssetSrc(current);
+  const previewSrc = previewAssetSrc(current);
+  const originalSrc = detailAssetSrc(current);
   const many = count > 1;
 
   return (
@@ -91,14 +105,16 @@ export function ComicReader({
       <ImageZoomViewer
         key={`${current.publicId}:${src}:${safeIndex}`}
         src={src}
+        previewSrc={previewSrc}
+        originalSrc={originalSrc}
         alt={t("imageOfGroup", {
           name: title,
           n: safeIndex + 1,
           total: count,
         })}
         className="h-full w-full"
-        initialMode="fill-width"
-        clickTogglesZoom={false}
+        initialMode="contain"
+        clickTogglesZoom
       />
 
       {many ? (

@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import {
   ApiError,
   listOriginalCharacters,
+  peekOcListCache,
   seedOcListCache,
 } from "../lib/api";
 import { useI18n } from "../lib/i18n";
@@ -57,17 +58,29 @@ export function OcHome({
   const matchesServer = seeded && filterKey === initialFilterKey;
   const useClient =
     clientSnap !== null && clientSnap.filterKey === filterKey;
+  const peeked =
+    !useClient && !matchesServer
+      ? peekOcListCache({
+          q: liveQuery || undefined,
+          page: 1,
+          pageSize: PAGE_SIZE,
+        })
+      : null;
 
   const items = useClient
     ? clientSnap.items
     : matchesServer
       ? initialItems
-      : (clientSnap?.items ?? []);
+      : peeked
+        ? peeked.data
+        : (clientSnap?.items ?? []);
   const total = useClient
     ? clientSnap.total
     : matchesServer
       ? initialTotal
-      : (clientSnap?.total ?? 0);
+      : peeked
+        ? peeked.meta.total
+        : (clientSnap?.total ?? 0);
   const page = useClient
     ? clientSnap.page
     : matchesServer
@@ -78,6 +91,8 @@ export function OcHome({
     : matchesServer
       ? initialLoadError
       : (clientSnap?.loadError ?? null);
+  const hasInstantItems =
+    useClient || matchesServer || Boolean(peeked) || items.length > 0;
   const usedFallback = useClient
     ? clientSnap.usedFallback
     : matchesServer
@@ -109,8 +124,15 @@ export function OcHome({
     }
     const requestId = ++requestIdRef.current;
     let cancelled = false;
-    setIsFiltering(true);
+    const alreadyHavePage = Boolean(
+      peekOcListCache({
+        q: liveQuery || undefined,
+        page: 1,
+        pageSize: PAGE_SIZE,
+      }),
+    );
     void (async () => {
+      if (!alreadyHavePage) setIsFiltering(true);
       try {
         const result = await listOriginalCharacters({
           q: liveQuery || undefined,
@@ -236,7 +258,7 @@ export function OcHome({
       <div
         className={[
           "relative flex min-h-[8rem] flex-1 flex-col transition-opacity duration-150",
-          isFiltering ? "opacity-70" : "opacity-100",
+          isFiltering && !hasInstantItems ? "opacity-70" : "opacity-100",
         ].join(" ")}
         aria-busy={isFiltering || isLoadingMore}
       >

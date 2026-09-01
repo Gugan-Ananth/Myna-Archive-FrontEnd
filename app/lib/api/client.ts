@@ -1,6 +1,7 @@
 import { isBrowser } from "./query-cache";
 import { getApiV1Url } from "./config";
 import { ApiError, parseApiError } from "./errors";
+import { endGlobalLoading, startGlobalLoading } from "../loading-events";
 
 export type FetchCacheOptions = {
   cache?: RequestCache;
@@ -68,47 +69,53 @@ export async function apiFetch<T>(
     headers.Authorization = `Bearer ${accessToken}`;
   }
 
-  let response: Response;
+  const loadingId = startGlobalLoading("request");
+
   try {
-    response = await fetch(buildUrl(path, query), {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-      cache,
-      next,
-      signal,
-    });
-  } catch (error) {
-    if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError")) {
-      throw error;
+    let response: Response;
+    try {
+      response = await fetch(buildUrl(path, query), {
+        method,
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        cache,
+        next,
+        signal,
+      });
+    } catch (error) {
+      if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError")) {
+        throw error;
+      }
+      const message =
+        error instanceof Error ? error.message : "Network request failed";
+      throw new ApiError(
+        `Cannot reach API (${message}). Is the backend running on ${getApiV1Url()}?`,
+        0,
+      );
     }
-    const message =
-      error instanceof Error ? error.message : "Network request failed";
-    throw new ApiError(
-      `Cannot reach API (${message}). Is the backend running on ${getApiV1Url()}?`,
-      0,
-    );
-  }
 
-  if (response.status === 401) {
-    await bounceToLogin();
-    throw await parseApiError(response);
-  }
+    if (response.status === 401) {
+      await bounceToLogin();
+      throw await parseApiError(response);
+    }
 
-  if (!response.ok) {
-    throw await parseApiError(response);
-  }
+    if (!response.ok) {
+      throw await parseApiError(response);
+    }
 
-  if (empty || response.status === 204) {
-    return undefined as T;
-  }
+    if (empty || response.status === 204) {
+      return undefined as T;
+    }
 
-  const text = await response.text();
-  if (!text) {
-    return undefined as T;
-  }
+    const text = await response.text();
+    if (!text) {
+      return undefined as T;
+    }
 
-  return JSON.parse(text) as T;
+    return JSON.parse(text) as T;
+  } finally {
+    endGlobalLoading(loadingId, "request");
+  }
 }
 
 async function bounceToLogin(): Promise<void> {

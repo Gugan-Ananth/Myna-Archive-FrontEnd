@@ -9,7 +9,13 @@ import {
   type TouchEvent as ReactTouchEvent,
 } from "react";
 import { useI18n } from "../lib/i18n";
-import { detailAssetSrc, withBunnyResize } from "../lib/media-display";
+import {
+  detailAssetSrc,
+  displayAssetSrc,
+  previewAssetSrc,
+  withBunnyResize,
+} from "../lib/media-display";
+import { prefetchMediaUrl } from "../lib/prefetch-media";
 import type { MediaAsset } from "../lib/types";
 import { ImageZoomViewer } from "./image-zoom-viewer";
 
@@ -44,6 +50,7 @@ export function ImageGroupCarousel({
   const [zoomed, setZoomed] = useState(false);
   const stripRef = useRef<HTMLDivElement>(null);
   const touchRef = useRef<{ x: number; y: number } | null>(null);
+  const focusActiveThumbRef = useRef(false);
   const count = assets.length;
   const safeIndex = Math.min(Math.max(0, index), Math.max(0, count - 1));
   const current = assets[safeIndex];
@@ -59,9 +66,16 @@ export function ImageGroupCarousel({
 
   const go = useCallback(
     (delta: number) => {
-      goTo(safeIndex + delta);
+      if (count <= 1) return;
+      setIndex((currentIndex) => {
+        const normalized = Math.min(
+          Math.max(0, currentIndex),
+          Math.max(0, count - 1),
+        );
+        return ((normalized + delta) % count + count) % count;
+      });
     },
-    [goTo, safeIndex],
+    [count],
   );
 
   // Parent must pass a stable callback (useCallback). Reporting only when
@@ -80,13 +94,31 @@ export function ImageGroupCarousel({
       block: "nearest",
       inline: "center",
     });
+    if (focusActiveThumbRef.current) {
+      focusActiveThumbRef.current = false;
+      active?.focus({ preventScroll: true });
+    }
   }, [safeIndex]);
+
+  useEffect(() => {
+    const neighbors = [assets[safeIndex + 1], assets[safeIndex - 1]];
+    for (const asset of neighbors) {
+      if (asset) prefetchMediaUrl(displayAssetSrc(asset));
+    }
+  }, [assets, safeIndex]);
 
   useEffect(() => {
     if (count <= 1) return;
     function onKey(event: KeyboardEvent) {
       const tag = (event.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (
+        stripRef.current &&
+        event.target instanceof Node &&
+        stripRef.current.contains(event.target)
+      ) {
+        return;
+      }
       if (event.key === "ArrowLeft") {
         event.preventDefault();
         go(-1);
@@ -112,7 +144,9 @@ export function ImageGroupCarousel({
     );
   }
 
-  const src = detailAssetSrc(current);
+  const src = displayAssetSrc(current);
+  const previewSrc = previewAssetSrc(current);
+  const originalSrc = detailAssetSrc(current);
   const isGroup = count > 1;
 
   function onStageTouchStart(event: ReactTouchEvent) {
@@ -145,26 +179,36 @@ export function ImageGroupCarousel({
   return (
     <div
       className={["h-full w-full", className].join(" ")}
-      onTouchStart={onStageTouchStart}
-      onTouchEnd={onStageTouchEnd}
     >
-      <ImageZoomViewer
-        key={`${current.publicId}:${src}`}
-        src={src}
-        alt={
-          isGroup
-            ? t("imageOfGroup", { name: title, n: safeIndex + 1, total: count })
-            : title
-        }
-        className="h-full w-full"
-        // Lift zoom chrome above the filmstrip; keep it bottom-center of the stage.
-        controlsClassName={
-          isGroup
-            ? "bottom-[5.75rem] left-1/2 -translate-x-1/2 sm:bottom-[6.25rem]"
-            : undefined
-        }
-        onZoomChange={setZoomed}
-      />
+      <div
+        className="absolute inset-0"
+        onTouchStart={onStageTouchStart}
+        onTouchEnd={onStageTouchEnd}
+      >
+        <ImageZoomViewer
+          key={`${current.publicId}:${src}`}
+          src={src}
+          previewSrc={previewSrc}
+          originalSrc={originalSrc}
+          alt={
+            isGroup
+              ? t("imageOfGroup", {
+                  name: title,
+                  n: safeIndex + 1,
+                  total: count,
+                })
+              : title
+          }
+          className="h-full w-full"
+          // Lift zoom chrome above the filmstrip; keep it bottom-center of the stage.
+          controlsClassName={
+            isGroup
+              ? "bottom-[5.75rem] left-1/2 -translate-x-1/2 sm:bottom-[6.25rem]"
+              : undefined
+          }
+          onZoomChange={setZoomed}
+        />
+      </div>
 
       {isGroup ? (
         <>
@@ -205,7 +249,7 @@ export function ImageGroupCarousel({
 
           {/* Filmstrip — primary group chrome; distinct from page navigation */}
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 bg-gradient-to-t from-black/55 via-black/25 to-transparent px-3 pb-3 pt-14 sm:px-4 sm:pb-4">
-            <p className="text-[11px] font-medium tabular-nums tracking-wide text-white/80">
+            <p className="text-lg font-bold tabular-nums tracking-wide text-white sm:text-xl">
               {t("imagePosition", { n: safeIndex + 1, total: count })}
             </p>
 
@@ -214,6 +258,17 @@ export function ImageGroupCarousel({
               role="tablist"
               aria-label={t("imageGroup")}
               onKeyDown={(event: ReactKeyboardEvent<HTMLDivElement>) => {
+                const isNavigationKey =
+                  event.key === "ArrowLeft" ||
+                  event.key === "ArrowRight" ||
+                  event.key === "Home" ||
+                  event.key === "End";
+                if (!isNavigationKey) return;
+                const target = event.target;
+                const cameFromThumbnail =
+                  target instanceof HTMLElement &&
+                  target.getAttribute("role") === "tab";
+                if (cameFromThumbnail) focusActiveThumbRef.current = true;
                 if (event.key === "ArrowLeft") {
                   event.preventDefault();
                   go(-1);

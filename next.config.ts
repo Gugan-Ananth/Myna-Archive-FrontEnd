@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
     // Homepage pins use a Bunny edge loader (see archive-card); keep modern
     // formats for any default-loader remote images.
     formats: ["image/webp", "image/avif"],
+    // Next.js 16 only allows the default quality of 75 unless explicitly
+    // configured. The archive cards use 72 to keep dashboard images light.
+    qualities: [72, 75],
     // Grid columns are ~20–50vw — smaller breakpoints cut wasted bytes.
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
     imageSizes: [96, 128, 256, 320, 384, 480, 640],

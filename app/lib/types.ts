@@ -1,6 +1,9 @@
 /** Media kind stored in the archive. */
 export type MediaType = "image" | "video" | "story" | "comic";
 
+export const ARCHIVE_SECTIONS = ["images", "cute-things"] as const;
+export type ArchiveSection = (typeof ARCHIVE_SECTIONS)[number];
+
 /** One uploaded binary within an Archive Item (cover or carousel slide). */
 export type MediaAsset = {
   publicId: string;
@@ -19,6 +22,8 @@ export type ArchiveItem = {
   description: string;
   /** Written story HTML; empty/omitted for image/video. */
   bodyHtml?: string;
+  /** Optional author name for written stories. */
+  author?: string;
   /** Optional short blurb for story homepage cards. */
   summary?: string;
   /**
@@ -30,6 +35,10 @@ export type ArchiveItem = {
   rating: number;
   /** Whether this item is an image, a video, a written story, or a comic. */
   mediaType: MediaType;
+  /** Whether this item is starred within its dashboard category. */
+  starred?: boolean;
+  /** Top-level archive section for this item. */
+  section?: ArchiveSection;
   /** Root story id when this row is a later chapter; null for the series. */
   seriesId?: string | null;
   /** 1-based chapter index. Roots are chapter 1. */
@@ -77,6 +86,8 @@ export type OriginalCharacter = {
   dislikes: string;
   background: string;
   additionalInfo: string;
+  /** Whether this OC is starred within the OC category. */
+  starred?: boolean;
   publicId: string;
   thumbnailUrl: string;
   mediaUrl: string;

@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { LOCALE_META, LOCALES, useI18n, type Locale } from "../lib/i18n";
+import { AppIcon } from "./app-icon";
 
 type LanguageSwitcherProps = {
   /** Where the menu opens from the trigger. */
@@ -73,7 +74,10 @@ export function LanguageSwitcher({
               ].join(" ")
         }
       >
-        <GlobeIcon className="h-5 w-5 md:h-6 md:w-6" />
+        <AppIcon
+          src="/icons/planet-earth.png"
+          className="h-[1.125rem] w-[1.125rem] md:h-[1.25rem] md:w-[1.25rem]"
+        />
         <span className="sr-only">
           {LOCALE_META[locale].nativeLabel}
         </span>
@@ -131,26 +135,6 @@ export function LanguageSwitcher({
         </div>
       )}
     </div>
-  );
-}
-
-function GlobeIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <circle cx="12" cy="12" r="9" />
-      <path d="M3 12h18" />
-      <path d="M12 3a14 14 0 0 1 0 18" />
-      <path d="M12 3a14 14 0 0 0 0 18" />
-    </svg>
   );
 }
 

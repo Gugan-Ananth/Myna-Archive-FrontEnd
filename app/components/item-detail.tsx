@@ -17,13 +17,20 @@ import type { ArchiveItem } from "../lib/types";
 import { BackButton } from "./back-button";
 import { CategoryTagPicker } from "./category-tag-picker";
 import { ComicReader } from "./comic-reader";
+import { ConfirmDialog } from "./confirm-dialog";
 import { ImageGroupCarousel } from "./image-group-carousel";
 import { RatingInput } from "./rating-input";
 import { StatusCallout } from "./status-callout";
-import { VideoPlayer } from "./video-player";
+import { BunnyStreamEmbed } from "./bunny-stream-embed";
+import { StarButton } from "./star-button";
 
 type ItemDetailProps = {
   item: ArchiveItem;
+};
+
+type DeleteConfirmation = {
+  message: string;
+  otherChapters: ArchiveItem[];
 };
 
 /**
@@ -42,6 +49,8 @@ export function ItemDetail({ item }: ItemDetailProps) {
   const [ratingValid, setRatingValid] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] =
+    useState<DeleteConfirmation | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** Active slide in an image group (1-based label uses +1). */
   const [groupSlide, setGroupSlide] = useState({ index: 0, total: 0 });
@@ -62,9 +71,22 @@ export function ItemDetail({ item }: ItemDetailProps) {
     !isVideo && !isStory && !isComic && itemMediaAssets(draft).length > 1;
   const homeHref = isComic
     ? "/?view=comics"
+    : draft.section === "cute-things"
+      ? "/?view=cute-things"
     : isGroup
       ? "/?view=collections"
       : "/";
+  const detailKindLabel = isStory
+    ? t("navStories")
+    : isComic
+      ? t("navComics")
+      : isVideo
+        ? t("navVideos")
+        : draft.section === "cute-things"
+          ? t("navCuteThings")
+          : isGroup
+            ? t("navCollections")
+            : t("navPhotos");
   const busy = saving || deleting;
 
   useEffect(() => {
@@ -94,6 +116,12 @@ export function ItemDetail({ item }: ItemDetailProps) {
     setEditing(false);
     setRatingValid(true);
     setError(null);
+  }
+
+  async function toggleStar(starred: boolean): Promise<void> {
+    const updated = await updateArchiveItem(saved.id, { starred });
+    setSaved((current) => ({ ...current, starred: updated.starred }));
+    setDraft((current) => ({ ...current, starred: updated.starred }));
   }
 
   async function saveEdit() {
@@ -152,8 +180,8 @@ export function ItemDetail({ item }: ItemDetailProps) {
     const others = isStory
       ? series.filter((chapter) => chapter.id !== saved.id)
       : [];
-    const confirmed = window.confirm(
-      isStory
+    setDeleteConfirmation({
+      message: isStory
         ? others.length > 0
           ? t("deleteChapterConfirm", {
               name: saved.name,
@@ -161,15 +189,21 @@ export function ItemDetail({ item }: ItemDetailProps) {
             })
           : t("deleteLastChapterConfirm", { name: saved.name })
         : t("deleteConfirm", { name: draft.name }),
-    );
-    if (!confirmed) return;
+      otherChapters: others,
+    });
+  }
+
+  async function confirmDelete() {
+    if (!deleteConfirmation || busy) return;
+    const { otherChapters } = deleteConfirmation;
+    setDeleteConfirmation(null);
 
     setDeleting(true);
     setError(null);
     try {
       await deleteArchiveItem(saved.id);
-      if (isStory && others.length > 0) {
-        const next = [...others].sort(
+      if (isStory && otherChapters.length > 0) {
+        const next = [...otherChapters].sort(
           (a, b) => (a.chapterNumber ?? 1) - (b.chapterNumber ?? 1),
         )[0];
         router.push(`/item/${next?.id ?? ""}`);
@@ -203,12 +237,18 @@ export function ItemDetail({ item }: ItemDetailProps) {
           <>
             <header className="relative z-30 flex w-full shrink-0 items-center justify-between gap-3 px-3 py-3 sm:px-8 lg:px-10">
               <BackButton href={homeHref} />
-              <DetailsToggle
-                open={panelOpen}
-                hideLabel={t("hideDetails")}
-                showLabel={t("showDetails")}
-                onToggle={() => setPanelOpen((open) => !open)}
-              />
+              <div className="flex items-center gap-2">
+                <DetailsToggle
+                  open={panelOpen}
+                  hideLabel={t("hideDetails")}
+                  showLabel={t("showDetails")}
+                  onToggle={() => setPanelOpen((open) => !open)}
+                />
+                <StarButton
+                  starred={draft.starred}
+                  onToggle={toggleStar}
+                />
+              </div>
             </header>
             <div className="min-h-0 flex-1 overflow-y-auto">
               <div className="w-full px-4 pb-10 pt-2 sm:px-8 lg:px-10">
@@ -250,10 +290,9 @@ export function ItemDetail({ item }: ItemDetailProps) {
         ) : (
           <>
             {isVideo ? (
-              <VideoPlayer
+              <BunnyStreamEmbed
                 key={draft.mediaUrl}
-                src={draft.mediaUrl}
-                poster={draft.thumbnailUrl}
+                item={draft}
                 title={draft.name}
                 className="absolute inset-0 h-full w-full"
               />
@@ -285,7 +324,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
                 )}
                 {(isGroup || isComic) && (
                   <span
-                    className="inline-flex items-center gap-1.5 rounded-full bg-surface/90 px-2.5 py-1.5 text-xs font-medium text-primary shadow-sm ring-1 ring-border backdrop-blur-md"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-surface/90 px-3 py-2 text-sm font-semibold text-primary shadow-sm ring-1 ring-border backdrop-blur-md"
                     title={
                       isComic
                         ? t("pageCount", { count: mediaAssets.length })
@@ -309,6 +348,10 @@ export function ItemDetail({ item }: ItemDetailProps) {
                   showLabel={t("showDetails")}
                   onToggle={() => setPanelOpen((open) => !open)}
                 />
+                <StarButton
+                  starred={draft.starred}
+                  onToggle={toggleStar}
+                />
               </div>
             </div>
           </>
@@ -317,34 +360,39 @@ export function ItemDetail({ item }: ItemDetailProps) {
 
       <aside
         className={[
-          "app-card z-20 shrink-0 overflow-hidden transition-[width,max-height,opacity] duration-300 ease-out",
+          "app-card z-20 shrink-0 overflow-hidden border-border/80 shadow-xl backdrop-blur-xl transition-[width,max-height,opacity] duration-300 ease-out",
           panelOpen
-            ? "max-h-[50vh] w-full opacity-100 lg:max-h-none lg:w-[min(24rem,38%)]"
+            ? "max-h-[50vh] w-full border-t opacity-100 lg:max-h-none lg:w-[min(26rem,40%)] lg:border-l"
             : "pointer-events-none max-h-0 w-full opacity-0 lg:max-h-none lg:w-0",
         ].join(" ")}
         aria-hidden={!panelOpen}
       >
-        <div className="flex h-full max-h-[50vh] w-full flex-col gap-5 overflow-y-auto p-4 sm:p-6 lg:max-h-none lg:min-w-[min(24rem,100%)] lg:pt-6">
-          <div className="flex items-start justify-between gap-3">
-            {editing ? (
-              <label className="flex min-w-0 flex-1 flex-col gap-1">
-                <span className="text-xs font-medium text-foreground-muted">
-                  {t("name")}
-                </span>
-                <input
-                  value={draft.name}
-                  disabled={busy}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, name: e.target.value }))
-                  }
-                  className="rounded-xl border border-border bg-background px-3 py-2 text-base font-semibold text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
-                />
-              </label>
-            ) : (
-              <h1 className="text-xl font-semibold tracking-tight text-foreground">
-                {draft.name}
-              </h1>
-            )}
+        <div className="flex h-full max-h-[50vh] w-full flex-col gap-6 overflow-y-auto p-5 sm:p-6 lg:max-h-none lg:min-w-[min(26rem,100%)] lg:gap-7 lg:p-7">
+          <div className="flex items-start gap-4 border-b border-border/70 pb-6">
+            <div className="min-w-0 flex-1">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                {detailKindLabel}
+              </p>
+              {editing ? (
+                <label className="flex min-w-0 flex-col gap-1.5">
+                  <span className="text-xs font-medium text-foreground-muted">
+                    {t("name")}
+                  </span>
+                  <input
+                    value={draft.name}
+                    disabled={busy}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, name: e.target.value }))
+                    }
+                    className="w-full rounded-xl border border-border bg-background px-3 py-2 text-xl font-semibold leading-tight text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
+                  />
+                </label>
+              ) : (
+                <h1 className="break-words text-2xl font-bold leading-tight tracking-tight text-foreground sm:text-3xl lg:text-[2rem]">
+                  {draft.name}
+                </h1>
+              )}
+            </div>
 
             {!editing &&
               (isStory || isComic ? (
@@ -371,8 +419,8 @@ export function ItemDetail({ item }: ItemDetailProps) {
               ))}
           </div>
 
-          <div>
-            <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-foreground-muted">
+          <section className="rounded-2xl border border-border/70 bg-background/35 p-4 sm:p-5">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-foreground-muted">
               {t("rating")}
             </p>
             {editing ? (
@@ -385,10 +433,10 @@ export function ItemDetail({ item }: ItemDetailProps) {
             ) : (
               <RatingInput value={draft.rating} readOnly />
             )}
-          </div>
+          </section>
 
-          <div>
-            <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-foreground-muted">
+          <section className="rounded-2xl border border-border/70 bg-background/35 p-4 sm:p-5">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-foreground-muted">
               {t("tags")}
             </p>
             {editing && !isStory ? (
@@ -416,10 +464,10 @@ export function ItemDetail({ item }: ItemDetailProps) {
                 )}
               </div>
             )}
-          </div>
+          </section>
 
-          <div className="min-h-0 flex-1">
-            <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-foreground-muted">
+          <section className="min-h-0 flex-1 rounded-2xl border border-border/70 bg-background/35 p-4 sm:p-5">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-foreground-muted">
               {isStory ? t("storySummary") : t("description")}
             </p>
             {editing && !isStory ? (
@@ -429,7 +477,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
                 onChange={(e) =>
                   setDraft((d) => ({ ...d, description: e.target.value }))
                 }
-                rows={5}
+                rows={7}
                 className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm leading-relaxed text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
               />
             ) : (
@@ -439,12 +487,12 @@ export function ItemDetail({ item }: ItemDetailProps) {
                   : draft.description || t("noDescription")}
               </p>
             )}
-          </div>
+          </section>
 
           {error ? <StatusCallout title={error} compact /> : null}
 
           {editing ? (
-            <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+            <div className="mt-auto flex flex-wrap gap-2 border-t border-border/70 pt-5">
               <button
                 type="button"
                 onClick={() => void saveEdit()}
@@ -475,7 +523,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
               </button>
             </div>
           ) : (
-            <div className="border-t border-border pt-4">
+            <div className="mt-auto border-t border-border/70 pt-5">
               <button
                 type="button"
                 onClick={() => void onDelete()}
@@ -492,6 +540,14 @@ export function ItemDetail({ item }: ItemDetailProps) {
           )}
         </div>
       </aside>
+      <ConfirmDialog
+        open={deleteConfirmation !== null}
+        message={deleteConfirmation?.message ?? ""}
+        confirmLabel={t("delete")}
+        busy={deleting}
+        onCancel={() => setDeleteConfirmation(null)}
+        onConfirm={() => void confirmDelete()}
+      />
     </div>
   );
 }
