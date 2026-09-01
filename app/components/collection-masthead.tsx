@@ -1,11 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import bunnyImageLoader from "../lib/bunny-image-loader";
 import { useI18n } from "../lib/i18n";
 import { gridMediaSrc } from "../lib/media-display";
 import type { ArchiveItem } from "../lib/types";
+import { LoadingImage } from "./global-loading";
 
 type CollectionMastheadProps = {
   items: ArchiveItem[];
@@ -74,10 +74,11 @@ export function CollectionMasthead({
           >
             <div className="relative aspect-[1.25] overflow-hidden rounded-[0.95rem] bg-surface-muted">
               {featuredSrc ? (
-                <Image
+                <LoadingImage
                   src={featuredSrc}
                   alt=""
                   fill
+                  trackLoading
                   loader={bunnyImageLoader}
                   sizes="(max-width: 640px) 85vw, 360px"
                   quality={70}

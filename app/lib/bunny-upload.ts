@@ -1,5 +1,6 @@
 import * as tus from "tus-js-client";
 import type { BunnyUploadResult, UploadSignature } from "./api/types";
+import { endGlobalLoading, startGlobalLoading } from "./loading-events";
 
 export type UploadProgress = {
   /** 0–100 */
@@ -55,17 +56,22 @@ export async function uploadToBunny(
     );
   }
 
-  if (signature.uploadMethod === "PUT") {
-    return uploadImagePut(file, signature, onProgress, signal);
-  }
+  const loadingId = startGlobalLoading("request");
+  try {
+    if (signature.uploadMethod === "PUT") {
+      return await uploadImagePut(file, signature, onProgress, signal);
+    }
 
-  if (signature.uploadMethod === "TUS") {
-    return uploadVideoTus(file, signature, onProgress, signal);
-  }
+    if (signature.uploadMethod === "TUS") {
+      return await uploadVideoTus(file, signature, onProgress, signal);
+    }
 
-  throw new Error(
-    `Unsupported upload method: ${(signature as UploadSignature).uploadMethod}`,
-  );
+    throw new Error(
+      `Unsupported upload method: ${(signature as UploadSignature).uploadMethod}`,
+    );
+  } finally {
+    endGlobalLoading(loadingId, "request");
+  }
 }
 
 /** Edge Storage single-shot PUT (fine for ≤50 MB images). */

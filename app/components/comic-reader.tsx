@@ -19,8 +19,8 @@ type ComicReaderProps = {
 };
 
 /**
- * One-page comic reader: first page fills the stage (scroll the image),
- * left/right arrows move between pages.
+ * One-page comic reader: the page starts contained, a second click switches
+ * to fill-width zoom, and left/right arrows move between pages.
  */
 export function ComicReader({
   assets,
@@ -113,8 +113,8 @@ export function ComicReader({
           total: count,
         })}
         className="h-full w-full"
-        initialMode="fill-width"
-        clickTogglesZoom={false}
+        initialMode="contain"
+        clickTogglesZoom
       />
 
       {many ? (

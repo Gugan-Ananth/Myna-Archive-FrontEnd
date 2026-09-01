@@ -23,10 +23,16 @@ import { useI18n } from "../lib/i18n";
 import { slugify, toDisplayLabel } from "../lib/taxonomy";
 import type { TaxonomyCategoryDto, TaxonomyTagDto } from "../lib/types";
 import { EmptyBoard } from "./empty-board";
+import { ConfirmDialog } from "./confirm-dialog";
 import { StatusCallout } from "./status-callout";
 
 type TagsManagerProps = {
   initialCategories: TaxonomyCategoryDto[];
+};
+
+type ConfirmationRequest = {
+  message: string;
+  confirm: () => Promise<void>;
 };
 
 /**
@@ -43,6 +49,8 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
   const [addingCategory, setAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryTag, setNewCategoryTag] = useState("");
+  const [confirmation, setConfirmation] =
+    useState<ConfirmationRequest | null>(null);
   const [addingTagFor, setAddingTagFor] = useState<string | null>(null);
   const [draftTag, setDraftTag] = useState("");
   const [editingCategorySlug, setEditingCategorySlug] = useState<string | null>(
@@ -153,18 +161,19 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
     });
   }
 
-  async function removeCategory(category: TaxonomyCategoryDto) {
-    const confirmed = window.confirm(
-      t("deleteCategoryConfirm", {
+  function removeCategory(category: TaxonomyCategoryDto) {
+    setConfirmation({
+      message: t("deleteCategoryConfirm", {
         name: category.label,
         count: category.tags.length,
       }),
-    );
-    if (!confirmed) return;
-    await run(async () => {
-      await deleteTaxonomyCategory(category.slug);
-      replaceCategory(category.slug, null);
-      setEditingCategorySlug(null);
+      confirm: async () => {
+        await run(async () => {
+          await deleteTaxonomyCategory(category.slug);
+          replaceCategory(category.slug, null);
+          setEditingCategorySlug(null);
+        });
+      },
     });
   }
 
@@ -217,24 +226,34 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
     });
   }
 
-  async function removeTag(categorySlug: string, tag: TaxonomyTagDto) {
-    const confirmed = window.confirm(
-      t("deleteTagConfirm", { name: tag.label, count: tag.count }),
-    );
-    if (!confirmed) return;
-    await run(async () => {
-      await deleteTaxonomyTag(categorySlug, tag.slug);
-      setCategories((prev) =>
-        prev.map((category) =>
-          category.slug === categorySlug
-            ? {
-                ...category,
-                tags: category.tags.filter((entry) => entry.slug !== tag.slug),
-              }
-            : category,
-        ),
-      );
+  function removeTag(categorySlug: string, tag: TaxonomyTagDto) {
+    setConfirmation({
+      message: t("deleteTagConfirm", { name: tag.label, count: tag.count }),
+      confirm: async () => {
+        await run(async () => {
+          await deleteTaxonomyTag(categorySlug, tag.slug);
+          setCategories((prev) =>
+            prev.map((category) =>
+              category.slug === categorySlug
+                ? {
+                    ...category,
+                    tags: category.tags.filter(
+                      (entry) => entry.slug !== tag.slug,
+                    ),
+                  }
+                : category,
+            ),
+          );
+        });
+      },
     });
+  }
+
+  async function confirmPending() {
+    if (!confirmation || busy) return;
+    const request = confirmation;
+    setConfirmation(null);
+    await request.confirm();
   }
 
   function closestDropId(
@@ -965,6 +984,14 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
           })}
         </ul>
       )}
+      <ConfirmDialog
+        open={confirmation !== null}
+        message={confirmation?.message ?? ""}
+        confirmLabel={t("delete")}
+        busy={busy}
+        onCancel={() => setConfirmation(null)}
+        onConfirm={() => void confirmPending()}
+      />
     </main>
   );
 }

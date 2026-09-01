@@ -68,6 +68,7 @@ export function TagChipBar({
           listTaxonomy(),
           listTagSummaries({
             mediaType: section.mediaType,
+            section: section.section,
             imageGroup: section.imageGroup,
           }),
         ]);
@@ -81,7 +82,7 @@ export function TagChipBar({
     return () => {
       cancelled = true;
     };
-  }, [section.imageGroup, section.mediaType, view]);
+  }, [section.imageGroup, section.mediaType, section.section, view]);
 
   const scopedFetch = fetched?.view === view ? fetched : null;
   const apiTaxonomy = scopedFetch?.taxonomy ?? initialTaxonomy;

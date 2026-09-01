@@ -1,6 +1,7 @@
 import type {
   ArchiveItem,
   MediaAsset,
+  ArchiveSection,
   MediaType,
   OriginalCharacter,
   TagSummary,
@@ -11,6 +12,7 @@ import type {
 export type {
   ArchiveItem,
   MediaAsset,
+  ArchiveSection,
   MediaType,
   OriginalCharacter,
   TagSummary,
@@ -56,6 +58,8 @@ export type ListArchiveItemsParams = {
   q?: string;
   tag?: string[];
   mediaType?: MediaType;
+  section?: ArchiveSection;
+  starred?: boolean;
   /** true = image groups; false = single images. Omit for all of `mediaType`. */
   imageGroup?: boolean;
   /** When true with mediaType=story, only series roots (not later chapters). */
@@ -66,6 +70,7 @@ export type ListArchiveItemsParams = {
 
 export type ListTagSummariesParams = {
   mediaType?: MediaType;
+  section?: ArchiveSection;
   imageGroup?: boolean;
 };
 
@@ -81,6 +86,7 @@ export type PaginatedOriginalCharacters = {
 
 export type ListOriginalCharactersParams = {
   q?: string;
+  starred?: boolean;
   page?: number;
   pageSize?: number;
 };
@@ -100,6 +106,7 @@ export type CreateOriginalCharacterInput = {
 };
 
 export type UpdateOriginalCharacterInput = {
+  starred?: boolean;
   name?: string;
   age?: string;
   likes?: string;
@@ -124,12 +131,15 @@ export type CreateMediaAssetInput = {
 
 export type CreateArchiveItemInput = {
   mediaType: MediaType;
+  section?: ArchiveSection;
   name: string;
   tags: string[];
   rating: number;
   description?: string;
   /** Written story HTML. Inline images bind to `assets` in document order. */
   bodyHtml?: string;
+  /** Optional author name for written stories. */
+  author?: string;
   /** Optional short story blurb for homepage cards. */
   summary?: string;
   seriesId?: string;
@@ -148,9 +158,11 @@ export type CreateArchiveItemInput = {
 };
 
 export type UpdateArchiveItemInput = {
+  starred?: boolean;
   name?: string;
   description?: string;
   bodyHtml?: string;
+  author?: string;
   summary?: string;
   /** Replace story cover + body images (cover is the extra leading asset). */
   assets?: CreateMediaAssetInput[];

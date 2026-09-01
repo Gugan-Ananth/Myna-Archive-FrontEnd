@@ -16,6 +16,7 @@ import type {
   TagSummary,
   TaxonomyCategoryDto,
 } from "./lib/types";
+import { loadTopTen, type TopTenData } from "./lib/top-ten";
 
 type HomeProps = {
   searchParams: Promise<{
@@ -32,7 +33,6 @@ export default async function Home({ searchParams }: HomeProps) {
   const query = typeof params.q === "string" ? params.q : "";
   const tags = normalizeTags(params.tag);
   const view = parseCollectionView(params.view);
-  const section = listParamsForView(view);
   const auth = await sessionAuth();
 
   let items: Awaited<ReturnType<typeof listArchiveItems>>["data"] = [];
@@ -41,11 +41,14 @@ export default async function Home({ searchParams }: HomeProps) {
   let total = 0;
   let ocs: OriginalCharacter[] = [];
   let ocsTotal = 0;
+  let topTen: TopTenData | undefined;
   let loadError: string | null = null;
   let usedFallbackError = false;
 
   try {
-    if (view === "oc") {
+    if (view === "top-10") {
+      topTen = await loadTopTen(query, auth);
+    } else if (view === "oc") {
       const listResult = await listOriginalCharacters(
         {
           q: query || undefined,
@@ -57,6 +60,7 @@ export default async function Home({ searchParams }: HomeProps) {
       ocs = listResult.data;
       ocsTotal = listResult.meta.total;
     } else {
+      const section = listParamsForView(view);
       // Parallel SSR: list + flat tags + taxonomy tree, scoped to the section.
       const [listResult, tagsResult, taxonomyResult] = await Promise.all([
         listArchiveItems(
@@ -72,6 +76,7 @@ export default async function Home({ searchParams }: HomeProps) {
         listTagSummaries(
           {
             mediaType: section.mediaType,
+            section: section.section,
             imageGroup: section.imageGroup,
           },
           auth,
@@ -111,6 +116,7 @@ export default async function Home({ searchParams }: HomeProps) {
       usedFallbackError={usedFallbackError}
       ocs={ocs}
       ocsTotal={ocsTotal}
+      topTen={topTen}
     />
   );
 }

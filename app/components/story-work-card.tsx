@@ -1,60 +1,61 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import bunnyImageLoader from "../lib/bunny-image-loader";
+import { updateArchiveItem } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { gridMediaSrc, STORY_COVER_TEMPLATE } from "../lib/media-display";
 import { storyCardBlurb } from "../lib/story-content";
 import type { ArchiveItem } from "../lib/types";
 import { warmArchiveItem } from "../lib/warm-preview";
+import { LoadingImage } from "./global-loading";
+import { StarButton } from "./star-button";
 
 type StoryWorkCardProps = {
   item: ArchiveItem;
+  priority?: boolean;
+  onStarChange?: (item: ArchiveItem) => void;
 };
 
 /**
  * Magazine-style story card: book-cover panel plus title, summary (or
  * opening lines), rating, and chapter count — not a plain image pin.
  */
-export function StoryWorkCard({ item }: StoryWorkCardProps) {
+export function StoryWorkCard({
+  item,
+  priority = false,
+  onStarChange,
+}: StoryWorkCardProps) {
   const { t } = useI18n();
   const cover = item.mediaUrl || item.thumbnailUrl;
   const hasCover = Boolean(cover);
   const src = hasCover ? gridMediaSrc(item) : STORY_COVER_TEMPLATE.src;
-  const width =
-    hasCover && item.width && item.width > 0
-      ? item.width
-      : STORY_COVER_TEMPLATE.width;
-  const height =
-    hasCover && item.height && item.height > 0
-      ? item.height
-      : STORY_COVER_TEMPLATE.height;
   const chapters = item.chapterCount ?? 1;
   const rating = Number.isFinite(item.rating) ? item.rating.toFixed(1) : null;
   const blurb = storyCardBlurb(item);
+  const author = item.author?.trim();
 
   return (
-    <Link
-      href={`/item/${item.id}`}
-      prefetch
-      onPointerEnter={() => warmArchiveItem(item)}
-      onFocus={() => warmArchiveItem(item)}
-      onPointerDown={() => warmArchiveItem(item)}
-      className="group block h-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-    >
-      <article className="app-card flex h-full flex-row overflow-hidden rounded-2xl ring-1 ring-border transition-[box-shadow,transform] duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:ring-border-strong">
-        <div className="flex w-[8.5rem] shrink-0 items-center justify-center bg-surface-muted p-2.5 sm:w-[13rem] sm:p-4">
-          <Image
+    <div className="relative h-full">
+      <Link
+        href={`/item/${item.id}`}
+        prefetch
+        onPointerEnter={() => warmArchiveItem(item)}
+        onFocus={() => warmArchiveItem(item)}
+        onPointerDown={() => warmArchiveItem(item)}
+        className="group block h-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      >
+        <article className="app-card flex h-full flex-row overflow-hidden rounded-2xl ring-1 ring-border transition-[box-shadow,transform] duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:ring-border-strong">
+        <div className="relative min-h-[20rem] w-[8.5rem] shrink-0 overflow-hidden bg-surface-muted sm:min-h-[24rem] sm:w-[13rem]">
+          <LoadingImage
             src={src}
             alt=""
-            width={width}
-            height={height}
+            fill
+            trackLoading={priority}
             loader={hasCover ? bunnyImageLoader : undefined}
             unoptimized={!hasCover}
             sizes="(max-width: 640px) 136px, 208px"
-            style={{ width: "auto", height: "auto" }}
-            className="max-h-80 max-w-full object-contain"
+            className="object-cover"
           />
         </div>
         <div className="flex min-w-0 flex-1 flex-col px-4 py-5 sm:px-7 sm:py-7">
@@ -69,6 +70,12 @@ export function StoryWorkCard({ item }: StoryWorkCardProps) {
               {blurb}
             </p>
           ) : null}
+          {author ? (
+            <p className="mt-3 text-sm text-foreground-muted">
+              {t("storyWrittenByLabel")}{" "}
+              <strong className="font-semibold text-primary">{author}</strong>
+            </p>
+          ) : null}
           <p className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-4 text-sm text-foreground-muted">
             {rating ? (
               <span className="inline-flex items-center gap-1 font-semibold tabular-nums text-primary">
@@ -81,8 +88,17 @@ export function StoryWorkCard({ item }: StoryWorkCardProps) {
             ) : null}
           </p>
         </div>
-      </article>
-    </Link>
+        </article>
+      </Link>
+      <StarButton
+        starred={item.starred}
+        onToggle={async (starred) => {
+          const updated = await updateArchiveItem(item.id, { starred });
+          onStarChange?.(updated);
+        }}
+        className="absolute right-2 top-2 z-20"
+      />
+    </div>
   );
 }
 

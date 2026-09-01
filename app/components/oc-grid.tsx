@@ -4,6 +4,7 @@ import { useI18n } from "../lib/i18n";
 import type { OriginalCharacter } from "../lib/types";
 import { EmptyBoard } from "./empty-board";
 import { OcCard } from "./oc-card";
+import { TopTenRank } from "./top-ten-rank";
 
 type OcGridProps = {
   items: OriginalCharacter[];
@@ -11,6 +12,8 @@ type OcGridProps = {
   emptyHint?: string | null;
   emptyHref?: string;
   priorityCount?: number;
+  showRank?: boolean;
+  onStarChange?: (oc: OriginalCharacter) => void;
 };
 
 export function OcGrid({
@@ -19,6 +22,8 @@ export function OcGrid({
   emptyHint,
   emptyHref,
   priorityCount = 6,
+  showRank = false,
+  onStarChange,
 }: OcGridProps) {
   const { t } = useI18n();
 
@@ -45,7 +50,14 @@ export function OcGrid({
     <ul className="grid list-none grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
       {items.map((oc, index) => (
         <li key={oc.id} className="min-w-0">
-          <OcCard oc={oc} priority={index < priorityCount} />
+          <div className="relative">
+            {showRank ? <TopTenRank rank={index + 1} /> : null}
+            <OcCard
+              oc={oc}
+              priority={index < priorityCount}
+              onStarChange={onStarChange}
+            />
+          </div>
         </li>
       ))}
     </ul>

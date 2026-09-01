@@ -16,6 +16,7 @@ import {
   filePickerForView,
   listParamsForView,
   parseCollectionView,
+  type ArchiveCollectionView,
   type CollectionView,
 } from "../lib/collection-view";
 import { useI18n } from "../lib/i18n";
@@ -27,6 +28,7 @@ import type {
   TagSummary,
   TaxonomyCategoryDto,
 } from "../lib/types";
+import { emptyTopTenData, type TopTenData } from "../lib/top-ten";
 import { ActiveTagsSummary } from "./active-tags-summary";
 import { ArchiveGrid } from "./archive-grid";
 import { HomeBackdrop } from "./home-backdrop";
@@ -34,6 +36,7 @@ import { HomeFiltersNotice } from "./home-filters-notice";
 import { OcHome } from "./oc-home";
 import { StatusCallout } from "./status-callout";
 import { StoryWorksList } from "./story-works-list";
+import { TopTenHome } from "./top-ten-home";
 
 const PAGE_SIZE = 40;
 
@@ -47,7 +50,7 @@ type ViewSnap = {
 };
 
 function sectionListParams(
-  view: CollectionView,
+  view: ArchiveCollectionView,
   query: string,
   tags: string[],
   page: number,
@@ -66,6 +69,7 @@ function emptyTitleKey(
   view: CollectionView,
 ):
   | "archiveEmptyPhotos"
+  | "archiveEmptyCuteThings"
   | "archiveEmptyCollections"
   | "archiveEmptyComics"
   | "archiveEmptyVideos"
@@ -73,6 +77,7 @@ function emptyTitleKey(
   if (view === "videos") return "archiveEmptyVideos";
   if (view === "comics") return "archiveEmptyComics";
   if (view === "stories") return "archiveEmptyStories";
+  if (view === "cute-things") return "archiveEmptyCuteThings";
   if (view === "collections") return "archiveEmptyCollections";
   return "archiveEmptyPhotos";
 }
@@ -81,6 +86,7 @@ function emptyHintKey(
   view: CollectionView,
 ):
   | "archiveEmptyPhotosHint"
+  | "archiveEmptyCuteThingsHint"
   | "archiveEmptyCollectionsHint"
   | "archiveEmptyComicsHint"
   | "archiveEmptyVideosHint"
@@ -88,6 +94,7 @@ function emptyHintKey(
   if (view === "videos") return "archiveEmptyVideosHint";
   if (view === "comics") return "archiveEmptyComicsHint";
   if (view === "stories") return "archiveEmptyStoriesHint";
+  if (view === "cute-things") return "archiveEmptyCuteThingsHint";
   if (view === "collections") return "archiveEmptyCollectionsHint";
   return "archiveEmptyPhotosHint";
 }
@@ -120,6 +127,7 @@ type HomeViewProps = {
   usedFallbackError: boolean;
   ocs?: OriginalCharacter[];
   ocsTotal?: number;
+  topTen?: TopTenData;
 };
 
 /**
@@ -144,6 +152,7 @@ export function HomeView({
   usedFallbackError,
   ocs = [],
   ocsTotal = 0,
+  topTen,
 }: HomeViewProps) {
   const { t } = useI18n();
   const router = useRouter();
@@ -190,7 +199,7 @@ export function HomeView({
   const matchesServer = filterKey === initialFilterKey;
   const snap = viewSnaps[liveView];
   const peeked =
-    snap?.filterKey === filterKey || liveView === "oc"
+    snap?.filterKey === filterKey || liveView === "oc" || liveView === "top-10"
       ? null
       : peekListCache(sectionListParams(liveView, liveQuery, liveTags, 1));
 
@@ -282,7 +291,7 @@ export function HomeView({
 
   // Seed browser cache from SSR so tag toggles / revisits skip network when fresh.
   useEffect(() => {
-    if (initialView === "oc") return;
+    if (initialView === "oc" || initialView === "top-10") return;
     seedListCache(
       sectionListParams(initialView, initialQuery, initialTags, 1),
       {
@@ -347,7 +356,7 @@ export function HomeView({
 
   // Re-fetch page 1 whenever live filters leave the SSR snapshot (cached when possible).
   useEffect(() => {
-    if (liveView === "oc") return;
+    if (liveView === "oc" || liveView === "top-10") return;
     if (filterKey === initialFilterKey) {
       requestIdRef.current += 1;
       return;
@@ -413,7 +422,7 @@ export function HomeView({
   }, [filterKey, initialFilterKey, liveQuery, liveTags, liveView]);
 
   const loadMore = useCallback(async () => {
-    if (liveView === "oc") return;
+    if (liveView === "oc" || liveView === "top-10") return;
     if (isLoadingMore || isFiltering || !hasMore) return;
 
     const nextPage = page + 1;
@@ -480,7 +489,7 @@ export function HomeView({
 
   // Prefetch page 2+ into the client cache while the first page is visible.
   useEffect(() => {
-    if (liveView === "oc") return;
+    if (liveView === "oc" || liveView === "top-10") return;
     if (!hasMore || isFiltering || loadError) return;
     const nextPage = page + 1;
     const timer = window.setTimeout(() => {
@@ -500,6 +509,23 @@ export function HomeView({
     : null;
 
   const hasFilters = Boolean(liveQuery) || liveTags.length > 0;
+
+  if (liveView === "top-10") {
+    return (
+      <TopTenHome
+        initialData={topTen ?? emptyTopTenData()}
+        initialQuery={initialQuery}
+        created={created}
+        initialLoadError={
+          initialView === "top-10" ? initialLoadError : null
+        }
+        usedFallbackError={
+          initialView === "top-10" ? usedFallbackError : false
+        }
+        seeded={initialView === "top-10"}
+      />
+    );
+  }
 
   if (liveView === "oc") {
     return (

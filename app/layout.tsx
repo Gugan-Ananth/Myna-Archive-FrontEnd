@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { AppMobileNav, AppNavRail } from "./components/app-nav-rail";
 import { ConditionalHeader } from "./components/conditional-header";
+import { GlobalLoadingProvider } from "./components/global-loading";
 import {
   DEFAULT_LOCALE,
   isLocale,
@@ -91,29 +92,37 @@ export default async function RootLayout({
       >
         <ThemeProvider initialTheme={theme}>
           <LanguageProvider initialLocale={locale}>
-            <div className="flex min-h-0 flex-1">
-              <Suspense
-                fallback={
-                  <aside className="app-nav-rail hidden h-dvh w-[4.5rem] shrink-0 border-r border-border md:block" />
-                }
-              >
-                <AppNavRail />
-              </Suspense>
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <GlobalLoadingProvider>
+              <div className="flex min-h-0 flex-1">
                 <Suspense
                   fallback={
-                    <header className="h-16 border-b border-transparent bg-transparent" />
+                    <>
+                      <div
+                        aria-hidden
+                        className="hidden h-dvh w-[72px] shrink-0 md:block"
+                      />
+                      <aside className="app-nav-rail fixed inset-y-0 left-0 z-40 hidden w-[72px] border-r border-border md:block" />
+                    </>
                   }
                 >
-                  <ConditionalHeader />
+                  <AppNavRail />
                 </Suspense>
-                {/* min-h-0 lets fullscreen item pages size the media stage correctly */}
-                <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                  <Suspense
+                    fallback={
+                      <header className="h-16 border-b border-transparent bg-transparent" />
+                    }
+                  >
+                    <ConditionalHeader />
+                  </Suspense>
+                  {/* min-h-0 lets fullscreen item pages size the media stage correctly */}
+                  <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+                </div>
               </div>
-            </div>
-            <Suspense fallback={null}>
-              <AppMobileNav />
-            </Suspense>
+              <Suspense fallback={null}>
+                <AppMobileNav />
+              </Suspense>
+            </GlobalLoadingProvider>
           </LanguageProvider>
         </ThemeProvider>
       </body>

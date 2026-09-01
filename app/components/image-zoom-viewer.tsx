@@ -8,6 +8,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { endGlobalLoading, startGlobalLoading } from "../lib/loading-events";
 import { useI18n } from "../lib/i18n";
 
 type Mode = "contain" | "fill-width";
@@ -122,6 +123,7 @@ export function ImageZoomViewer({
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const movedRef = useRef(false);
   const activeSrcRef = useRef(activeSrc);
+  const displayLoadingIdRef = useRef<string | null>(null);
 
   const isZoomed = mode !== "contain";
   const needsOriginal = extraScale > MIN_EXTRA;
@@ -130,16 +132,46 @@ export function ImageZoomViewer({
     activeSrcRef.current = activeSrc;
   }, [activeSrc]);
 
+  const finishDisplayLoading = useCallback(() => {
+    const id = displayLoadingIdRef.current;
+    if (!id) return;
+    displayLoadingIdRef.current = null;
+    endGlobalLoading(id, "image");
+  }, []);
+
+  // If there is no cached preview, track the image that is rendered directly
+  // in the isolated viewer instead of blocking the rest of the page.
+  useEffect(() => {
+    if (!activeSrc || loaded || previewSrc) return;
+    const id = startGlobalLoading("image");
+    displayLoadingIdRef.current = id;
+    const frame = window.requestAnimationFrame(() => {
+      if (imgRef.current?.complete) finishDisplayLoading();
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      finishDisplayLoading();
+    };
+  }, [activeSrc, finishDisplayLoading, loaded, previewSrc]);
+
   // Decode the viewport-sized file off-screen, then swap over the cached thumb.
   useEffect(() => {
     const opening = previewSrc || src;
     if (!src || src === opening) return;
 
     let cancelled = false;
+    const loadingId = startGlobalLoading("image");
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      endGlobalLoading(loadingId, "image");
+    };
     const img = new Image();
     img.decoding = "async";
     const reveal = () => {
       if (cancelled) return;
+      finish();
       setActiveSrc(src);
       setLoaded(true);
     };
@@ -151,6 +183,7 @@ export function ImageZoomViewer({
       }
     };
     img.onerror = () => {
+      finish();
       if (cancelled) return;
       if (!previewSrc) {
         setFailed(true);
@@ -160,6 +193,7 @@ export function ImageZoomViewer({
     img.src = src;
     return () => {
       cancelled = true;
+      finish();
     };
   }, [src, previewSrc]);
 
@@ -168,9 +202,17 @@ export function ImageZoomViewer({
     if (!needsOriginal || !originalSrc) return;
     if (originalSrc === activeSrcRef.current) return;
     let cancelled = false;
+    const loadingId = startGlobalLoading("image");
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      endGlobalLoading(loadingId, "image");
+    };
     const img = new Image();
     img.decoding = "async";
     const reveal = () => {
+      finish();
       if (!cancelled) setActiveSrc(originalSrc);
     };
     img.onload = () => {
@@ -180,9 +222,11 @@ export function ImageZoomViewer({
         reveal();
       }
     };
+    img.onerror = finish;
     img.src = originalSrc;
     return () => {
       cancelled = true;
+      finish();
     };
   }, [needsOriginal, originalSrc]);
 

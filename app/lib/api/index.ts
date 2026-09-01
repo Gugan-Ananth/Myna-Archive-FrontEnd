@@ -1,4 +1,5 @@
 export { ApiError } from "./errors";
+export type { FetchCacheOptions } from "./client";
 export { getApiBaseUrl, getApiV1Url } from "./config";
 export {
   createArchiveItem,
@@ -40,6 +41,7 @@ export {
 } from "./original-characters";
 export { createUploadSignature } from "./media";
 export type {
+  ArchiveSection,
   ArchiveItem,
   BunnyUploadResult,
   CreateArchiveItemInput,

@@ -1,21 +1,25 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState, useSyncExternalStore } from "react";
+import { updateOriginalCharacter } from "../lib/api";
 import bunnyImageLoader from "../lib/bunny-image-loader";
 import {
   blurHashPlaceholderFallback,
   blurHashToDataURL,
 } from "../lib/display-metadata";
+import { useI18n } from "../lib/i18n";
 import { ocGridSrc } from "../lib/media-display";
 import type { OriginalCharacter } from "../lib/types";
 import { warmOriginalCharacter } from "../lib/warm-preview";
+import { LoadingImage } from "./global-loading";
+import { StarButton } from "./star-button";
 
 type OcCardProps = {
   oc: OriginalCharacter;
   /** First viewport cards: preload + high fetch priority. */
   priority?: boolean;
+  onStarChange?: (oc: OriginalCharacter) => void;
 };
 
 function useIsClient() {
@@ -37,7 +41,12 @@ function cardDims(oc: OriginalCharacter): { w: number; h: number } {
  * OC board card: portrait fills the frame using the stored aspect ratio
  * (same fill behavior as photo pins).
  */
-export function OcCard({ oc, priority = false }: OcCardProps) {
+export function OcCard({
+  oc,
+  priority = false,
+  onStarChange,
+}: OcCardProps) {
+  const { t } = useI18n();
   const src = ocGridSrc(oc);
   const dims = cardDims(oc);
   const isClient = useIsClient();
@@ -51,15 +60,16 @@ export function OcCard({ oc, priority = false }: OcCardProps) {
   }, [isClient, oc.blurHash]);
 
   return (
-    <Link
-      href={`/oc/${oc.id}`}
-      prefetch
-      onPointerEnter={() => warmOriginalCharacter(oc)}
-      onFocus={() => warmOriginalCharacter(oc)}
-      onPointerDown={() => warmOriginalCharacter(oc)}
-      className="group block h-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-    >
-      <article className="app-card flex h-full flex-col overflow-hidden rounded-2xl ring-1 ring-border transition-[box-shadow,transform] duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:ring-border-strong [content-visibility:auto] [contain-intrinsic-size:auto_320px]">
+    <div className="relative h-full">
+      <Link
+        href={`/oc/${oc.id}`}
+        prefetch
+        onPointerEnter={() => warmOriginalCharacter(oc)}
+        onFocus={() => warmOriginalCharacter(oc)}
+        onPointerDown={() => warmOriginalCharacter(oc)}
+        className="group block h-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      >
+        <article className="app-card flex h-full flex-col overflow-hidden rounded-2xl ring-1 ring-border transition-[box-shadow,transform] duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:ring-border-strong [content-visibility:auto] [contain-intrinsic-size:auto_320px]">
         <div
           className="relative w-full overflow-hidden bg-surface-muted"
           style={{ aspectRatio: `${dims.w} / ${dims.h}` }}
@@ -70,12 +80,13 @@ export function OcCard({ oc, priority = false }: OcCardProps) {
               aria-hidden
             />
           ) : null}
-          <Image
+          <LoadingImage
             src={src}
             alt=""
             fill
+            trackLoading={priority}
             loader={bunnyImageLoader}
-            sizes="(max-width: 640px) 50vw, (max-width: 1280px) 33vw, 25vw"
+            sizes="(max-width: 639px) 50vw, (max-width: 1279px) 33vw, 25vw"
             quality={72}
             preload={priority}
             fetchPriority={priority ? "high" : "auto"}
@@ -91,10 +102,26 @@ export function OcCard({ oc, priority = false }: OcCardProps) {
             {oc.name}
           </h2>
           {oc.age.trim() ? (
-            <p className="mt-1 text-sm text-foreground-muted">{oc.age}</p>
+            <p className="mt-1 text-xs text-foreground-muted">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-foreground-muted">
+                {t("ocAge")}:
+              </span>{" "}
+              <span className="text-base font-semibold text-primary">
+                {oc.age}
+              </span>
+            </p>
           ) : null}
         </div>
-      </article>
-    </Link>
+        </article>
+      </Link>
+      <StarButton
+        starred={oc.starred}
+        onToggle={async (starred) => {
+          const updated = await updateOriginalCharacter(oc.id, { starred });
+          onStarChange?.(updated);
+        }}
+        className="absolute right-2 top-2 z-20"
+      />
+    </div>
   );
 }

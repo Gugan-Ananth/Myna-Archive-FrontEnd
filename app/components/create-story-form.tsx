@@ -116,6 +116,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   const coverInputRef = useRef<HTMLInputElement>(null);
   const savedRange = useRef<Range | null>(null);
   const [title, setTitle] = useState(item?.name ?? "");
+  const [author, setAuthor] = useState(item?.author ?? "");
   const [summary, setSummary] = useState(item?.summary ?? "");
   const [tags, setTags] = useState<string[]>(item?.tags ?? []);
   const [rating, setRating] = useState(item?.rating ?? 5.0);
@@ -203,6 +204,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     const parent = seriesRoots.find((item) => item.id === id);
     if (!parent) return;
     setTitle(parent.name);
+    setAuthor(parent.author ?? "");
     setTags(parent.tags);
     if (Number.isFinite(parent.rating)) setRating(parent.rating);
     setChapterNumber((parent.chapterCount ?? 1) + 1);
@@ -551,6 +553,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
           tags,
           rating,
           bodyHtml,
+          author: author.trim(),
           summary: summary.trim(),
           assets,
         });
@@ -567,6 +570,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
           tags,
           rating,
           bodyHtml,
+          author: author.trim() || undefined,
           summary: summary.trim() || undefined,
           ...(linkMode === "chapter" && seriesId
             ? { seriesId, chapterNumber }
@@ -912,6 +916,23 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                 }}
                 placeholder={t("storyTitlePlaceholder")}
                 className="rounded-xl border border-border bg-background px-3 py-2 text-lg font-medium outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-sm font-medium uppercase tracking-wide text-foreground-muted">
+                {t("storyAuthor")}{" "}
+                <span className="normal-case text-foreground-subtle">
+                  {t("storyAuthorOptional")}
+                </span>
+              </span>
+              <input
+                id="story-author"
+                value={author}
+                disabled={saving}
+                maxLength={300}
+                onChange={(e) => setAuthor(e.target.value)}
+                placeholder={t("storyAuthorPlaceholder")}
+                className="rounded-xl border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
               />
             </label>
             <label className="flex flex-col gap-1">

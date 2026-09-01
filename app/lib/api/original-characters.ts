@@ -24,6 +24,7 @@ const OCS_TAG = "original-characters";
 function listCacheKey(params: ListOriginalCharactersParams): string {
   return buildQueryCacheKey("ocs", {
     q: params.q,
+    starred: params.starred,
     page: params.page ?? 1,
     pageSize: params.pageSize ?? 20,
   });
@@ -39,6 +40,7 @@ export async function listOriginalCharacters(
     apiFetch<PaginatedOriginalCharacters>("/original-characters", {
       query: {
         q: params.q,
+        starred: params.starred,
         page: params.page,
         pageSize: params.pageSize,
       },

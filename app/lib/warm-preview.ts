@@ -13,10 +13,17 @@ import { prefetchMediaUrl, prefetchVideoUrl } from "./prefetch-media";
 import { stashItemPreview, stashOcPreview } from "./preview-stash";
 import type { ArchiveItem, OriginalCharacter } from "./types";
 
-/** Stash list data + warm the display-size media the detail stage will use. */
-export function warmArchiveItem(item: ArchiveItem): void {
+/**
+ * Cache list data immediately; only warm detail media for an intentional
+ * interaction so moving across a grid cannot start many large downloads.
+ */
+export function warmArchiveItem(
+  item: ArchiveItem,
+  options: { prefetchMedia?: boolean } = {},
+): void {
   stashItemPreview(item);
   seedItemCache(item);
+  if (options.prefetchMedia === false) return;
   if (item.mediaType === "story") return;
   if (item.mediaType === "video") {
     if (item.thumbnailUrl) prefetchMediaUrl(item.thumbnailUrl);

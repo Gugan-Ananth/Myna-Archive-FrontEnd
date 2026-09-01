@@ -1,16 +1,22 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ApiError, deleteOriginalCharacter } from "../lib/api";
+import {
+  ApiError,
+  deleteOriginalCharacter,
+  updateOriginalCharacter,
+} from "../lib/api";
 import bunnyImageLoader from "../lib/bunny-image-loader";
 import { useI18n } from "../lib/i18n";
 import { originalMediaUrl } from "../lib/media-display";
 import type { OriginalCharacter } from "../lib/types";
 import { BackButton } from "./back-button";
+import { ConfirmDialog } from "./confirm-dialog";
+import { LoadingImage } from "./global-loading";
 import { StatusCallout } from "./status-callout";
+import { StarButton } from "./star-button";
 
 type OcDetailProps = {
   oc: OriginalCharacter;
@@ -20,6 +26,7 @@ export function OcDetail({ oc }: OcDetailProps) {
   const { t } = useI18n();
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const src = originalMediaUrl(oc.mediaUrl || oc.thumbnailUrl);
   const width = oc.width && oc.width > 0 ? oc.width : 800;
@@ -27,8 +34,12 @@ export function OcDetail({ oc }: OcDetailProps) {
 
   async function onDelete() {
     if (deleting) return;
-    const confirmed = window.confirm(t("deleteOcConfirm", { name: oc.name }));
-    if (!confirmed) return;
+    setDeleteConfirmOpen(true);
+  }
+
+  async function confirmDelete() {
+    if (deleting) return;
+    setDeleteConfirmOpen(false);
     setDeleting(true);
     setError(null);
     try {
@@ -54,14 +65,22 @@ export function OcDetail({ oc }: OcDetailProps) {
       </div>
       <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-4 py-16 sm:px-6 lg:flex-row lg:items-start lg:gap-10 lg:py-20">
         <div className="relative mx-auto w-full max-w-[14rem] overflow-hidden rounded-2xl bg-surface-muted ring-1 ring-border sm:max-w-sm lg:mx-0 lg:w-[18rem] lg:max-w-none lg:shrink-0">
-          <Image
+          <LoadingImage
             src={src}
             alt=""
             width={width}
             height={height}
+            trackLoading
             loader={bunnyImageLoader}
             sizes="320px"
             className="h-auto w-full object-contain"
+          />
+          <StarButton
+            starred={oc.starred}
+            onToggle={(starred) =>
+              updateOriginalCharacter(oc.id, { starred })
+            }
+            className="absolute right-3 top-3 z-10"
           />
         </div>
         <div className="app-card min-w-0 flex-1 rounded-2xl border border-border p-5 shadow-sm sm:p-6">
@@ -108,6 +127,14 @@ export function OcDetail({ oc }: OcDetailProps) {
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        message={t("deleteOcConfirm", { name: oc.name })}
+        confirmLabel={t("delete")}
+        busy={deleting}
+        onCancel={() => setDeleteConfirmOpen(false)}
+        onConfirm={() => void confirmDelete()}
+      />
     </div>
   );
 }

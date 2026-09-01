@@ -53,6 +53,7 @@ export function prefetchCollectionView(view: CollectionView): void {
 
   void listTagSummaries({
     mediaType: section.mediaType,
+    section: section.section,
     imageGroup: section.imageGroup,
   }).catch(() => {
     /* idle prefetch is best-effort */

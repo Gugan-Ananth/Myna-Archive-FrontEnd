@@ -20,6 +20,8 @@ import hairTouchImg from "../../public/stickers/domination_hair_touch.png";
 import bullyTrioImg from "../../public/stickers/2_bully_1_girl.png";
 import ropeSuggestionImg from "../../public/stickers/rope_suggestion_arms_on_shoulder.png";
 import puppetStringImg from "../../public/stickers/puppet_string.png";
+import boyTiedImg from "../../public/stickers/boy_tied.png";
+import tiedGirlChainImg from "../../public/stickers/tied_girl_chain.png";
 
 export type Sticker = {
   src: string;
@@ -49,6 +51,8 @@ export const STICKERS = {
   bullyTrio: sticker(bullyTrioImg),
   ropeSuggestion: sticker(ropeSuggestionImg),
   puppetString: sticker(puppetStringImg),
+  boyTied: sticker(boyTiedImg),
+  tiedGirlChain: sticker(tiedGirlChainImg),
 } as const satisfies Record<string, Sticker>;
 
 export type StickerId = keyof typeof STICKERS;
@@ -72,7 +76,9 @@ export const STATUS_STICKER: Record<StatusMood, Sticker> = {
 
 /** One image per home section — used as a faded page backdrop only. */
 export const HOME_BACKDROP: Record<CollectionView, Sticker> = {
+  "top-10": STICKERS.boyTied,
   photos: STICKERS.kaguyaRibbon,
+  "cute-things": STICKERS.tiedGirlChain,
   collections: STICKERS.puppetString,
   comics: STICKERS.chinGrip,
   videos: STICKERS.armsAboveTied,
