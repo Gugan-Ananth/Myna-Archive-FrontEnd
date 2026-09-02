@@ -31,7 +31,10 @@ export async function loginAction(
         Accept: "application/json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ username, password }),
+      // The deployed Nest API still names this single-account field `email`.
+      // The login UI exposes it as a username, so keep that API compatibility
+      // mapping here until the backend contract is renamed as well.
+      body: JSON.stringify({ email: username, password }),
       cache: "no-store",
     });
 
