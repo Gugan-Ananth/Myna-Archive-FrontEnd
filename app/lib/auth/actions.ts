@@ -17,9 +17,9 @@ export async function loginAction(
   _prev: LoginState,
   formData: FormData,
 ): Promise<LoginState> {
-  const email = String(formData.get("email") ?? "").trim();
+  const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "");
-  if (!email || !password) {
+  if (!username || !password) {
     return { error: "missing" };
   }
 
@@ -31,7 +31,7 @@ export async function loginAction(
         Accept: "application/json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ username, password }),
       cache: "no-store",
     });
 

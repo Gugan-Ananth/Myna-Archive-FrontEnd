@@ -47,13 +47,12 @@ export function LoginForm() {
 
           <form action={action} className="flex flex-col gap-4">
             <label className="flex flex-col gap-1.5 text-sm">
-              <span className="font-medium text-foreground">{t("email")}</span>
+              <span className="font-medium text-foreground">{t("username")}</span>
               <input
-                id="email"
-                name="email"
-                type="email"
+                id="username"
+                name="username"
+                type="text"
                 autoComplete="username"
-                inputMode="email"
                 required
                 autoFocus
                 disabled={pending}
