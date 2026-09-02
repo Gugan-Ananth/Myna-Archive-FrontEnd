@@ -31,12 +31,12 @@ const en = {
   signInTitle: "Sign in",
   signInEyebrow: "MYNA ARCHIVE",
   signInHint: "One account. This device stays signed in.",
-  email: "Email",
+  username: "Username",
   password: "Password",
   signInSubmit: "Sign in",
   signingIn: "Signing in…",
-  signInMissing: "Enter email and password.",
-  signInInvalid: "Invalid email or password.",
+  signInMissing: "Enter username and password.",
+  signInInvalid: "Invalid username or password.",
   signInUnavailable:
     "Could not reach the archive. Is the backend running?",
 
@@ -424,12 +424,12 @@ const es: Record<MessageKey, string> = {
   signInTitle: "Iniciar sesión",
   signInEyebrow: "MYNA ARCHIVE",
   signInHint: "Una sola cuenta. Este dispositivo permanece conectado.",
-  email: "Correo",
+  username: "Nombre de usuario",
   password: "Contraseña",
   signInSubmit: "Entrar",
   signingIn: "Entrando…",
-  signInMissing: "Introduce correo y contraseña.",
-  signInInvalid: "Correo o contraseña no válidos.",
+  signInMissing: "Introduce nombre de usuario y contraseña.",
+  signInInvalid: "Nombre de usuario o contraseña no válidos.",
   signInUnavailable:
     "No se pudo contactar el archivo. ¿Está el backend en marcha?",
 
@@ -814,12 +814,12 @@ const ca: Record<MessageKey, string> = {
   signInTitle: "Inicia la sessió",
   signInEyebrow: "MYNA ARCHIVE",
   signInHint: "Un sol compte. Aquest dispositiu resta connectat.",
-  email: "Correu",
+  username: "Nom d'usuari",
   password: "Contrasenya",
   signInSubmit: "Entra",
   signingIn: "S'està entrant…",
-  signInMissing: "Introdueix el correu i la contrasenya.",
-  signInInvalid: "Correu o contrasenya no vàlids.",
+  signInMissing: "Introdueix el nom d'usuari i la contrasenya.",
+  signInInvalid: "Nom d'usuari o contrasenya no vàlids.",
   signInUnavailable:
     "No s'ha pogut contactar l'arxiu. Està el backend en marxa?",
 

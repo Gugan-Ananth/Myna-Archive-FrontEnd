@@ -9,10 +9,8 @@ import {
   type ReactNode,
 } from "react";
 import {
-  endGlobalLoading,
   GLOBAL_LOADING_EVENT,
   getActiveGlobalLoadingIds,
-  startGlobalLoading,
   type GlobalLoadingDetail,
 } from "../lib/loading-events";
 
@@ -24,7 +22,7 @@ type GlobalLoadingProviderProps = {
   children: ReactNode;
 };
 
-/** Collects blocking request tasks so the page has one consistent loading surface. */
+/** Collects blocking mutation tasks so the page has one consistent loading surface. */
 export function GlobalLoadingProvider({
   children,
 }: GlobalLoadingProviderProps) {
@@ -157,19 +155,6 @@ export function GlobalLoadingOverlay({
       </div>
     </div>
   );
-}
-
-/**
- * Bridges Next's route fallback into the provider. Keeping the fallback
- * tracker headless means route loading and API loading share one overlay.
- */
-export function RouteLoadingTracker() {
-  useEffect(() => {
-    const id = startGlobalLoading("request");
-    return () => endGlobalLoading(id, "request");
-  }, []);
-
-  return null;
 }
 
 type LoadingImageProps = ImageProps;

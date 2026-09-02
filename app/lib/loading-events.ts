@@ -1,6 +1,6 @@
 export const GLOBAL_LOADING_EVENT = "myna:global-loading";
 
-/** Only blocking work belongs in the full-page loader; image decode is local. */
+/** Only user-triggered mutations belong in the full-page loader; reads and image decode are local. */
 export type GlobalLoadingKind = "request";
 export type GlobalLoadingPhase = "start" | "end";
 

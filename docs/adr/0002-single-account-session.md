@@ -16,7 +16,7 @@ The archive is a personal collection. There must be a gate so a random visitor c
 - Login is a Server Action that calls `POST /api/v1/auth/login` and stores the access token in an **httpOnly** `myna_session` cookie (SameSite=Lax, ~400-day max-age).
 - `proxy.ts` verifies the cookie HMAC on every navigation, refreshes max-age so the session stays alive, and redirects unknown devices to `/login`.
 - Browser API calls go to `/api/backend/*` (BFF) which copies the cookie into `Authorization: Bearer`. Server Components call Nest directly with the same header.
-- Email and password are **not** in the frontend. They live in backend env only.
+- Username and password are **not** in the frontend. They live in backend env only.
 
 ## Consequences
 

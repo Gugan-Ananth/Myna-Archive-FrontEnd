@@ -69,7 +69,11 @@ export async function apiFetch<T>(
     headers.Authorization = `Bearer ${accessToken}`;
   }
 
-  const loadingId = startGlobalLoading("request");
+  // Reads and route rendering should not block the whole page. Track only
+  // user-triggered mutations such as create, update, delete, and upload.
+  const loadingId = isMutationMethod(method)
+    ? startGlobalLoading("request")
+    : null;
 
   try {
     let response: Response;
@@ -116,6 +120,10 @@ export async function apiFetch<T>(
   } finally {
     endGlobalLoading(loadingId, "request");
   }
+}
+
+function isMutationMethod(method: string): boolean {
+  return ["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase());
 }
 
 async function bounceToLogin(): Promise<void> {
