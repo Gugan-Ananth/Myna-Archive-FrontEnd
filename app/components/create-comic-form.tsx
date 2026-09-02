@@ -40,6 +40,7 @@ import {
 import { CHOOSER_SCENE } from "../lib/stickers";
 import { BackButton } from "./back-button";
 import { CategoryTagPicker } from "./category-tag-picker";
+import { MediaLinkInput } from "./media-link-input";
 import { RatingInput } from "./rating-input";
 import { SceneFigure } from "./scene-figure";
 import { StatusCallout } from "./status-callout";
@@ -385,7 +386,6 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
       setPhase("done");
       abortRef.current = null;
       router.push("/?view=comics&created=1");
-      router.refresh();
     } catch (err) {
       if (isUploadAborted(err) || controller.signal.aborted) {
         setPhase("idle");
@@ -518,6 +518,12 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
               {t("comicUploadHint", { max: MAX_COMIC_ASSETS })}
             </span>
           </button>
+          <MediaLinkInput
+            mediaType="image"
+            onFile={(file) => addFiles([file])}
+            disabled={busy}
+            className="mt-4 max-w-xl"
+          />
           {error ? (
             <div className="mt-4 max-w-xl">
               <StatusCallout title={error} compact />
@@ -638,6 +644,12 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
               <p className="text-sm leading-snug text-foreground-subtle">
                 {t("comicCreateHint")}
               </p>
+
+              <MediaLinkInput
+                mediaType="image"
+                onFile={(file) => addFiles([file])}
+                disabled={busy || pending.length >= MAX_COMIC_ASSETS}
+              />
 
               <label className="flex flex-col gap-1">
                 <span className="text-sm font-medium uppercase tracking-wide text-foreground-muted">

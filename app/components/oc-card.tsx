@@ -84,7 +84,6 @@ export function OcCard({
             src={src}
             alt=""
             fill
-            trackLoading={priority}
             loader={bunnyImageLoader}
             sizes="(max-width: 639px) 50vw, (max-width: 1279px) 33vw, 25vw"
             quality={72}

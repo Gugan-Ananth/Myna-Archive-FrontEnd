@@ -59,7 +59,6 @@ export function StoryWorksList({
             {showRank ? <TopTenRank rank={index + 1} /> : null}
             <StoryWorkCard
               item={item}
-              priority={index < 2}
               onStarChange={onStarChange}
             />
           </div>

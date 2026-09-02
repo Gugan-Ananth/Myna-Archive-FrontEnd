@@ -46,6 +46,10 @@ export function originalMediaUrl(url: string): string {
 export const GRID_THUMB_WIDTH = 480;
 export const GRID_THUMB_QUALITY = 72;
 
+/** First-paint detail derivative. Keep this small enough to arrive quickly. */
+export const DETAIL_PREVIEW_WIDTH = 480;
+export const DETAIL_PREVIEW_QUALITY = 68;
+
 /** Viewport-sized derivative for the detail stage (not the original file). */
 export const DETAIL_DISPLAY_WIDTH = 1600;
 export const DETAIL_DISPLAY_QUALITY = 80;
@@ -53,7 +57,7 @@ export const DETAIL_DISPLAY_QUALITY = 80;
 /**
  * Homepage grid source — prefer CDN-optimized thumbnails (Pinterest-style).
  * Small edge-resized bytes beat full originals through any optimizer.
- * Detail first paint uses `displayMediaSrc`; zoom uses `detailMediaSrc`.
+ * Detail first paint uses `previewAssetSrc`; promotion uses `displayMediaSrc`.
  */
 export function gridMediaSrc(item: ArchiveItem): string {
   if (item.mediaType === "video") {
@@ -115,10 +119,15 @@ export const GRID_BLUR_DATA_URL =
  * Cached grid thumb for instant detail paint (blur-up under the display size).
  */
 export function previewAssetSrc(asset: MediaAsset): string {
-  if (asset.thumbnailUrl) return asset.thumbnailUrl;
+  if (asset.thumbnailUrl) {
+    return withBunnyResize(asset.thumbnailUrl, {
+      width: DETAIL_PREVIEW_WIDTH,
+      quality: DETAIL_PREVIEW_QUALITY,
+    });
+  }
   return withBunnyResize(originalMediaUrl(asset.mediaUrl), {
-    width: GRID_THUMB_WIDTH,
-    quality: GRID_THUMB_QUALITY,
+    width: DETAIL_PREVIEW_WIDTH,
+    quality: DETAIL_PREVIEW_QUALITY,
   });
 }
 
@@ -126,18 +135,23 @@ export function previewMediaSrc(item: ArchiveItem): string {
   if (item.mediaType === "video") {
     return item.thumbnailUrl || item.mediaUrl;
   }
-  if (item.thumbnailUrl) return item.thumbnailUrl;
+  if (item.thumbnailUrl) {
+    return withBunnyResize(item.thumbnailUrl, {
+      width: DETAIL_PREVIEW_WIDTH,
+      quality: DETAIL_PREVIEW_QUALITY,
+    });
+  }
   const cover = itemMediaAssets(item)[0];
   if (cover) return previewAssetSrc(cover);
   return withBunnyResize(originalMediaUrl(item.mediaUrl), {
-    width: GRID_THUMB_WIDTH,
-    quality: GRID_THUMB_QUALITY,
+    width: DETAIL_PREVIEW_WIDTH,
+    quality: DETAIL_PREVIEW_QUALITY,
   });
 }
 
 /**
- * Detail first paint: viewport-sized WebP from Bunny Optimizer.
- * Originals (up to 50 MB) wait until the user zooms.
+ * Detail display ladder: a 480px preview paints first, then a viewport-sized
+ * WebP replaces it. Originals (up to 50 MB) wait until the user zooms.
  */
 export function displayAssetSrc(asset: MediaAsset): string {
   return withBunnyResize(originalMediaUrl(asset.mediaUrl), {

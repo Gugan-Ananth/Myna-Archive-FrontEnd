@@ -8,17 +8,16 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { endGlobalLoading, startGlobalLoading } from "../lib/loading-events";
 import { useI18n } from "../lib/i18n";
 
 type Mode = "contain" | "fill-width";
 
 type ImageZoomViewerProps = {
-  /** Viewport-sized Bunny derivative for first paint. */
+  /** Viewport-sized Bunny derivative, loaded after the low-res preview. */
   src: string;
-  /** Grid thumb already in the browser cache — shown until `src` decodes. */
+  /** 480px Bunny derivative shown immediately while `src` decodes. */
   previewSrc?: string;
-  /** Original upload; fetched only after the user zooms past 1×. */
+  /** Original upload; fetched only after the user zooms beyond the display size. */
   originalSrc?: string;
   alt: string;
   className?: string;
@@ -91,6 +90,7 @@ export function ImageZoomViewer({
   const { t } = useI18n();
   const [activeSrc, setActiveSrc] = useState(previewSrc || src);
   const [loaded, setLoaded] = useState(() => Boolean(previewSrc));
+  const [previewReady, setPreviewReady] = useState(() => !previewSrc);
   const [failed, setFailed] = useState(false);
   const [mode, setMode] = useState<Mode>(initialMode);
   const [extraScale, setExtraScale] = useState(MIN_EXTRA);
@@ -123,7 +123,6 @@ export function ImageZoomViewer({
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const movedRef = useRef(false);
   const activeSrcRef = useRef(activeSrc);
-  const displayLoadingIdRef = useRef<string | null>(null);
 
   const isZoomed = mode !== "contain";
   const needsOriginal = extraScale > MIN_EXTRA;
@@ -132,87 +131,69 @@ export function ImageZoomViewer({
     activeSrcRef.current = activeSrc;
   }, [activeSrc]);
 
-  const finishDisplayLoading = useCallback(() => {
-    const id = displayLoadingIdRef.current;
-    if (!id) return;
-    displayLoadingIdRef.current = null;
-    endGlobalLoading(id, "image");
-  }, []);
-
-  // If there is no cached preview, track the image that is rendered directly
-  // in the isolated viewer instead of blocking the rest of the page.
+  // A cached image can finish before React receives its load event. Check the
+  // DOM once after mount so the display promotion still starts in that case.
   useEffect(() => {
-    if (!activeSrc || loaded || previewSrc) return;
-    const id = startGlobalLoading("image");
-    displayLoadingIdRef.current = id;
+    if (!previewSrc) return;
     const frame = window.requestAnimationFrame(() => {
-      if (imgRef.current?.complete) finishDisplayLoading();
+      if (imgRef.current?.complete) setPreviewReady(true);
     });
-    return () => {
-      window.cancelAnimationFrame(frame);
-      finishDisplayLoading();
-    };
-  }, [activeSrc, finishDisplayLoading, loaded, previewSrc]);
+    return () => window.cancelAnimationFrame(frame);
+  }, [previewSrc]);
 
   // Decode the viewport-sized file off-screen, then swap over the cached thumb.
+  // This is intentionally not registered with the global loading overlay: the
+  // low-res image is already usable while this background promotion runs.
   useEffect(() => {
     const opening = previewSrc || src;
-    if (!src || src === opening) return;
+    if (!src || src === opening || !previewReady) return;
 
     let cancelled = false;
-    const loadingId = startGlobalLoading("image");
-    let finished = false;
-    const finish = () => {
-      if (finished) return;
-      finished = true;
-      endGlobalLoading(loadingId, "image");
-    };
-    const img = new Image();
-    img.decoding = "async";
-    const reveal = () => {
+    let timer: number | null = null;
+    const loadDisplay = () => {
       if (cancelled) return;
-      finish();
-      setActiveSrc(src);
-      setLoaded(true);
-    };
-    img.onload = () => {
-      if (typeof img.decode === "function") {
-        void img.decode().then(reveal).catch(reveal);
-      } else {
-        reveal();
-      }
-    };
-    img.onerror = () => {
-      finish();
-      if (cancelled) return;
-      if (!previewSrc) {
-        setFailed(true);
+      const img = new Image();
+      img.decoding = "async";
+      img.fetchPriority = "low";
+      const reveal = () => {
+        if (cancelled || activeSrcRef.current === originalSrc) return;
+        setActiveSrc(src);
         setLoaded(true);
-      }
+      };
+      img.onload = () => {
+        if (typeof img.decode === "function") {
+          void img.decode().then(reveal).catch(reveal);
+        } else {
+          reveal();
+        }
+      };
+      img.onerror = () => {
+        // Keep the already-visible preview when the optimized derivative is
+        // unavailable. A later interaction can still retry via the browser.
+      };
+      img.src = src;
     };
-    img.src = src;
+
+    // Give the browser one paint for the 480px image before competing for
+    // bandwidth with the larger derivative.
+    timer = window.setTimeout(loadDisplay, 120);
     return () => {
       cancelled = true;
-      finish();
+      if (timer !== null) window.clearTimeout(timer);
     };
-  }, [src, previewSrc]);
+  }, [originalSrc, previewReady, previewSrc, src]);
 
-  // Original bytes only when the user actually zooms (not fill-width layout).
+  // Original bytes only when the user actually zooms beyond the display size.
+  // This is also a background promotion and must not block interaction with
+  // the already-rendered display derivative.
   useEffect(() => {
     if (!needsOriginal || !originalSrc) return;
     if (originalSrc === activeSrcRef.current) return;
     let cancelled = false;
-    const loadingId = startGlobalLoading("image");
-    let finished = false;
-    const finish = () => {
-      if (finished) return;
-      finished = true;
-      endGlobalLoading(loadingId, "image");
-    };
     const img = new Image();
     img.decoding = "async";
+    img.fetchPriority = "low";
     const reveal = () => {
-      finish();
       if (!cancelled) setActiveSrc(originalSrc);
     };
     img.onload = () => {
@@ -222,11 +203,12 @@ export function ImageZoomViewer({
         reveal();
       }
     };
-    img.onerror = finish;
+    img.onerror = () => {
+      // Keep the display derivative if the original is unavailable.
+    };
     img.src = originalSrc;
     return () => {
       cancelled = true;
-      finish();
     };
   }, [needsOriginal, originalSrc]);
 
@@ -602,10 +584,29 @@ export function ImageZoomViewer({
             const el = event.currentTarget;
             setNatural({ w: el.naturalWidth, h: el.naturalHeight });
             setLoaded(true);
+            if (previewSrc && activeSrc === previewSrc) {
+              setPreviewReady(true);
+            }
           }}
           onError={() => {
+            if (previewSrc && activeSrc === previewSrc && src !== previewSrc) {
+              // The 480px derivative failed; let the display derivative take
+              // over as the fallback rather than showing a broken image.
+              setPreviewReady(true);
+              setActiveSrc(src);
+              setLoaded(false);
+              return;
+            }
+            if (originalSrc && activeSrc === originalSrc && src !== originalSrc) {
+              // The original is optional; retain the decoded display-sized
+              // image if it is unavailable.
+              setActiveSrc(src);
+              setLoaded(true);
+              return;
+            }
             if (previewSrc && activeSrc !== previewSrc) {
               setActiveSrc(previewSrc);
+              setLoaded(true);
               return;
             }
             setFailed(true);

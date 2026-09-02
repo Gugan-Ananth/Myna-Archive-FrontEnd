@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "../lib/i18n";
 import { StatusMascot } from "./status-mascot";
 
@@ -31,10 +31,26 @@ export function HomeFiltersNotice({
   const { t } = useI18n();
   const [toastVisible, setToastVisible] = useState(created);
   const [toastExiting, setToastExiting] = useState(false);
+  const toastStartedRef = useRef(false);
   const toastMs = createdVideo ? TOAST_VIDEO_MS : TOAST_MS;
 
+  const dismissCreatedParam = useCallback(() => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("created");
+    next.delete("video");
+    const qs = next.toString();
+    router.replace(qs ? `/?${qs}` : "/", { scroll: false });
+  }, [router, searchParams]);
+
   useEffect(() => {
-    if (!created) return;
+    if (!created) {
+      toastStartedRef.current = false;
+      return;
+    }
+    // A refresh or another parent render can change hook identities while the
+    // created flag remains true. Do not restart the same success toast.
+    if (toastStartedRef.current) return;
+    toastStartedRef.current = true;
 
     const frame = window.requestAnimationFrame(() => {
       setToastVisible(true);
@@ -52,15 +68,7 @@ export function HomeFiltersNotice({
       clearTimeout(exitTimer);
       clearTimeout(clearTimer);
     };
-  }, [created, createdVideo, router, toastMs]);
-
-  function dismissCreatedParam() {
-    const next = new URLSearchParams(searchParams.toString());
-    next.delete("created");
-    next.delete("video");
-    const qs = next.toString();
-    router.replace(qs ? `/?${qs}` : "/", { scroll: false });
-  }
+  }, [created, createdVideo, dismissCreatedParam, toastMs]);
 
   function dismissToast() {
     setToastExiting(true);

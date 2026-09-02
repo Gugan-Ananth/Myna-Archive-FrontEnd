@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { listTaxonomy } from "../lib/api";
+import { replaceUrlWithoutRefresh } from "../lib/client-navigation";
 import { useI18n } from "../lib/i18n";
 import {
   buildTaxonomyFromApi,
@@ -102,7 +103,7 @@ export function ActiveTagsSummary({
     const qs = next.toString();
     const href = qs ? `/?${qs}` : "/";
     if (pathname === "/") {
-      router.replace(href, { scroll: false });
+      replaceUrlWithoutRefresh(href);
     } else {
       router.push(href);
     }
@@ -114,7 +115,7 @@ export function ActiveTagsSummary({
     const qs = next.toString();
     const href = qs ? `/?${qs}` : "/";
     if (pathname === "/") {
-      router.replace(href, { scroll: false });
+      replaceUrlWithoutRefresh(href);
     } else {
       router.push(href);
     }

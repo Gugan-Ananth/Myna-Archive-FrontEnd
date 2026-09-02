@@ -10,6 +10,7 @@ import {
 import { prefetchMediaUrl } from "../lib/prefetch-media";
 import type { MediaAsset } from "../lib/types";
 import { ImageZoomViewer } from "./image-zoom-viewer";
+import { MediaFilmstrip } from "./media-filmstrip";
 
 type ComicReaderProps = {
   assets: MediaAsset[];
@@ -151,6 +152,21 @@ export function ComicReader({
               </span>
             </span>
           </button>
+
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 bg-gradient-to-t from-black/55 via-black/25 to-transparent px-3 pb-3 pt-14 sm:px-4 sm:pb-4">
+            <p className="text-lg font-bold tabular-nums tracking-wide text-white sm:text-xl">
+              {t("imagePosition", { n: safeIndex + 1, total: count })}
+            </p>
+            <MediaFilmstrip
+              assets={assets}
+              activeIndex={safeIndex}
+              onSelect={goTo}
+              ariaLabel={t("comic")}
+              itemLabel={(pageIndex) =>
+                t("goToImage", { n: pageIndex + 1 })
+              }
+            />
+          </div>
         </>
       ) : null}
     </div>

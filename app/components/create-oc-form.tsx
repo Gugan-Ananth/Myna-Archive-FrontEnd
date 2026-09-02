@@ -29,6 +29,7 @@ import { originalMediaUrl } from "../lib/media-display";
 import { CHOOSER_SCENE } from "../lib/stickers";
 import type { OriginalCharacter } from "../lib/types";
 import { BackButton } from "./back-button";
+import { MediaLinkInput } from "./media-link-input";
 import { SceneFigure } from "./scene-figure";
 import { StatusCallout } from "./status-callout";
 
@@ -319,6 +320,13 @@ export function CreateOcForm({ oc }: CreateOcFormProps) {
               </>
             )}
           </button>
+          <MediaLinkInput
+            mediaType="image"
+            label={`${t("uploadFromLink")} · ${t("ocPortrait")}`}
+            onFile={addPortrait}
+            disabled={saving}
+            className="mt-3"
+          />
           {preview ? (
             <button
               type="button"

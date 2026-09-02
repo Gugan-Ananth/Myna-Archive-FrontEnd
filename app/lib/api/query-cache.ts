@@ -22,6 +22,7 @@ type Entry<T> = {
 };
 
 const store = new Map<string, Entry<unknown>>();
+const inFlight = new Map<string, Promise<unknown>>();
 
 const DEFAULT_TTL_MS = 45_000;
 const DEFAULT_STALE_MS = 5 * 60_000;
@@ -82,6 +83,7 @@ export function setQueryCache<T>(
 export function invalidateQueryCache(prefixOrKey?: string): void {
   if (!prefixOrKey) {
     store.clear();
+    inFlight.clear();
     return;
   }
   if (store.has(prefixOrKey)) {
@@ -90,10 +92,39 @@ export function invalidateQueryCache(prefixOrKey?: string): void {
   for (const key of store.keys()) {
     if (key.startsWith(prefixOrKey)) store.delete(key);
   }
+  for (const key of inFlight.keys()) {
+    if (key === prefixOrKey || key.startsWith(prefixOrKey)) {
+      inFlight.delete(key);
+    }
+  }
 }
 
 export function isBrowser(): boolean {
   return typeof window !== "undefined";
+}
+
+function refreshQuery<T>(
+  key: string,
+  fetcher: () => Promise<T>,
+  options: QueryCacheOptions,
+): Promise<T> {
+  const pending = inFlight.get(key);
+  if (pending) return pending as Promise<T>;
+
+  const request = fetcher()
+    .then((data) => {
+      // A mutation may have invalidated this request while it was in flight.
+      // Only the current request for a key may repopulate the cache.
+      if (inFlight.get(key) === request) {
+        setQueryCache(key, data, options);
+      }
+      return data;
+    })
+    .finally(() => {
+      if (inFlight.get(key) === request) inFlight.delete(key);
+    });
+  inFlight.set(key, request);
+  return request;
 }
 
 /**
@@ -121,16 +152,12 @@ export async function cachedQuery<T>(
 
   if (hit?.stale) {
     if (options.revalidateInBackground !== false) {
-      void fetcher()
-        .then((data) => setQueryCache(key, data, options))
-        .catch(() => {
-          /* keep stale */
-        });
+      void refreshQuery(key, fetcher, options).catch(() => {
+        /* keep stale */
+      });
     }
     return hit.data;
   }
 
-  const data = await fetcher();
-  setQueryCache(key, data, options);
-  return data;
+  return refreshQuery(key, fetcher, options);
 }

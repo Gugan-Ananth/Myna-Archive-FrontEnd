@@ -43,6 +43,7 @@ import {
 import { CHOOSER_SCENE } from "../lib/stickers";
 import { BackButton } from "./back-button";
 import { CategoryTagPicker } from "./category-tag-picker";
+import { MediaLinkInput } from "./media-link-input";
 import { RatingInput } from "./rating-input";
 import { SceneFigure } from "./scene-figure";
 import { StatusCallout } from "./status-callout";
@@ -387,9 +388,8 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     return true;
   }
 
-  function onInsertImage(files: FileList | null) {
-    const file = files?.[0];
-    if (!file || !validateImageFile(file)) return;
+  function insertImageFile(file: File) {
+    if (!validateImageFile(file)) return;
     const reader = new FileReader();
     reader.onload = () => {
       const src = typeof reader.result === "string" ? reader.result : "";
@@ -407,9 +407,13 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     reader.readAsDataURL(file);
   }
 
-  function onPickCover(files: FileList | null) {
+  function onInsertImage(files: FileList | null) {
     const file = files?.[0];
-    if (!file || !validateImageFile(file)) return;
+    if (file) insertImageFile(file);
+  }
+
+  function pickCoverFile(file: File) {
+    if (!validateImageFile(file)) return;
     setCover((prev) => {
       if (prev.kind === "file") URL.revokeObjectURL(prev.previewUrl);
       return {
@@ -418,6 +422,11 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
         previewUrl: URL.createObjectURL(file),
       };
     });
+  }
+
+  function onPickCover(files: FileList | null) {
+    const file = files?.[0];
+    if (file) pickCoverFile(file);
   }
 
   function clearCover() {
@@ -712,6 +721,17 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
         </button>
       </header>
 
+      <div className="border-b border-border/60 px-3 py-2 sm:px-4">
+        <MediaLinkInput
+          mediaType="image"
+          label={`${t("uploadFromLink")} · ${t("image")}`}
+          onFile={insertImageFile}
+          onBeforeFetch={rememberSelection}
+          disabled={saving}
+          className="mx-auto max-w-2xl"
+        />
+      </div>
+
       <input
         ref={imageInputRef}
         type="file"
@@ -822,6 +842,13 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                   </div>
                 </div>
               )}
+              <MediaLinkInput
+                mediaType="image"
+                label={`${t("uploadFromLink")} · ${t("storyCover")}`}
+                onFile={pickCoverFile}
+                disabled={saving}
+                className="mt-2"
+              />
             </div>
             {!isEditing ? (
             <fieldset className="space-y-1.5">
