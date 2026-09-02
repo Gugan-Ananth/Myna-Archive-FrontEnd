@@ -1,6 +1,7 @@
 export const GLOBAL_LOADING_EVENT = "myna:global-loading";
 
-export type GlobalLoadingKind = "request" | "image";
+/** Only blocking work belongs in the full-page loader; image decode is local. */
+export type GlobalLoadingKind = "request";
 export type GlobalLoadingPhase = "start" | "end";
 
 export type GlobalLoadingDetail = {
@@ -10,12 +11,14 @@ export type GlobalLoadingDetail = {
 };
 
 let sequence = 0;
+const activeLoadingIds = new Set<string>();
 
 /** Start a browser-only task tracked by the global loading overlay. */
 export function startGlobalLoading(kind: GlobalLoadingKind): string | null {
   if (typeof window === "undefined") return null;
 
   const id = `${kind}:${++sequence}`;
+  activeLoadingIds.add(id);
   dispatch({ id, kind, phase: "start" });
   return id;
 }
@@ -26,7 +29,17 @@ export function endGlobalLoading(
   kind: GlobalLoadingKind,
 ): void {
   if (!id || typeof window === "undefined") return;
+  if (!activeLoadingIds.delete(id)) return;
   dispatch({ id, kind, phase: "end" });
+}
+
+/**
+ * Read active tasks when the provider mounts. Effects in descendants can run
+ * before the provider's listener is attached, so the event alone is not a
+ * reliable source of truth during hydration or React Strict Mode.
+ */
+export function getActiveGlobalLoadingIds(): string[] {
+  return [...activeLoadingIds];
 }
 
 function dispatch(detail: GlobalLoadingDetail): void {

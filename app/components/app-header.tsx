@@ -4,8 +4,10 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { parseCollectionView } from "../lib/collection-view";
+import { replaceUrlWithoutRefresh } from "../lib/client-navigation";
 import { useI18n } from "../lib/i18n";
 import { AddMediaTrigger } from "./add-media-trigger";
+import { CopyFromLinkTrigger } from "./copy-from-link-trigger";
 import { SearchBar } from "./search-bar";
 import { TagChipBar } from "./tag-chip-bar";
 
@@ -49,9 +51,8 @@ export function AppHeader() {
   function pushParams(next: URLSearchParams) {
     const qs = next.toString();
     const href = qs ? `/?${qs}` : "/";
-    // Soft URL update only — HomeView re-fetches via client cache (no full RSC refresh).
     if (pathname === "/") {
-      router.replace(href, { scroll: false });
+      replaceUrlWithoutRefresh(href);
     } else {
       router.push(href);
     }
@@ -127,7 +128,8 @@ export function AppHeader() {
           )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-self-end">
+        <div className="flex shrink-0 items-center gap-2 justify-self-end">
+          <CopyFromLinkTrigger view={view} />
           <AddMediaTrigger
             view={view}
             aria-label={t("add")}

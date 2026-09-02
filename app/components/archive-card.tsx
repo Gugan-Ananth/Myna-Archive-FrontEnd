@@ -2,10 +2,8 @@
 
 import Link from "next/link";
 import {
-  useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -27,7 +25,6 @@ import {
   withCacheBust,
 } from "../lib/media-display";
 import type { ArchiveItem } from "../lib/types";
-import { endGlobalLoading, startGlobalLoading } from "../lib/loading-events";
 import { warmArchiveItem } from "../lib/warm-preview";
 import { LoadingImage } from "./global-loading";
 import { StarButton } from "./star-button";
@@ -144,7 +141,6 @@ export function ArchiveCard({
               src={STORY_COVER_TEMPLATE.src}
               alt=""
               fill
-              trackLoading={priority}
               unoptimized
               sizes="(max-width: 539px) 100vw, (max-width: 899px) 50vw, (max-width: 1279px) 33vw, (max-width: 1679px) 25vw, 20vw"
               className="object-cover object-center transition-transform duration-300 ease-out group-hover:scale-[1.03]"
@@ -154,7 +150,6 @@ export function ArchiveCard({
               src={imageSrc}
               alt=""
               fill
-              trackLoading={priority}
               loader={bunnyImageLoader}
               sizes="(max-width: 539px) 100vw, (max-width: 899px) 50vw, (max-width: 1279px) 33vw, (max-width: 1679px) 25vw, 20vw"
               quality={72}
@@ -247,33 +242,6 @@ function VideoThumb({
   );
   const [previewReady, setPreviewReady] = useState(false);
   const [previewFailed, setPreviewFailed] = useState(false);
-  const thumbLoadingIdRef = useRef<string | null>(null);
-  const finishThumbLoading = useCallback(() => {
-    const id = thumbLoadingIdRef.current;
-    if (!id) return;
-    thumbLoadingIdRef.current = null;
-    endGlobalLoading(id, "image");
-  }, []);
-
-  useEffect(() => {
-    if (
-      !priority ||
-      thumbCandidates.length === 0 ||
-      state === "ready" ||
-      state === "failed"
-    ) {
-      return;
-    }
-    const id = startGlobalLoading("image");
-    thumbLoadingIdRef.current = id;
-    return finishThumbLoading;
-  }, [
-    finishThumbLoading,
-    priority,
-    state,
-    thumbCandidates.length,
-  ]);
-
   const videoSrc = useMemo(() => {
     if (thumbCandidates.length === 0) return "";
     const base =

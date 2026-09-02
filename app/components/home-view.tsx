@@ -10,7 +10,6 @@ import {
   seedTagsCache,
   seedTaxonomyCache,
 } from "../lib/api";
-import { prefetchIdleCollectionViews } from "../lib/prefetch-collection";
 import {
   createHrefForView,
   filePickerForView,
@@ -335,24 +334,6 @@ export function HomeView({
     taxonomy,
     usedFallbackError,
   ]);
-
-  // Warm the other rail sections after first paint.
-  useEffect(() => {
-    let idleId: number | undefined;
-    let timer: number | undefined;
-    const run = () => prefetchIdleCollectionViews(liveView);
-    if (typeof window.requestIdleCallback === "function") {
-      idleId = window.requestIdleCallback(run, { timeout: 1500 });
-    } else {
-      timer = window.setTimeout(run, 400);
-    }
-    return () => {
-      if (idleId != null && typeof window.cancelIdleCallback === "function") {
-        window.cancelIdleCallback(idleId);
-      }
-      if (timer != null) window.clearTimeout(timer);
-    };
-  }, [liveView]);
 
   // Re-fetch page 1 whenever live filters leave the SSR snapshot (cached when possible).
   useEffect(() => {

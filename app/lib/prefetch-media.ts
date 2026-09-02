@@ -20,6 +20,7 @@ export function prefetchMediaUrl(url: string): void {
   if (!remember(url)) return;
   const img = new Image();
   img.decoding = "async";
+  img.fetchPriority = "low";
   img.src = url;
 }
 

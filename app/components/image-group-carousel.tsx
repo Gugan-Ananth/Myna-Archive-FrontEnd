@@ -5,7 +5,6 @@ import {
   useEffect,
   useRef,
   useState,
-  type KeyboardEvent as ReactKeyboardEvent,
   type TouchEvent as ReactTouchEvent,
 } from "react";
 import { useI18n } from "../lib/i18n";
@@ -13,11 +12,11 @@ import {
   detailAssetSrc,
   displayAssetSrc,
   previewAssetSrc,
-  withBunnyResize,
 } from "../lib/media-display";
 import { prefetchMediaUrl } from "../lib/prefetch-media";
 import type { MediaAsset } from "../lib/types";
 import { ImageZoomViewer } from "./image-zoom-viewer";
+import { MediaFilmstrip } from "./media-filmstrip";
 
 type ImageGroupCarouselProps = {
   assets: MediaAsset[];
@@ -26,8 +25,6 @@ type ImageGroupCarouselProps = {
   /** Notifies parent so chrome (e.g. top badge) can show “2 / 5”. */
   onIndexChange?: (index: number, total: number) => void;
 };
-
-const FILMSTRIP_THUMB_WIDTH = 96;
 
 /**
  * Detail-stage viewer for image groups.
@@ -48,9 +45,7 @@ export function ImageGroupCarousel({
   const { t } = useI18n();
   const [index, setIndex] = useState(0);
   const [zoomed, setZoomed] = useState(false);
-  const stripRef = useRef<HTMLDivElement>(null);
   const touchRef = useRef<{ x: number; y: number } | null>(null);
-  const focusActiveThumbRef = useRef(false);
   const count = assets.length;
   const safeIndex = Math.min(Math.max(0, index), Math.max(0, count - 1));
   const current = assets[safeIndex];
@@ -84,22 +79,6 @@ export function ImageGroupCarousel({
     onIndexChange?.(safeIndex, count);
   }, [safeIndex, count, onIndexChange]);
 
-  // Keep the active thumb visible in a long strip.
-  useEffect(() => {
-    const root = stripRef.current;
-    if (!root) return;
-    const active = root.querySelector<HTMLElement>('[aria-current="true"]');
-    active?.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest",
-      inline: "center",
-    });
-    if (focusActiveThumbRef.current) {
-      focusActiveThumbRef.current = false;
-      active?.focus({ preventScroll: true });
-    }
-  }, [safeIndex]);
-
   useEffect(() => {
     const neighbors = [assets[safeIndex + 1], assets[safeIndex - 1]];
     for (const asset of neighbors) {
@@ -112,13 +91,6 @@ export function ImageGroupCarousel({
     function onKey(event: KeyboardEvent) {
       const tag = (event.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      if (
-        stripRef.current &&
-        event.target instanceof Node &&
-        stripRef.current.contains(event.target)
-      ) {
-        return;
-      }
       if (event.key === "ArrowLeft") {
         event.preventDefault();
         go(-1);
@@ -252,89 +224,19 @@ export function ImageGroupCarousel({
             <p className="text-lg font-bold tabular-nums tracking-wide text-white sm:text-xl">
               {t("imagePosition", { n: safeIndex + 1, total: count })}
             </p>
-
-            <div
-              ref={stripRef}
-              role="tablist"
-              aria-label={t("imageGroup")}
-              onKeyDown={(event: ReactKeyboardEvent<HTMLDivElement>) => {
-                const isNavigationKey =
-                  event.key === "ArrowLeft" ||
-                  event.key === "ArrowRight" ||
-                  event.key === "Home" ||
-                  event.key === "End";
-                if (!isNavigationKey) return;
-                const target = event.target;
-                const cameFromThumbnail =
-                  target instanceof HTMLElement &&
-                  target.getAttribute("role") === "tab";
-                if (cameFromThumbnail) focusActiveThumbRef.current = true;
-                if (event.key === "ArrowLeft") {
-                  event.preventDefault();
-                  go(-1);
-                } else if (event.key === "ArrowRight") {
-                  event.preventDefault();
-                  go(1);
-                } else if (event.key === "Home") {
-                  event.preventDefault();
-                  goTo(0);
-                } else if (event.key === "End") {
-                  event.preventDefault();
-                  goTo(count - 1);
-                }
-              }}
-              className={[
-                "pointer-events-auto flex max-w-[min(100%,36rem)] items-center gap-1.5 overflow-x-auto overscroll-x-contain",
-                "rounded-2xl bg-black/50 p-1.5 shadow-lg ring-1 ring-white/12 backdrop-blur-md",
-                "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-              ].join(" ")}
-            >
-              {assets.map((asset, i) => {
-                const active = i === safeIndex;
-                const thumbSrc = filmstripThumbSrc(asset);
-                return (
-                  <button
-                    key={asset.publicId || `asset-${i}`}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    aria-current={active ? "true" : undefined}
-                    aria-label={t("goToImage", { n: i + 1 })}
-                    onClick={() => goTo(i)}
-                    className={[
-                      "relative h-11 w-11 shrink-0 overflow-hidden rounded-xl transition-[box-shadow,transform,opacity] duration-200",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-black/40",
-                      active
-                        ? "scale-100 opacity-100 ring-2 ring-primary ring-offset-1 ring-offset-black/50"
-                        : "opacity-70 ring-1 ring-white/15 hover:opacity-100 hover:ring-white/40",
-                    ].join(" ")}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={thumbSrc}
-                      alt=""
-                      draggable={false}
-                      loading="lazy"
-                      decoding="async"
-                      className="h-full w-full object-cover"
-                    />
-                  </button>
-                );
-              })}
-            </div>
+            <MediaFilmstrip
+              assets={assets}
+              activeIndex={safeIndex}
+              onSelect={goTo}
+              ariaLabel={t("imageGroup")}
+              itemLabel={(index) => t("goToImage", { n: index + 1 })}
+              wrap
+            />
           </div>
         </>
       ) : null}
     </div>
   );
-}
-
-function filmstripThumbSrc(asset: MediaAsset): string {
-  if (asset.thumbnailUrl) return asset.thumbnailUrl;
-  return withBunnyResize(detailAssetSrc(asset), {
-    width: FILMSTRIP_THUMB_WIDTH,
-    quality: 70,
-  });
 }
 
 function ChevronLeftIcon({ className }: { className?: string }) {

@@ -13,7 +13,6 @@ import { StarButton } from "./star-button";
 
 type StoryWorkCardProps = {
   item: ArchiveItem;
-  priority?: boolean;
   onStarChange?: (item: ArchiveItem) => void;
 };
 
@@ -23,7 +22,6 @@ type StoryWorkCardProps = {
  */
 export function StoryWorkCard({
   item,
-  priority = false,
   onStarChange,
 }: StoryWorkCardProps) {
   const { t } = useI18n();
@@ -51,7 +49,6 @@ export function StoryWorkCard({
             src={src}
             alt=""
             fill
-            trackLoading={priority}
             loader={hasCover ? bunnyImageLoader : undefined}
             unoptimized={!hasCover}
             sizes="(max-width: 640px) 136px, 208px"

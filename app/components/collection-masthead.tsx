@@ -78,7 +78,6 @@ export function CollectionMasthead({
                   src={featuredSrc}
                   alt=""
                   fill
-                  trackLoading
                   loader={bunnyImageLoader}
                   sizes="(max-width: 640px) 85vw, 360px"
                   quality={70}

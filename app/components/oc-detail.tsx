@@ -70,7 +70,6 @@ export function OcDetail({ oc }: OcDetailProps) {
             alt=""
             width={width}
             height={height}
-            trackLoading
             loader={bunnyImageLoader}
             sizes="320px"
             className="h-auto w-full object-contain"

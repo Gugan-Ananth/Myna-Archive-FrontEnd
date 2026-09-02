@@ -14,6 +14,7 @@ import {
   parseCollectionView,
   type CollectionView,
 } from "../lib/collection-view";
+import { replaceUrlWithoutRefresh } from "../lib/client-navigation";
 import { useI18n } from "../lib/i18n";
 import {
   buildTaxonomyFromApi,
@@ -61,6 +62,8 @@ export function TagChipBar({
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!panelOpen) return;
+
     let cancelled = false;
     void (async () => {
       try {
@@ -82,7 +85,7 @@ export function TagChipBar({
     return () => {
       cancelled = true;
     };
-  }, [section.imageGroup, section.mediaType, section.section, view]);
+  }, [panelOpen, section.imageGroup, section.mediaType, section.section, view]);
 
   const scopedFetch = fetched?.view === view ? fetched : null;
   const apiTaxonomy = scopedFetch?.taxonomy ?? initialTaxonomy;
@@ -152,7 +155,7 @@ export function TagChipBar({
     const qs = next.toString();
     const href = qs ? `/?${qs}` : "/";
     if (pathname === "/") {
-      router.replace(href, { scroll: false });
+      replaceUrlWithoutRefresh(href);
     } else {
       router.push(href);
     }

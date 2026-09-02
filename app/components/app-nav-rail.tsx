@@ -7,6 +7,7 @@ import {
   parseCollectionView,
   type CollectionView,
 } from "../lib/collection-view";
+import { replaceUrlWithoutRefresh } from "../lib/client-navigation";
 import { prefetchCollectionView } from "../lib/prefetch-collection";
 import type { MessageKey } from "../lib/i18n";
 import { useI18n } from "../lib/i18n";
@@ -204,7 +205,7 @@ function NavButtons({
     const qs = next.toString();
     const href = qs ? `/?${qs}` : "/";
     if (pathname === "/") {
-      router.replace(href, { scroll: false });
+      replaceUrlWithoutRefresh(href);
     } else {
       router.push(href);
     }
