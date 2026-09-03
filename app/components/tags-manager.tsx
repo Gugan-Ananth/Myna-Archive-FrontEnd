@@ -643,7 +643,7 @@ export function TagsManager({ initialCategories }: TagsManagerProps) {
       ) : (
         <ul
           className={[
-            "grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 xl:grid-cols-3",
+            "grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-2",
             drag ? "select-none" : "",
           ].join(" ")}
         >

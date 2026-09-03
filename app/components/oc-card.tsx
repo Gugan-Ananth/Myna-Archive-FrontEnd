@@ -93,7 +93,9 @@ export function OcCard({
             placeholder="blur"
             blurDataURL={blurDataUrl}
             className="object-cover object-center transition-transform duration-300 ease-out group-hover:scale-[1.03]"
+            fallbackLabel={t("previewUnavailable")}
             onLoad={() => setLoaded(true)}
+            onError={() => setLoaded(true)}
           />
         </div>
         <div className="flex flex-1 flex-col px-3 py-3 sm:px-4 sm:py-4">

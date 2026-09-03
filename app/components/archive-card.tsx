@@ -82,7 +82,6 @@ export function ArchiveCard({
   const isVideo = item.mediaType === "video";
   const isStory = item.mediaType === "story";
   const [loaded, setLoaded] = useState(false);
-  const [failed, setFailed] = useState(false);
   const hasStoredDims = Boolean(item.width && item.height);
   const [dims, setDims] = useState(() => initialDims(item));
   const isClient = useIsClient();
@@ -122,7 +121,7 @@ export function ArchiveCard({
             style={{ aspectRatio: `${dims.w} / ${dims.h}` }}
           >
           {/* Image skeleton */}
-          {!isVideo && !isStory && !loaded && !failed && (
+          {!isVideo && !isStory && !loaded && (
             <div
               className="absolute inset-0 animate-pulse bg-gradient-to-br from-surface-muted via-accent-soft/40 to-surface-muted"
               aria-hidden
@@ -144,6 +143,7 @@ export function ArchiveCard({
               unoptimized
               sizes="(max-width: 539px) 100vw, (max-width: 899px) 50vw, (max-width: 1279px) 33vw, (max-width: 1679px) 25vw, 20vw"
               className="object-cover object-center transition-transform duration-300 ease-out group-hover:scale-[1.03]"
+              fallbackLabel={t("previewUnavailable")}
             />
           ) : (
             <LoadingImage
@@ -160,22 +160,16 @@ export function ArchiveCard({
               placeholder="blur"
               blurDataURL={blurDataUrl}
               className="object-cover object-center transition-transform duration-300 ease-out group-hover:scale-[1.03]"
+              fallbackLabel={t("previewUnavailable")}
               onLoad={(event) => {
                 const img = event.currentTarget;
                 applyNaturalSize(img.naturalWidth, img.naturalHeight);
                 setLoaded(true);
               }}
               onError={() => {
-                setFailed(true);
                 setLoaded(true);
               }}
             />
-          )}
-
-          {!isVideo && !isStory && failed && (
-            <div className="absolute inset-0 flex items-center justify-center px-3 text-center text-xs text-foreground-subtle">
-              {t("previewUnavailable")}
-            </div>
           )}
 
           {!isVideo && (isImageGroup(item) || isComic(item)) ? (

@@ -77,6 +77,9 @@ export const MAX_COMIC_ASSETS = 80;
 /** Max inline images in one written story. */
 export const MAX_STORY_ASSETS = 20;
 
+/** Max story `bodyHtml` characters. Must match backend `MAX_STORY_BODY_CHARS`. */
+export const MAX_STORY_BODY_CHARS = 200_000;
+
 /** An original character (OC) sheet — portrait plus profile fields. */
 export type OriginalCharacter = {
   id: string;

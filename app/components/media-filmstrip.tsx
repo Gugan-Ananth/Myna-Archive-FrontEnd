@@ -3,6 +3,7 @@
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import { detailAssetSrc, withBunnyResize } from "../lib/media-display";
 import type { MediaAsset } from "../lib/types";
+import { BrokenImageIcon, SafeImg } from "./broken-image-fallback";
 
 type MediaFilmstripProps = {
   assets: MediaAsset[];
@@ -106,8 +107,7 @@ export function MediaFilmstrip({
                 : "opacity-70 ring-1 ring-white/15 hover:opacity-100 hover:ring-white/40",
             ].join(" ")}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <SafeImg
               src={filmstripThumbSrc(asset)}
               alt=""
               draggable={false}
@@ -115,6 +115,15 @@ export function MediaFilmstrip({
               fetchPriority="low"
               decoding="async"
               className="h-full w-full object-cover"
+              compactFallback
+              fallback={
+                <span
+                  className="flex h-full w-full items-center justify-center bg-white/10 text-white/45"
+                  aria-hidden
+                >
+                  <BrokenImageIcon className="h-3.5 w-3.5" />
+                </span>
+              }
             />
           </button>
         );

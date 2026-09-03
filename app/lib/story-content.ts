@@ -1,6 +1,18 @@
 import { originalMediaUrl } from "./media-display";
 import type { ArchiveItem, MediaAsset } from "./types";
 
+/** HTML posted to the API: drop zero-width marks and inline image payloads. */
+export function storyPayloadHtml(html: string): string {
+  return html
+    .replace(/\u200B/g, "")
+    .replace(/<img\b[^>]*>/gi, '<img alt="" />');
+}
+
+/** Character count of the HTML that will be stored, not the live editor bytes. */
+export function storyBodyCharCount(html: string): number {
+  return storyPayloadHtml(html).length;
+}
+
 function stripHtml(html: string): string {
   return html
     .replace(/<[^>]+>/g, " ")

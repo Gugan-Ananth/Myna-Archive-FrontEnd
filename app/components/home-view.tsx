@@ -32,6 +32,7 @@ import { ActiveTagsSummary } from "./active-tags-summary";
 import { ArchiveGrid } from "./archive-grid";
 import { HomeBackdrop } from "./home-backdrop";
 import { HomeFiltersNotice } from "./home-filters-notice";
+import { InfiniteScrollSentinel } from "./infinite-scroll-sentinel";
 import { OcHome } from "./oc-home";
 import { StatusCallout } from "./status-callout";
 import { StoryWorksList } from "./story-works-list";
@@ -135,7 +136,7 @@ type HomeViewProps = {
  * - Re-fetches when live URL filters change (tag chips / search).
  * - Client query cache + stale-while-revalidate for instant back-nav.
  * - Keeps previous grid visible while a filter request is in flight.
- * - Prefetches the next page while the user scrolls.
+ * - Prefetches the next page, then appends it as the user nears the bottom.
  */
 export function HomeView({
   items: initialItems,
@@ -193,6 +194,7 @@ export function HomeView({
 
   const [isFiltering, setIsFiltering] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const loadingMoreRef = useRef(false);
 
   const requestIdRef = useRef(0);
   const matchesServer = filterKey === initialFilterKey;
@@ -404,9 +406,10 @@ export function HomeView({
 
   const loadMore = useCallback(async () => {
     if (liveView === "oc" || liveView === "top-10") return;
-    if (isLoadingMore || isFiltering || !hasMore) return;
+    if (loadingMoreRef.current || isFiltering || !hasMore) return;
 
     const nextPage = page + 1;
+    loadingMoreRef.current = true;
     setIsLoadingMore(true);
     try {
       const result = await listArchiveItems(
@@ -414,6 +417,7 @@ export function HomeView({
       );
       setViewSnaps((prev) => {
         const current = prev[liveView];
+        if (current && current.filterKey !== filterKey) return prev;
         const baseItems =
           current?.filterKey === filterKey
             ? current.items
@@ -422,12 +426,15 @@ export function HomeView({
               : (current?.items ?? initialItems);
         const seen = new Set(baseItems.map((i) => i.id));
         const appended = result.data.filter((i) => !seen.has(i.id));
+        const nextItems = [...baseItems, ...appended];
         return {
           ...prev,
           [liveView]: {
             filterKey,
-            items: [...baseItems, ...appended],
-            total: result.meta.total,
+            items: nextItems,
+            // Stop paging if this page added nothing (avoids an auto-load loop).
+            total:
+              appended.length === 0 ? nextItems.length : result.meta.total,
             page: nextPage,
             loadError: null,
             usedFallback: false,
@@ -437,6 +444,7 @@ export function HomeView({
     } catch (error) {
       setViewSnaps((prev) => {
         const current = prev[liveView];
+        if (current && current.filterKey !== filterKey) return prev;
         return {
           ...prev,
           [liveView]: {
@@ -451,6 +459,7 @@ export function HomeView({
         };
       });
     } finally {
+      loadingMoreRef.current = false;
       setIsLoadingMore(false);
     }
   }, [
@@ -458,7 +467,6 @@ export function HomeView({
     hasMore,
     initialItems,
     isFiltering,
-    isLoadingMore,
     items,
     liveQuery,
     liveTags,
@@ -599,18 +607,12 @@ export function HomeView({
           />
         )}
 
-        {hasMore && !loadError ? (
-          <div className="relative z-10 mt-2 flex justify-center pt-2">
-            <button
-              type="button"
-              onClick={() => void loadMore()}
-              disabled={isLoadingMore || isFiltering}
-              className="inline-flex h-11 min-w-[10rem] items-center justify-center rounded-full border border-border bg-surface px-6 text-sm font-medium text-foreground shadow-sm transition-colors hover:border-primary hover:bg-accent-soft hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isLoadingMore ? t("loadingMore") : t("loadMore")}
-            </button>
-          </div>
-        ) : null}
+        <InfiniteScrollSentinel
+          onLoadMore={loadMore}
+          hasMore={hasMore && !loadError}
+          isLoading={isLoadingMore}
+          disabled={isFiltering}
+        />
       </div>
       </div>
     </main>

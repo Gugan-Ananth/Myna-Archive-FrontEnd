@@ -73,6 +73,7 @@ export function OcDetail({ oc }: OcDetailProps) {
             loader={bunnyImageLoader}
             sizes="320px"
             className="h-auto w-full object-contain"
+            fallbackLabel={t("previewUnavailable")}
           />
           <StarButton
             starred={oc.starred}

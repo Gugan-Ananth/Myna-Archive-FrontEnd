@@ -530,8 +530,11 @@ html {
   color: var(--foreground);
   font-family: var(--font-playfair), "Playfair", Georgia, serif;
   font-size: 1.05rem;
-  line-height: 1.8;
+  line-height: 1.85;
+  overflow-x: clip;
+  overflow-wrap: break-word;
   word-break: break-word;
+  text-align: start;
 }
 
 @media (min-width: 640px) {
@@ -543,11 +546,11 @@ html {
 @media (min-width: 1024px) {
   .story-read {
     font-size: 1.25rem;
-    line-height: 1.82;
+    line-height: 1.88;
   }
 }
 
-.story-read *:not(img) {
+.story-read *:not(img):not(.story-dialogue-bubble) {
   color: inherit !important;
   -webkit-text-fill-color: inherit !important;
 }
@@ -566,14 +569,42 @@ html {
   margin: 1.05em 0 0.4em;
 }
 
-.story-read p {
-  margin: 0 0 1em;
+.story-read p,
+.story-read div {
+  text-align: start;
+  text-indent: 0;
+  padding-inline-start: 0;
+}
+
+.story-read > p,
+.story-read > div:not(.story-break) {
+  margin: 0 0 1.15em;
+}
+
+.story-read .story-dialogue-block {
+  margin: 1.35em 0;
+}
+
+.story-read .story-dialogue-block .story-dialogue-bubble {
+  margin-block: 0;
+}
+
+.story-read .story-lede::first-letter {
+  float: left;
+  padding-right: 0.1em;
+  padding-top: 0.08em;
+  color: var(--primary) !important;
+  -webkit-text-fill-color: var(--primary) !important;
+  font-size: 3.2em;
+  font-weight: 600;
+  line-height: 0.78;
 }
 
 .story-read blockquote {
-  margin: 1.15em 0;
-  padding-left: 1rem;
-  border-left: 3px solid var(--border-strong);
+  margin: 1.4em 0;
+  padding: 0.15em 0 0.15em 1.15rem;
+  border-left: 3px solid var(--primary);
+  font-style: italic;
 }
 
 .story-read img {
@@ -581,8 +612,143 @@ html {
   width: 100%;
   max-width: 100%;
   height: auto;
-  margin: 1.25rem 0;
-  border-radius: 0.75rem;
+  margin: 1.5rem 0;
+  border-radius: 0.85rem;
+  box-shadow: 0 12px 32px -18px rgb(30 27 46 / 0.35);
+}
+
+.story-read .story-break {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 2.1em 0;
+  border: 0;
+  color: var(--accent-muted);
+  letter-spacing: 0.55em;
+  font-size: 0.62rem;
+}
+
+.story-read .story-break::before {
+  content: "✦ ✦ ✦";
+}
+
+.story-read .story-dialogue-bubble {
+  position: relative;
+  isolation: isolate;
+  display: block;
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: min(88%, 35rem);
+  margin: 1.25em 0;
+  padding: 0.85em 1.1em;
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border));
+  border-radius: 1.25rem;
+  background:
+    radial-gradient(
+      ellipse 90% 80% at 0% 0%,
+      color-mix(in srgb, var(--primary) 18%, transparent) 0%,
+      transparent 58%
+    ),
+    linear-gradient(145deg, var(--surface) 0%, var(--surface-muted) 100%);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--primary) 8%, transparent),
+    0 9px 0 -6px color-mix(in srgb, var(--primary) 54%, var(--surface)),
+    0 18px 30px -20px rgb(30 27 46 / 0.24);
+  color: var(--foreground) !important;
+  -webkit-text-fill-color: var(--foreground) !important;
+  font-style: normal;
+  text-align: start;
+  text-indent: 0;
+  line-height: 1.65;
+}
+
+.story-read .story-dialogue-bubble[data-side="left"] {
+  margin-inline-end: auto;
+  border-bottom-left-radius: 0.35rem;
+}
+
+.story-read .story-dialogue-bubble[data-side="right"] {
+  margin-inline-start: auto;
+  border-bottom-right-radius: 0.35rem;
+  background:
+    radial-gradient(
+      ellipse 90% 80% at 100% 0%,
+      color-mix(in srgb, var(--accent) 20%, transparent) 0%,
+      transparent 58%
+    ),
+    linear-gradient(145deg, var(--surface-muted) 0%, var(--accent-soft) 100%);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.story-read .story-dialogue-bubble::before {
+  content: "“";
+  margin-inline-end: 0.12em;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.story-read .story-dialogue-bubble::after {
+  content: "”";
+  margin-inline-start: 0.08em;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.story-read .story-dialogue-bubble[data-kind="dash"]::before {
+  content: "—";
+  margin-inline-end: 0.25em;
+}
+
+.story-read .story-dialogue-bubble[data-kind="dash"]::after {
+  content: none;
+}
+
+.dark .story-read .story-dialogue-bubble {
+  border-color: color-mix(in srgb, var(--accent-muted) 68%, #09080d);
+  background:
+    radial-gradient(
+      ellipse 90% 80% at 0% 0%,
+      color-mix(in srgb, var(--primary) 25%, transparent) 0%,
+      transparent 58%
+    ),
+    linear-gradient(145deg, #292532 0%, #09080d 100%);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent),
+    0 9px 0 -6px color-mix(in srgb, var(--primary) 84%, #09080d),
+    0 18px 30px -20px rgb(0 0 0 / 0.9);
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+.dark .story-read .story-dialogue-bubble[data-side="right"] {
+  border-color: color-mix(in srgb, var(--accent) 72%, #09080d);
+  background:
+    radial-gradient(
+      ellipse 90% 80% at 100% 0%,
+      color-mix(in srgb, var(--accent) 30%, transparent) 0%,
+      transparent 58%
+    ),
+    linear-gradient(145deg, #1b1822 0%, #050507 100%);
+}
+
+.dark .story-read img {
+  box-shadow: 0 12px 32px -16px rgb(0 0 0 / 0.55);
+}
+
+/*
+  Hide the browser broken-file glyph on unmanaged <img> tags (story HTML,
+  contenteditable). object-position pushes the failed bitmap off-canvas;
+  the background stands in for the missing picture.
+*/
+img.broken-media {
+  object-fit: none;
+  object-position: -99999px;
+  min-height: 6rem;
+  background-color: var(--surface-muted);
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239b95ad' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='14' rx='2'/%3E%3Ccircle cx='8.5' cy='10' r='1.25'/%3E%3Cpath d='m21 15-5-5-3.5 3.5'/%3E%3Cpath d='M8 19 4.5 15.5'/%3E%3Cpath d='m3 3 18 18'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 2rem;
 }
 
 .story-read font[face="Playfair"],

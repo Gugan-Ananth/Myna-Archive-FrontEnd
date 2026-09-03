@@ -9,6 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { useI18n } from "../lib/i18n";
+import { BrokenImageFallback } from "./broken-image-fallback";
 
 type Mode = "contain" | "fill-width";
 
@@ -123,6 +124,7 @@ export function ImageZoomViewer({
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const movedRef = useRef(false);
   const activeSrcRef = useRef(activeSrc);
+  const attemptedSrcRef = useRef<Set<string>>(new Set());
 
   const isZoomed = mode !== "contain";
   const needsOriginal = extraScale > MIN_EXTRA;
@@ -549,8 +551,25 @@ export function ImageZoomViewer({
       )}
 
       {failed && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-6 text-center text-sm text-neutral-400">
-          {t("couldNotLoadImage")}
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-neutral-950 px-6 text-center">
+          <BrokenImageFallback
+            tone="dark"
+            label={t("couldNotLoadImage")}
+            className="h-auto w-auto bg-transparent"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              attemptedSrcRef.current = new Set();
+              setFailed(false);
+              setLoaded(false);
+              setPreviewReady(!previewSrc);
+              setActiveSrc(previewSrc || src);
+            }}
+            className="rounded-full bg-white/10 px-4 py-1.5 text-sm font-medium text-white/90 ring-1 ring-white/15 hover:bg-white/15"
+          >
+            {t("tryAgain")}
+          </button>
         </div>
       )}
 
@@ -573,8 +592,10 @@ export function ImageZoomViewer({
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {!failed ? (
+        // eslint-disable-next-line @next/next/no-img-element
         <img
+          key={activeSrc}
           ref={imgRef}
           src={activeSrc}
           alt={alt}
@@ -588,27 +609,20 @@ export function ImageZoomViewer({
               setPreviewReady(true);
             }
           }}
-          onError={() => {
-            if (previewSrc && activeSrc === previewSrc && src !== previewSrc) {
-              // The 480px derivative failed; let the display derivative take
-              // over as the fallback rather than showing a broken image.
-              setPreviewReady(true);
-              setActiveSrc(src);
+          onError={(event) => {
+            attemptedSrcRef.current.add(activeSrc);
+            const next = [src, originalSrc, previewSrc].find(
+              (candidate): candidate is string =>
+                Boolean(candidate) &&
+                !attemptedSrcRef.current.has(candidate ?? ""),
+            );
+            if (next) {
+              if (next !== previewSrc) setPreviewReady(true);
+              setActiveSrc(next);
               setLoaded(false);
               return;
             }
-            if (originalSrc && activeSrc === originalSrc && src !== originalSrc) {
-              // The original is optional; retain the decoded display-sized
-              // image if it is unavailable.
-              setActiveSrc(src);
-              setLoaded(true);
-              return;
-            }
-            if (previewSrc && activeSrc !== previewSrc) {
-              setActiveSrc(previewSrc);
-              setLoaded(true);
-              return;
-            }
+            event.currentTarget.style.visibility = "hidden";
             setFailed(true);
             setLoaded(true);
           }}
@@ -631,8 +645,10 @@ export function ImageZoomViewer({
             loaded ? "opacity-100" : "opacity-0",
           ].join(" ")}
         />
+        ) : null}
       </div>
 
+      {!failed ? (
       <div
         className={[
           "pointer-events-none absolute z-20 flex items-center gap-0.5 rounded-full bg-black/55 px-1 py-1 shadow-lg ring-1 ring-white/10 backdrop-blur-md",
@@ -676,6 +692,7 @@ export function ImageZoomViewer({
           <PlusIcon className="h-4 w-4" />
         </button>
       </div>
+      ) : null}
     </div>
   );
 }

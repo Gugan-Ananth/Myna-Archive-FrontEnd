@@ -8,11 +8,15 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import { recoveryImageSrc } from "../lib/image-recovery";
 import {
   GLOBAL_LOADING_EVENT,
+  GLOBAL_LOADING_SUPPRESS_EVENT,
   getActiveGlobalLoadingIds,
+  isGlobalLoadingSuppressed,
   type GlobalLoadingDetail,
 } from "../lib/loading-events";
+import { BrokenImageFallback } from "./broken-image-fallback";
 
 const LOADING_DELAY_MS = 180;
 const MIN_VISIBLE_MS = 240;
@@ -29,6 +33,7 @@ export function GlobalLoadingProvider({
   const pendingIdsRef = useRef<Set<string>>(new Set());
   const [pendingCount, setPendingCount] = useState(0);
   const [visible, setVisible] = useState(false);
+  const [suppressed, setSuppressed] = useState(false);
   const showTimerRef = useRef<number | null>(null);
   const hideTimerRef = useRef<number | null>(null);
   const visibleSinceRef = useRef<number | null>(null);
@@ -47,15 +52,35 @@ export function GlobalLoadingProvider({
       setPendingCount(pendingIds.size);
     }
 
+    function onSuppress() {
+      const next = isGlobalLoadingSuppressed();
+      setSuppressed(next);
+      if (next) {
+        if (showTimerRef.current !== null) {
+          window.clearTimeout(showTimerRef.current);
+          showTimerRef.current = null;
+        }
+        if (hideTimerRef.current !== null) {
+          window.clearTimeout(hideTimerRef.current);
+          hideTimerRef.current = null;
+        }
+        visibleSinceRef.current = null;
+        setVisible(false);
+      }
+    }
+
     window.addEventListener(GLOBAL_LOADING_EVENT, onLoading);
+    window.addEventListener(GLOBAL_LOADING_SUPPRESS_EVENT, onSuppress);
     // A descendant may start work in its effect before this parent effect runs.
     // Reconcile with the registry so those tasks are still represented.
     const activeIds = getActiveGlobalLoadingIds();
     for (const id of activeIds) pendingIdsRef.current.add(id);
     if (activeIds.length > 0) setPendingCount(pendingIdsRef.current.size);
+    setSuppressed(isGlobalLoadingSuppressed());
 
     return () => {
       window.removeEventListener(GLOBAL_LOADING_EVENT, onLoading);
+      window.removeEventListener(GLOBAL_LOADING_SUPPRESS_EVENT, onSuppress);
       if (showTimerRef.current !== null) {
         window.clearTimeout(showTimerRef.current);
       }
@@ -66,6 +91,14 @@ export function GlobalLoadingProvider({
   }, []);
 
   useEffect(() => {
+    if (suppressed) {
+      if (showTimerRef.current !== null) {
+        window.clearTimeout(showTimerRef.current);
+        showTimerRef.current = null;
+      }
+      return;
+    }
+
     if (pendingCount > 0) {
       if (hideTimerRef.current !== null) {
         window.clearTimeout(hideTimerRef.current);
@@ -106,12 +139,12 @@ export function GlobalLoadingProvider({
         hideTimerRef.current = null;
       }
     };
-  }, [pendingCount, visible]);
+  }, [pendingCount, suppressed, visible]);
 
   return (
     <>
       {children}
-      <GlobalLoadingOverlay visible={visible} />
+      <GlobalLoadingOverlay visible={visible && !suppressed} />
     </>
   );
 }
@@ -157,25 +190,77 @@ export function GlobalLoadingOverlay({
   );
 }
 
-type LoadingImageProps = ImageProps;
+type LoadingImageProps = ImageProps & {
+  /** When set, shown under the icon after the image and original retry fail. */
+  fallbackLabel?: string;
+};
 
-/** Next image wrapper for callers that want a consistent image component. */
+/**
+ * Next image that recovers from CDN/optimizer failures, then hides the
+ * browser broken-file glyph behind an in-app placeholder.
+ */
 export function LoadingImage({
   onLoad,
   onError,
   alt,
   src,
+  loader,
+  unoptimized,
+  fallbackLabel,
+  className,
   ...props
 }: LoadingImageProps) {
+  const srcKey = typeof src === "string" ? src : "static";
+  const [phase, setPhase] = useState<"primary" | "recovery" | "failed">(
+    "primary",
+  );
+  const [phaseSrc, setPhaseSrc] = useState(srcKey);
+  if (phaseSrc !== srcKey) {
+    setPhaseSrc(srcKey);
+    setPhase("primary");
+  }
+
+  const recoverySrc =
+    typeof src === "string" ? recoveryImageSrc(src, Boolean(loader)) : null;
+  const activeSrc = phase === "recovery" && recoverySrc ? recoverySrc : src;
+  const emptySrc = typeof src === "string" && !src;
+
+  if (phase === "failed" || emptySrc) {
+    const width = typeof props.width === "number" ? props.width : undefined;
+    const height = typeof props.height === "number" ? props.height : undefined;
+    return (
+      <BrokenImageFallback
+        fill={Boolean(props.fill)}
+        label={fallbackLabel}
+        className={props.fill ? undefined : "min-h-[12rem] w-full"}
+        style={
+          !props.fill && width && height
+            ? { aspectRatio: `${width} / ${height}` }
+            : undefined
+        }
+      />
+    );
+  }
+
   return (
     <Image
       {...props}
-      src={src}
+      key={`${srcKey}:${phase}`}
+      src={activeSrc}
       alt={alt}
+      loader={phase === "recovery" ? undefined : loader}
+      unoptimized={phase === "recovery" ? true : unoptimized}
+      className={className}
       onLoad={(event) => {
         onLoad?.(event);
       }}
       onError={(event) => {
+        if (phase === "primary" && recoverySrc) {
+          setPhase("recovery");
+          return;
+        }
+        event.currentTarget.style.visibility = "hidden";
+        setPhase("failed");
         onError?.(event);
       }}
     />

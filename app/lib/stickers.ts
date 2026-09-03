@@ -22,6 +22,8 @@ import ropeSuggestionImg from "../../public/stickers/rope_suggestion_arms_on_sho
 import puppetStringImg from "../../public/stickers/puppet_string.png";
 import boyTiedImg from "../../public/stickers/boy_tied.png";
 import tiedGirlChainImg from "../../public/stickers/tied_girl_chain.png";
+import echidnaTeaImg from "../../public/stickers/echidna_tea.png";
+import ronovaTeaImg from "../../public/stickers/ronova_tea.png";
 
 export type Sticker = {
   src: string;
@@ -85,6 +87,12 @@ export const HOME_BACKDROP: Record<CollectionView, Sticker> = {
   stories: STICKERS.tiedMage,
   oc: STICKERS.cornerWall,
 };
+
+/** Side art for the story reader, placed in the gutters around the prose. */
+export const STORY_READER_BACKDROP = {
+  left: sticker(echidnaTeaImg),
+  right: sticker(ronovaTeaImg),
+} as const;
 
 /** One image per Add chooser card (and that card’s dedicated form). */
 export const CHOOSER_SCENE = {

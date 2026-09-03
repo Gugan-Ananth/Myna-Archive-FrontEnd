@@ -524,7 +524,10 @@ export function VideoPlayer({
           src={posterSrc}
           alt=""
           className="pointer-events-none absolute inset-0 h-full w-full object-contain opacity-75"
-          onError={() => setPosterFailed(true)}
+          onError={(event) => {
+            event.currentTarget.style.visibility = "hidden";
+            setPosterFailed(true);
+          }}
         />
       ) : null}
 

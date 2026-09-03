@@ -84,6 +84,7 @@ export function CollectionMasthead({
                   loading="lazy"
                   decoding="async"
                   className="object-cover object-center transition-transform duration-500 ease-out group-hover:scale-[1.04]"
+                  fallbackLabel={t("previewUnavailable")}
                 />
               ) : (
                 <div className="absolute inset-0 bg-gradient-to-br from-accent-soft via-surface-muted to-accent-muted/40" />

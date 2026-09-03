@@ -180,7 +180,7 @@ export function CategoryTagPicker({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 space-y-2">
       <div className="flex min-h-[1.75rem] flex-wrap gap-1.5">
         {value.length === 0 && (
           <span className="text-sm text-foreground-subtle">

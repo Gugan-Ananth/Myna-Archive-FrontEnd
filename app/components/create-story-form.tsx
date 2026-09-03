@@ -19,7 +19,12 @@ import {
   updateArchiveItem,
   type CreateMediaAssetInput,
 } from "../lib/api";
-import { isUploadAborted, uploadToBunny } from "../lib/bunny-upload";
+import {
+  batchUploadPercent,
+  isUploadAborted,
+  uploadToBunny,
+} from "../lib/bunny-upload";
+import { suppressGlobalLoading } from "../lib/loading-events";
 import { captureImageDisplayMetadata } from "../lib/display-metadata";
 import { useI18n } from "../lib/i18n";
 import {
@@ -28,25 +33,31 @@ import {
   MAX_IMAGE_BYTES,
   normalizeMime,
 } from "../lib/media-constraints";
+import { attachBrokenMediaHandler } from "../lib/image-recovery";
 import { itemMediaAssets } from "../lib/media-display";
 import {
   dataUrlToFile,
   findStoryAssetBySrc,
   firstFreeChapterNumber,
   splitStoryCoverAndBody,
+  storyBodyCharCount,
+  storyPayloadHtml,
 } from "../lib/story-content";
 import {
   MAX_STORY_ASSETS,
+  MAX_STORY_BODY_CHARS,
   type ArchiveItem,
   type MediaAsset,
 } from "../lib/types";
 import { CHOOSER_SCENE } from "../lib/stickers";
 import { BackButton } from "./back-button";
+import { SafeImg } from "./broken-image-fallback";
 import { CategoryTagPicker } from "./category-tag-picker";
 import { MediaLinkInput } from "./media-link-input";
 import { RatingInput } from "./rating-input";
 import { SceneFigure } from "./scene-figure";
 import { StatusCallout } from "./status-callout";
+import { UploadProgressOverlay } from "./upload-progress";
 
 const FONT_OPTIONS = [
   { value: "Playfair", label: "Playfair" },
@@ -108,7 +119,7 @@ function initialCover(item?: ArchiveItem): CoverDraft {
  * in the same metadata pattern as image/video create.
  */
 export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const router = useRouter();
   const isEditing = Boolean(item);
   const abortRef = useRef<AbortController | null>(null);
@@ -124,24 +135,35 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   const [ratingValid, setRatingValid] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [bodyEmpty, setBodyEmpty] = useState(!item?.bodyHtml);
+  const [bodyChars, setBodyChars] = useState(() =>
+    storyBodyCharCount(item?.bodyHtml ?? ""),
+  );
   const [toolbar, setToolbar] = useState<ToolbarState>(DEFAULT_TOOLBAR);
   const [saving, setSaving] = useState(false);
   const [saveLabel, setSaveLabel] = useState("");
+  const [uploadPercent, setUploadPercent] = useState(0);
+  const [uploadCurrent, setUploadCurrent] = useState(0);
+  const [uploadTotal, setUploadTotal] = useState(0);
   const [linkMode, setLinkMode] = useState<"new" | "chapter">("new");
   const [seriesId, setSeriesId] = useState("");
   const [chapterNumber, setChapterNumber] = useState(1);
   const [seriesRoots, setSeriesRoots] = useState<ArchiveItem[]>([]);
   const [cover, setCover] = useState<CoverDraft>(() => initialCover(item));
 
+  const bodyOverLimit = bodyChars > MAX_STORY_BODY_CHARS;
   const canSubmit =
     Boolean(title.trim() && tags.length > 0 && ratingValid) &&
     !saving &&
+    !bodyOverLimit &&
     (linkMode === "new" || Boolean(seriesId));
 
   const syncToolbar = useCallback(() => {
     if (typeof document === "undefined") return;
     const editor = editorRef.current;
-    if (editor) setBodyEmpty(isEditorEmpty(editor));
+    if (editor) {
+      setBodyEmpty(isEditorEmpty(editor));
+      setBodyChars(storyBodyCharCount(editor.innerHTML));
+    }
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0) return;
     const range = sel.getRangeAt(0);
@@ -173,6 +195,13 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     if (!item || !editor) return;
     editor.innerHTML = item.bodyHtml ?? "";
     setBodyEmpty(isEditorEmpty(editor));
+    setBodyChars(storyBodyCharCount(editor.innerHTML));
+  }, [item]);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    return attachBrokenMediaHandler(editor);
   }, [item]);
 
   useEffect(() => {
@@ -450,7 +479,18 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     if (!ratingValid) return;
 
     const editor = editorRef.current;
-    const html = (editor?.innerHTML ?? "").replace(/\u200B/g, "");
+    const html = storyPayloadHtml(editor?.innerHTML ?? "");
+    const bodyCharsNow = html.length;
+    setBodyChars(bodyCharsNow);
+    if (bodyCharsNow > MAX_STORY_BODY_CHARS) {
+      setError(
+        t("storyBodyTooLong", {
+          count: bodyCharsNow.toLocaleString(locale),
+          max: MAX_STORY_BODY_CHARS.toLocaleString(locale),
+        }),
+      );
+      return;
+    }
     const images = editor ? [...editor.querySelectorAll("img")] : [];
     if (images.length > MAX_STORY_ASSETS) {
       setError(t("maxImagesReached", { max: MAX_STORY_ASSETS }));
@@ -464,9 +504,22 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     setError(null);
     setSaving(true);
     setSaveLabel(t("preparingUpload"));
+    setUploadPercent(0);
+    setUploadCurrent(0);
+    setUploadTotal(0);
 
+    const releaseLoading = suppressGlobalLoading();
     try {
       const existingAssets = item ? itemMediaAssets(item) : [];
+      const newBodyCount = images.filter((img) => {
+        const src = img.getAttribute("src") ?? "";
+        return !findStoryAssetBySrc(src, existingAssets);
+      }).length;
+      const totalUploads =
+        (cover.kind === "file" ? 1 : 0) + newBodyCount;
+      let completed = 0;
+      setUploadTotal(totalUploads);
+      if (totalUploads === 0) setUploadPercent(100);
 
       async function uploadFile(
         file: File,
@@ -482,7 +535,11 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
           );
           return null;
         }
+        const index = completed;
+        setUploadCurrent(index + 1);
+        setUploadTotal(totalUploads);
         setSaveLabel(label);
+        setUploadPercent(batchUploadPercent(index, totalUploads, 0));
         const mimeType = normalizeMime(file.type, file.name);
         const signature = await createUploadSignature(
           {
@@ -495,7 +552,12 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
         );
         const uploaded = await uploadToBunny(file, signature, {
           signal: controller.signal,
+          onProgress: (p) =>
+            setUploadPercent(
+              batchUploadPercent(index, totalUploads, p.percent),
+            ),
         });
+        completed += 1;
         const meta = await captureImageDisplayMetadata(file);
         return {
           publicId: uploaded.publicId,
@@ -540,7 +602,12 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
         }
         const uploaded = await uploadFile(
           file,
-          t("uploadingImageOf", { n: i + 1, total: images.length }),
+          totalUploads > 1
+            ? t("uploadedCount", {
+                n: completed + 1,
+                total: totalUploads,
+              })
+            : t("uploadingMedia"),
         );
         if (!uploaded) {
           setSaving(false);
@@ -550,7 +617,8 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
       }
 
       setSaveLabel(t("savingToArchive"));
-      const bodyHtml = html.replace(/<img\b[^>]*>/gi, "<img alt=\"\" />");
+      setUploadPercent(100);
+      const bodyHtml = html;
       const assets = [
         ...(coverAsset ? [coverAsset] : []),
         ...bodyAssets,
@@ -596,19 +664,36 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
       if (isUploadAborted(err) || controller.signal.aborted) {
         setSaving(false);
         setSaveLabel("");
+        setUploadPercent(0);
+        setUploadCurrent(0);
+        setUploadTotal(0);
         return;
       }
+      const overLimit =
+        err instanceof ApiError &&
+        (err.status === 413 ||
+          /too large|shorter than or equal to/i.test(err.message));
       setError(
-        err instanceof ApiError
-          ? err.details.length > 1
-            ? err.details.join(" · ")
-            : err.message
-          : err instanceof Error
-            ? err.message
-            : t("somethingWentWrong"),
+        overLimit
+          ? t("storyBodyTooLong", {
+              count: bodyCharsNow.toLocaleString(locale),
+              max: MAX_STORY_BODY_CHARS.toLocaleString(locale),
+            })
+          : err instanceof ApiError
+            ? err.details.length > 1
+              ? err.details.join(" · ")
+              : err.message
+            : err instanceof Error
+              ? err.message
+              : t("somethingWentWrong"),
       );
       setSaving(false);
       setSaveLabel("");
+      setUploadPercent(0);
+      setUploadCurrent(0);
+      setUploadTotal(0);
+    } finally {
+      releaseLoading();
     }
   }
 
@@ -721,17 +806,6 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
         </button>
       </header>
 
-      <div className="border-b border-border/60 px-3 py-2 sm:px-4">
-        <MediaLinkInput
-          mediaType="image"
-          label={`${t("uploadFromLink")} · ${t("image")}`}
-          onFile={insertImageFile}
-          onBeforeFetch={rememberSelection}
-          disabled={saving}
-          className="mx-auto max-w-2xl"
-        />
-      </div>
-
       <input
         ref={imageInputRef}
         type="file"
@@ -786,11 +860,25 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                 bodyEmpty ? "story-doc-empty" : "",
               ].join(" ")}
             />
+            <p
+              className={[
+                "mt-3 text-right text-xs tabular-nums",
+                bodyOverLimit
+                  ? "font-medium text-danger"
+                  : "text-foreground-subtle",
+              ].join(" ")}
+              aria-live="polite"
+            >
+              {t("storyBodyCharCount", {
+                count: bodyChars.toLocaleString(locale),
+                max: MAX_STORY_BODY_CHARS.toLocaleString(locale),
+              })}
+            </p>
           </div>
         </div>
 
-        <aside className="app-card flex w-full shrink-0 flex-col border-t border-border lg:h-full lg:w-[min(22rem,36%)] lg:border-l lg:border-t-0">
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4 sm:p-5">
+        <aside className="app-card flex w-full min-w-0 shrink-0 flex-col border-t border-border lg:h-full lg:w-[min(22rem,36%)] lg:border-l lg:border-t-0">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto p-4 sm:p-5">
             <div>
               <p className="mb-1 text-sm font-medium uppercase tracking-wide text-foreground-muted">
                 {t("storyCover")}
@@ -814,8 +902,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                 </button>
               ) : (
                 <div className="overflow-hidden rounded-xl ring-1 ring-border">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <SafeImg
                     src={
                       cover.kind === "file" ? cover.previewUrl : cover.url
                     }
@@ -962,7 +1049,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                 className="rounded-xl border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
               />
             </label>
-            <label className="flex flex-col gap-1">
+            <label className="flex min-w-0 flex-col gap-1">
               <span className="text-sm font-medium uppercase tracking-wide text-foreground-muted">
                 {t("storySummary")}{" "}
                 <span className="normal-case text-foreground-subtle">
@@ -977,7 +1064,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                 rows={3}
                 onChange={(e) => setSummary(e.target.value)}
                 placeholder={t("storySummaryPlaceholder")}
-                className="resize-y rounded-xl border border-border bg-background px-3 py-2 text-base leading-relaxed outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+                className="relative z-10 w-full min-w-0 resize-y rounded-xl border border-border bg-background px-3 py-2 text-base leading-relaxed outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
               />
               <span className="self-end text-xs tabular-nums text-foreground-subtle">
                 {summary.length}/600
@@ -1011,6 +1098,26 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
           </div>
         </aside>
       </div>
+
+      <UploadProgressOverlay
+        open={saving}
+        title={
+          saveLabel === t("savingToArchive")
+            ? t("savingToArchive")
+            : uploadTotal > 1
+              ? t("uploadedCount", { n: uploadCurrent, total: uploadTotal })
+              : saveLabel || t("uploadingMedia")
+        }
+        hint={
+          uploadTotal > 1 && saveLabel === t("uploadingCover")
+            ? t("uploadingCover")
+            : uploadTotal > 1 && saveLabel === t("preparingUpload")
+              ? t("preparingUpload")
+              : null
+        }
+        percent={uploadPercent}
+        onCancel={() => abortRef.current?.abort()}
+      />
     </form>
   );
 }
