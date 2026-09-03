@@ -9,16 +9,18 @@ type HomeBackdropProps = {
 /**
  * Quiet, section-specific atmosphere behind the home grid. The full
  * illustration is contained at screen height on the right — not cover-cropped.
+ * It is fixed to the viewport so a long archive list does not carry the art
+ * away while the user scrolls.
  */
 export function HomeBackdrop({ view }: HomeBackdropProps) {
   const sticker = HOME_BACKDROP[view];
 
   return (
     <div
-      className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
+      className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
       aria-hidden
     >
-      <div className="sticky top-0 flex h-dvh w-full justify-end">
+      <div className="flex h-dvh w-full justify-end">
         <div
           className="relative h-full opacity-[0.20] dark:opacity-[0.30] [mask-image:linear-gradient(to_left,black_55%,transparent_100%)]"
           style={{

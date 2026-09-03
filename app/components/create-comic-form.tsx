@@ -17,7 +17,12 @@ import {
   updateArchiveItem,
   type CreateMediaAssetInput,
 } from "../lib/api";
-import { isUploadAborted, uploadToBunny } from "../lib/bunny-upload";
+import {
+  batchUploadPercent,
+  isUploadAborted,
+  uploadToBunny,
+} from "../lib/bunny-upload";
+import { suppressGlobalLoading } from "../lib/loading-events";
 import { clearCreateFiles } from "../lib/pending-create-files";
 import {
   captureImageDisplayMetadata,
@@ -39,11 +44,13 @@ import {
 } from "../lib/types";
 import { CHOOSER_SCENE } from "../lib/stickers";
 import { BackButton } from "./back-button";
+import { SafeImg } from "./broken-image-fallback";
 import { CategoryTagPicker } from "./category-tag-picker";
 import { MediaLinkInput } from "./media-link-input";
 import { RatingInput } from "./rating-input";
 import { SceneFigure } from "./scene-figure";
 import { StatusCallout } from "./status-callout";
+import { UploadProgressOverlay } from "./upload-progress";
 import { useStashedCreateFiles } from "./use-stashed-create-files";
 
 type SubmitPhase =
@@ -127,6 +134,8 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
   const [phase, setPhase] = useState<SubmitPhase>("idle");
   const [uploadPercent, setUploadPercent] = useState(0);
   const [uploadLabel, setUploadLabel] = useState("");
+  const [uploadCurrent, setUploadCurrent] = useState(0);
+  const [uploadTotal, setUploadTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
@@ -300,13 +309,17 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
     abortRef.current = controller;
 
     setError(null);
-    setPhase(pending.some((page) => page.kind === "file") ? "signing" : "saving");
-    setUploadPercent(0);
+    const filesToUpload = pending.filter((page) => page.kind === "file").length;
+    setPhase(filesToUpload > 0 ? "signing" : "saving");
+    setUploadPercent(filesToUpload > 0 ? 0 : 100);
     setUploadLabel("");
+    setUploadCurrent(filesToUpload > 0 ? 1 : 0);
+    setUploadTotal(filesToUpload);
 
+    const releaseLoading = suppressGlobalLoading();
     try {
       const assets: CreateMediaAssetInput[] = [];
-      const total = pending.length;
+      let fileIndex = 0;
 
       for (let i = 0; i < pending.length; i += 1) {
         if (controller.signal.aborted) {
@@ -318,9 +331,15 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
           continue;
         }
 
-        setUploadLabel(t("uploadingImageOf", { n: i + 1, total }));
+        setUploadCurrent(fileIndex + 1);
+        setUploadTotal(filesToUpload);
+        setUploadLabel(
+          filesToUpload > 1
+            ? t("uploadedCount", { n: fileIndex + 1, total: filesToUpload })
+            : t("uploadingMedia"),
+        );
         setPhase("signing");
-        setUploadPercent(0);
+        setUploadPercent(batchUploadPercent(fileIndex, filesToUpload, 0));
 
         const mimeType = normalizeMime(page.file.type, page.file.name);
         const signature = await createUploadSignature(
@@ -336,7 +355,10 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
         setPhase("uploading");
         const uploaded = await uploadToBunny(page.file, signature, {
           signal: controller.signal,
-          onProgress: (p) => setUploadPercent(p.percent),
+          onProgress: (p) =>
+            setUploadPercent(
+              batchUploadPercent(fileIndex, filesToUpload, p.percent),
+            ),
         });
 
         let meta = page.meta;
@@ -355,10 +377,12 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
               }
             : {}),
         });
+        fileIndex += 1;
       }
 
       setPhase("saving");
       setUploadLabel(t("savingToArchive"));
+      setUploadPercent(100);
       const payload = {
         name: trimmedName,
         tags,
@@ -391,6 +415,8 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
         setPhase("idle");
         setUploadPercent(0);
         setUploadLabel("");
+        setUploadCurrent(0);
+        setUploadTotal(0);
         setError(t("uploadCancelled"));
         abortRef.current = null;
         return;
@@ -406,12 +432,24 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
         setError(t("somethingWentWrong"));
       }
       abortRef.current = null;
+    } finally {
+      releaseLoading();
     }
   }
 
   const canSubmit =
     Boolean(pending.length > 0 && name.trim() && tags.length > 0 && ratingValid) &&
     !busy;
+
+  const progressTitle =
+    phase === "saving"
+      ? t("savingToArchive")
+      : uploadTotal > 1
+        ? t("uploadedCount", { n: uploadCurrent, total: uploadTotal })
+        : uploadLabel ||
+          (phase === "signing" ? t("preparingUpload") : t("uploadingMedia"));
+  const progressHint =
+    uploadTotal > 1 && phase === "signing" ? t("preparingUpload") : null;
 
   function onDropFile(event: DragEvent) {
     event.preventDefault();
@@ -539,8 +577,7 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
           <div className="relative min-h-[min(38vh,20rem)] min-w-0 flex-1 bg-surface-muted sm:min-h-[min(42vh,22rem)] lg:min-h-full">
             {active ? (
               <div className="absolute inset-0 flex items-center justify-center p-4 pt-16 sm:p-8 sm:pt-16">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <SafeImg
                   src={active.previewUrl}
                   alt=""
                   className="max-h-full max-w-full rounded-lg object-contain shadow-sm ring-1 ring-black/5"
@@ -563,11 +600,11 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
                           : "ring-border hover:ring-border-strong",
                       ].join(" ")}
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+                      <SafeImg
                         src={item.previewUrl}
                         alt=""
                         className="h-full w-full object-cover"
+                        compactFallback
                       />
                       {i === 0 ? (
                         <span className="absolute inset-x-0 bottom-0 bg-primary/90 py-0.5 text-[9px] font-medium text-primary-foreground">
@@ -639,8 +676,8 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
             </div>
           </div>
 
-          <aside className="app-card flex w-full shrink-0 flex-col border-t border-border lg:h-full lg:w-[min(26rem,40%)] lg:border-l lg:border-t-0">
-            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4 pt-5 sm:p-5 lg:pt-14">
+          <aside className="app-card flex w-full min-w-0 shrink-0 flex-col border-t border-border lg:h-full lg:w-[min(26rem,40%)] lg:border-l lg:border-t-0">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto p-4 pt-5 sm:p-5 lg:pt-14">
               <p className="text-sm leading-snug text-foreground-subtle">
                 {t("comicCreateHint")}
               </p>
@@ -691,7 +728,7 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
                 />
               </div>
 
-              <label className="flex flex-col gap-1">
+              <label className="flex min-w-0 flex-col gap-1">
                 <span className="text-sm font-medium uppercase tracking-wide text-foreground-muted">
                   {t("description")}
                 </span>
@@ -703,45 +740,11 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
                   placeholder={t("optionalNotes", {
                     media: t("comic").toLowerCase(),
                   })}
-                  className="h-24 max-h-36 min-h-[5.5rem] resize-y rounded-xl border border-border bg-background px-3 py-2 text-base leading-relaxed outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
+                  className="relative z-10 h-24 max-h-36 min-h-[5.5rem] w-full min-w-0 resize-y rounded-xl border border-border bg-background px-3 py-2 text-base leading-relaxed outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
                 />
               </label>
 
               {error ? <StatusCallout title={error} compact /> : null}
-
-              {busy && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm font-medium text-foreground-muted">
-                    <span>
-                      {phase === "signing" &&
-                        (uploadLabel || t("preparingUpload"))}
-                      {phase === "uploading" &&
-                        (uploadLabel || t("uploadingMedia"))}
-                      {phase === "saving" && t("savingToArchive")}
-                    </span>
-                    {phase === "uploading" && (
-                      <span className="tabular-nums text-primary">
-                        {uploadPercent}%
-                      </span>
-                    )}
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted">
-                    <div
-                      className="h-full rounded-full bg-primary transition-[width] duration-200"
-                      style={{
-                        width:
-                          phase === "signing"
-                            ? "12%"
-                            : phase === "uploading"
-                              ? `${Math.max(uploadPercent, 4)}%`
-                              : phase === "saving"
-                                ? "92%"
-                                : "100%",
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="flex shrink-0 flex-col gap-2 border-t border-border p-4 sm:px-5 sm:pb-5 sm:pt-3">
@@ -765,6 +768,14 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
           </aside>
         </form>
       )}
+
+      <UploadProgressOverlay
+        open={busy}
+        title={progressTitle}
+        hint={progressHint}
+        percent={uploadPercent}
+        onCancel={cancelUpload}
+      />
     </div>
   );
 }

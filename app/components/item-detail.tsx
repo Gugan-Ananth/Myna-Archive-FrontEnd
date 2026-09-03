@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ApiError,
   deleteArchiveItem,
   listStoryChapters,
   updateArchiveItem,
 } from "../lib/api";
+import { attachBrokenMediaHandler } from "../lib/image-recovery";
 import { useI18n } from "../lib/i18n";
 import { itemMediaAssets } from "../lib/media-display";
 import { storyCardBlurb } from "../lib/story-content";
@@ -23,6 +24,8 @@ import { RatingInput } from "./rating-input";
 import { StatusCallout } from "./status-callout";
 import { BunnyStreamEmbed } from "./bunny-stream-embed";
 import { StarButton } from "./star-button";
+import { StoryBackdrop } from "./story-backdrop";
+import { StoryReader } from "./story-reader";
 
 type ItemDetailProps = {
   item: ArchiveItem;
@@ -54,7 +57,10 @@ export function ItemDetail({ item }: ItemDetailProps) {
   const [error, setError] = useState<string | null>(null);
   /** Active slide in an image group (1-based label uses +1). */
   const [groupSlide, setGroupSlide] = useState({ index: 0, total: 0 });
-  const [chapters, setChapters] = useState<ArchiveItem[]>([]);
+  const [chapters, setChapters] = useState<ArchiveItem[]>(
+    item.mediaType === "story" ? [item] : [],
+  );
+  const storyBodyRef = useRef<HTMLElement>(null);
 
   const handleGroupIndexChange = useCallback((index: number, total: number) => {
     setGroupSlide((prev) =>
@@ -88,6 +94,13 @@ export function ItemDetail({ item }: ItemDetailProps) {
             ? t("navCollections")
             : t("navPhotos");
   const busy = saving || deleting;
+
+  useEffect(() => {
+    if (!isStory) return;
+    const root = storyBodyRef.current;
+    if (!root) return;
+    return attachBrokenMediaHandler(root);
+  }, [isStory, draft.bodyHtml]);
 
   useEffect(() => {
     if (item.mediaType !== "story") return;
@@ -228,14 +241,15 @@ export function ItemDetail({ item }: ItemDetailProps) {
   return (
     <div
       className={[
-        "relative flex min-h-0 flex-1 flex-col lg:flex-row",
+        "relative isolate flex min-h-0 flex-1 flex-col lg:flex-row",
         isStory ? "" : "bg-neutral-950",
       ].join(" ")}
     >
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+      {isStory ? <StoryBackdrop /> : null}
+      <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col">
         {isStory ? (
           <>
-            <header className="relative z-30 flex w-full shrink-0 items-center justify-between gap-3 px-3 py-3 sm:px-8 lg:px-10">
+            <header className="relative z-30 flex w-full shrink-0 items-center justify-between gap-3 px-3 py-3 sm:px-4">
               <BackButton href={homeHref} />
               <div className="flex items-center gap-2">
                 <DetailsToggle
@@ -251,40 +265,11 @@ export function ItemDetail({ item }: ItemDetailProps) {
               </div>
             </header>
             <div className="min-h-0 flex-1 overflow-y-auto">
-              <div className="w-full px-4 pb-10 pt-2 sm:px-8 lg:px-10">
-                {chapters.length > 1 ? (
-                  <nav
-                    aria-label={t("storyChapters")}
-                    className="mb-5 flex flex-wrap gap-1.5"
-                  >
-                    {chapters.map((chapter) => {
-                      const active = chapter.id === draft.id;
-                      return (
-                        <Link
-                          key={chapter.id}
-                          href={`/item/${chapter.id}`}
-                          className={[
-                            "inline-flex h-9 items-center rounded-full px-3.5 text-sm font-medium transition-colors",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                            active
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-surface text-foreground-muted ring-1 ring-border hover:bg-accent-soft hover:text-primary",
-                          ].join(" ")}
-                        >
-                          {t("storyChapter")} {chapter.chapterNumber ?? 1}
-                        </Link>
-                      );
-                    })}
-                  </nav>
-                ) : null}
-                <h1 className="w-full text-2xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-[2.6rem] lg:leading-[1.15]">
-                  {draft.name}
-                </h1>
-                <article
-                  className="story-read mt-8 w-full sm:mt-10"
-                  dangerouslySetInnerHTML={{ __html: draft.bodyHtml ?? "" }}
-                />
-              </div>
+              <StoryReader
+                item={draft}
+                chapters={chapters}
+                bodyRef={storyBodyRef}
+              />
             </div>
           </>
         ) : (
@@ -360,14 +345,15 @@ export function ItemDetail({ item }: ItemDetailProps) {
 
       <aside
         className={[
-          "app-card z-20 shrink-0 overflow-hidden border-border/80 shadow-xl backdrop-blur-xl transition-[width,max-height,opacity] duration-300 ease-out",
+          "app-card z-40 flex min-w-0 max-w-full shrink-0 flex-col overflow-hidden border-border/80 shadow-xl backdrop-blur-xl transition-[width,max-height,opacity] duration-300 ease-out",
           panelOpen
-            ? "max-h-[50vh] w-full border-t opacity-100 lg:max-h-none lg:w-[min(26rem,40%)] lg:border-l"
+            ? "pointer-events-auto max-h-[50vh] w-full border-t opacity-100 lg:max-h-none lg:h-full lg:w-[min(26rem,40%)] lg:border-l"
             : "pointer-events-none max-h-0 w-full opacity-0 lg:max-h-none lg:w-0",
         ].join(" ")}
         aria-hidden={!panelOpen}
       >
-        <div className="flex h-full max-h-[50vh] w-full flex-col gap-6 overflow-y-auto p-5 sm:p-6 lg:max-h-none lg:min-w-[min(26rem,100%)] lg:gap-7 lg:p-7">
+        <div className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col overflow-x-hidden lg:min-w-[min(26rem,100%)]">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-x-hidden overflow-y-auto p-5 sm:p-6 lg:gap-7 lg:p-7">
           <div className="flex items-start gap-4 border-b border-border/70 pb-6">
             <div className="min-w-0 flex-1">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
@@ -419,7 +405,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
               ))}
           </div>
 
-          <section className="rounded-2xl border border-border/70 bg-background/35 p-4 sm:p-5">
+          <section className="min-w-0 rounded-2xl border border-border/70 bg-background/35 p-4 sm:p-5">
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-foreground-muted">
               {t("rating")}
             </p>
@@ -435,7 +421,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
             )}
           </section>
 
-          <section className="rounded-2xl border border-border/70 bg-background/35 p-4 sm:p-5">
+          <section className="min-w-0 rounded-2xl border border-border/70 bg-background/35 p-4 sm:p-5">
             <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-foreground-muted">
               {t("tags")}
             </p>
@@ -466,38 +452,44 @@ export function ItemDetail({ item }: ItemDetailProps) {
             )}
           </section>
 
-          <section className="min-h-0 flex-1 rounded-2xl border border-border/70 bg-background/35 p-4 sm:p-5">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-foreground-muted">
-              {isStory ? t("storySummary") : t("description")}
-            </p>
-            {editing && !isStory ? (
+          {editing && !isStory ? (
+            <label className="flex min-h-0 min-w-0 flex-col rounded-2xl border border-border/70 bg-background/35 p-4 sm:p-5 lg:min-h-0 lg:flex-1">
+              <span className="mb-3 shrink-0 text-xs font-semibold uppercase tracking-[0.14em] text-foreground-muted">
+                {t("description")}
+              </span>
               <textarea
                 value={draft.description}
                 disabled={busy}
                 onChange={(e) =>
                   setDraft((d) => ({ ...d, description: e.target.value }))
                 }
-                rows={7}
-                className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm leading-relaxed text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
+                rows={4}
+                className="relative z-10 min-h-[6.5rem] w-full min-w-0 flex-1 resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm leading-relaxed text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
               />
-            ) : (
-              <p className="text-sm leading-relaxed text-foreground-muted">
+            </label>
+          ) : (
+            <section className="min-w-0 rounded-2xl border border-border/70 bg-background/35 p-4 sm:p-5">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-foreground-muted">
+                {isStory ? t("storySummary") : t("description")}
+              </p>
+              <p className="min-w-0 break-words text-sm leading-relaxed text-foreground-muted">
                 {isStory
                   ? storyCardBlurb(draft) || t("noDescription")
                   : draft.description || t("noDescription")}
               </p>
-            )}
-          </section>
+            </section>
+          )}
 
           {error ? <StatusCallout title={error} compact /> : null}
+          </div>
 
           {editing ? (
-            <div className="mt-auto flex flex-wrap gap-2 border-t border-border/70 pt-5">
+            <div className="grid w-full min-w-0 shrink-0 grid-cols-[repeat(3,minmax(0,1fr))] gap-2 border-t border-border/70 p-4 sm:px-6 sm:pb-6 lg:px-7 lg:pb-7">
               <button
                 type="button"
                 onClick={() => void saveEdit()}
                 disabled={!ratingValid || busy}
-                className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-11 w-full min-w-0 items-center justify-center overflow-hidden rounded-full bg-primary px-1.5 text-center text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 sm:px-4"
               >
                 {saving ? t("saving") : t("save")}
               </button>
@@ -505,7 +497,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
                 type="button"
                 onClick={cancelEdit}
                 disabled={busy}
-                className="inline-flex h-11 items-center justify-center rounded-full border border-border px-6 text-sm font-medium text-foreground hover:bg-surface-muted disabled:opacity-50"
+                className="inline-flex h-11 w-full min-w-0 items-center justify-center overflow-hidden rounded-full border border-border px-1.5 text-center text-sm font-medium text-foreground hover:bg-surface-muted disabled:opacity-50 sm:px-4"
               >
                 {t("cancel")}
               </button>
@@ -513,7 +505,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
                 type="button"
                 onClick={() => void onDelete()}
                 disabled={busy}
-                className="ml-auto inline-flex h-11 items-center justify-center rounded-full border border-danger/30 px-6 text-sm font-medium text-danger hover:bg-danger/10 disabled:opacity-50"
+                className="inline-flex h-11 w-full min-w-0 items-center justify-center overflow-hidden rounded-full border border-danger/30 px-1.5 text-center text-sm font-medium text-danger hover:bg-danger/10 disabled:opacity-50 sm:px-4"
               >
                 {deleting
                   ? t("deleting")
@@ -523,7 +515,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
               </button>
             </div>
           ) : (
-            <div className="mt-auto border-t border-border/70 pt-5">
+            <div className="shrink-0 border-t border-border/70 p-4 sm:px-6 sm:pb-6 lg:px-7 lg:pb-7">
               <button
                 type="button"
                 onClick={() => void onDelete()}

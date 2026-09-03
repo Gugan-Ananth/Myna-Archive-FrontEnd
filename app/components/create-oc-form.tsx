@@ -16,6 +16,7 @@ import {
   updateOriginalCharacter,
 } from "../lib/api";
 import { isUploadAborted, uploadToBunny } from "../lib/bunny-upload";
+import { suppressGlobalLoading } from "../lib/loading-events";
 import { captureImageDisplayMetadata } from "../lib/display-metadata";
 import { useI18n } from "../lib/i18n";
 import {
@@ -29,9 +30,11 @@ import { originalMediaUrl } from "../lib/media-display";
 import { CHOOSER_SCENE } from "../lib/stickers";
 import type { OriginalCharacter } from "../lib/types";
 import { BackButton } from "./back-button";
+import { SafeImg } from "./broken-image-fallback";
 import { MediaLinkInput } from "./media-link-input";
 import { SceneFigure } from "./scene-figure";
 import { StatusCallout } from "./status-callout";
+import { UploadProgressOverlay } from "./upload-progress";
 
 type CreateOcFormProps = {
   oc?: OriginalCharacter;
@@ -64,6 +67,7 @@ export function CreateOcForm({ oc }: CreateOcFormProps) {
   const [dragOver, setDragOver] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveLabel, setSaveLabel] = useState("");
+  const [uploadPercent, setUploadPercent] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -135,7 +139,10 @@ export function CreateOcForm({ oc }: CreateOcFormProps) {
     abortRef.current = controller;
     setSaving(true);
     setError(null);
+    setUploadPercent(portrait ? 0 : 100);
+    setSaveLabel(portrait ? t("uploadingMedia") : t("savingToArchive"));
 
+    const releaseLoading = suppressGlobalLoading();
     try {
       let uploaded:
         | {
@@ -160,6 +167,7 @@ export function CreateOcForm({ oc }: CreateOcFormProps) {
         );
         const result = await uploadToBunny(portrait.file, signature, {
           signal: controller.signal,
+          onProgress: (p) => setUploadPercent(p.percent),
         });
         const meta = await captureImageDisplayMetadata(portrait.file);
         uploaded = {
@@ -175,6 +183,7 @@ export function CreateOcForm({ oc }: CreateOcFormProps) {
       }
 
       setSaveLabel(t("savingToArchive"));
+      setUploadPercent(100);
       const fields = {
         name: trimmedName,
         age: age.trim(),
@@ -221,11 +230,13 @@ export function CreateOcForm({ oc }: CreateOcFormProps) {
     } catch (err) {
       if (isUploadAborted(err) || controller.signal.aborted) {
         setSaving(false);
+        setUploadPercent(0);
         setError(t("uploadCancelled"));
         abortRef.current = null;
         return;
       }
       setSaving(false);
+      setUploadPercent(0);
       if (err instanceof ApiError) {
         setError(
           err.details.length > 1 ? err.details.join(" · ") : err.message,
@@ -236,6 +247,8 @@ export function CreateOcForm({ oc }: CreateOcFormProps) {
         setError(t("somethingWentWrong"));
       }
       abortRef.current = null;
+    } finally {
+      releaseLoading();
     }
   }
 
@@ -301,8 +314,7 @@ export function CreateOcForm({ oc }: CreateOcFormProps) {
             ].join(" ")}
           >
             {preview ? (
-              // eslint-disable-next-line @next/next/no-img-element -- local blob / existing CDN preview
-              <img
+              <SafeImg
                 src={preview}
                 alt=""
                 className="absolute inset-0 h-full w-full object-contain bg-surface-muted"
@@ -399,6 +411,13 @@ export function CreateOcForm({ oc }: CreateOcFormProps) {
           </div>
         </div>
       </form>
+
+      <UploadProgressOverlay
+        open={saving}
+        title={saveLabel || t("uploadingMedia")}
+        percent={uploadPercent}
+        onCancel={() => abortRef.current?.abort()}
+      />
     </div>
   );
 }
@@ -436,7 +455,7 @@ function Field({
         required={required}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="rounded-xl border border-border bg-background px-3 py-2.5 text-base outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 sm:text-sm"
+        className="w-full min-w-0 rounded-xl border border-border bg-background px-3 py-2.5 text-base outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 sm:text-sm"
       />
     </label>
   );
@@ -458,7 +477,7 @@ function Area({
   disabled?: boolean;
 }) {
   return (
-    <label className="flex flex-col gap-1.5">
+    <label className="flex min-w-0 flex-col gap-1.5">
       <span className="text-xs font-medium uppercase tracking-wide text-foreground-muted">
         {label}
       </span>
@@ -468,7 +487,7 @@ function Area({
         rows={rows}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="resize-y rounded-xl border border-border bg-background px-3 py-2.5 text-base leading-relaxed outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 sm:text-sm"
+        className="relative z-10 w-full min-w-0 resize-y rounded-xl border border-border bg-background px-3 py-2.5 text-base leading-relaxed outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 sm:text-sm"
       />
     </label>
   );

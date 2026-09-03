@@ -53,6 +53,7 @@ export function StoryWorkCard({
             unoptimized={!hasCover}
             sizes="(max-width: 640px) 136px, 208px"
             className="object-cover"
+            fallbackLabel={t("previewUnavailable")}
           />
         </div>
         <div className="flex min-w-0 flex-1 flex-col px-4 py-5 sm:px-7 sm:py-7">

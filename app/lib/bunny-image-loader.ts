@@ -30,10 +30,9 @@ export default function bunnyImageLoader({
     const w = Math.min(Math.max(width, 64), 1920);
     url.searchParams.set("width", String(w));
     url.searchParams.set("quality", String(quality ?? 72));
-    // AVIF only under Bunny’s ~4 MP encoder cap; small pins stay well under it.
-    if (!url.searchParams.has("format")) {
-      url.searchParams.set("format", w <= 720 ? "avif" : "webp");
-    }
+    // WebP is the same format `withBunnyResize` uses. Forcing AVIF on small
+    // pins broke some originals (Bunny encoder cap / older Safari).
+    url.searchParams.set("format", "webp");
     // Drop fixed height/aspect from stored thumbnail URLs so width drives size.
     url.searchParams.delete("height");
     url.searchParams.delete("aspect_ratio");

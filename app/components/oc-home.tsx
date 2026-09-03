@@ -12,6 +12,7 @@ import { useI18n } from "../lib/i18n";
 import type { OriginalCharacter } from "../lib/types";
 import { HomeBackdrop } from "./home-backdrop";
 import { HomeFiltersNotice } from "./home-filters-notice";
+import { InfiniteScrollSentinel } from "./infinite-scroll-sentinel";
 import { OcGrid } from "./oc-grid";
 import { StatusCallout } from "./status-callout";
 
@@ -53,6 +54,7 @@ export function OcHome({
   } | null>(null);
   const [isFiltering, setIsFiltering] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const loadingMoreRef = useRef(false);
   const requestIdRef = useRef(0);
 
   const matchesServer = seeded && filterKey === initialFilterKey;
@@ -170,8 +172,9 @@ export function OcHome({
   }, [filterKey, initialFilterKey, liveQuery, seeded]);
 
   const loadMore = useCallback(async () => {
-    if (isLoadingMore || isFiltering || !hasMore) return;
+    if (loadingMoreRef.current || isFiltering || !hasMore) return;
     const nextPage = page + 1;
+    loadingMoreRef.current = true;
     setIsLoadingMore(true);
     try {
       const result = await listOriginalCharacters({
@@ -180,6 +183,7 @@ export function OcHome({
         pageSize: PAGE_SIZE,
       });
       setClientSnap((prev) => {
+        if (prev && prev.filterKey !== filterKey) return prev;
         const base =
           prev?.filterKey === filterKey
             ? prev.items
@@ -187,24 +191,54 @@ export function OcHome({
               ? initialItems
               : (prev?.items ?? initialItems);
         const seen = new Set(base.map((item) => item.id));
+        const appended = result.data.filter((item) => !seen.has(item.id));
+        const nextItems = [...base, ...appended];
         return {
           filterKey,
-          items: [...base, ...result.data.filter((item) => !seen.has(item.id))],
-          total: result.meta.total,
+          items: nextItems,
+          total: appended.length === 0 ? nextItems.length : result.meta.total,
           page: nextPage,
           loadError: null,
           usedFallback: false,
         };
       });
+    } catch (error) {
+      setClientSnap((prev) => {
+        if (prev && prev.filterKey !== filterKey) return prev;
+        return {
+          filterKey,
+          items:
+            prev?.filterKey === filterKey
+              ? prev.items
+              : matchesServer
+                ? initialItems
+                : (prev?.items ?? initialItems),
+          total:
+            prev?.filterKey === filterKey
+              ? prev.total
+              : matchesServer
+                ? initialTotal
+                : (prev?.total ?? 0),
+          page:
+            prev?.filterKey === filterKey
+              ? prev.page
+              : matchesServer
+                ? 1
+                : (prev?.page ?? 1),
+          loadError: error instanceof ApiError ? error.message : "fallback",
+          usedFallback: !(error instanceof ApiError),
+        };
+      });
     } finally {
+      loadingMoreRef.current = false;
       setIsLoadingMore(false);
     }
   }, [
     filterKey,
     hasMore,
     initialItems,
+    initialTotal,
     isFiltering,
-    isLoadingMore,
     liveQuery,
     matchesServer,
     page,
@@ -268,18 +302,12 @@ export function OcHome({
           emptyMessage={emptyMessage}
           emptyHint={emptyHint}
         />
-        {hasMore && !loadError ? (
-          <div className="relative z-10 mt-2 flex justify-center pt-2">
-            <button
-              type="button"
-              onClick={() => void loadMore()}
-              disabled={isLoadingMore || isFiltering}
-              className="inline-flex h-11 min-w-[10rem] items-center justify-center rounded-full border border-border bg-surface px-6 text-sm font-medium text-foreground shadow-sm transition-colors hover:border-primary hover:bg-accent-soft hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isLoadingMore ? t("loadingMore") : t("loadMore")}
-            </button>
-          </div>
-        ) : null}
+        <InfiniteScrollSentinel
+          onLoadMore={loadMore}
+          hasMore={hasMore && !loadError}
+          isLoading={isLoadingMore}
+          disabled={isFiltering}
+        />
       </div>
       </div>
     </main>
