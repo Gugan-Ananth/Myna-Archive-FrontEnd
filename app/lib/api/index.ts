@@ -53,6 +53,8 @@ export type {
   MediaAsset,
   MediaType,
   OriginalCharacter,
+  StoryCharacter,
+  StoryCharacterInput,
   PaginatedArchiveItems,
   PaginatedOriginalCharacters,
   ReorderTaxonomyInput,

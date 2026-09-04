@@ -7,14 +7,24 @@ type BackButtonProps = {
   /** Fallback when history is empty (e.g. direct link). */
   href?: string;
   className?: string;
+  /** When set, skips history navigation (e.g. closing a lightbox). */
+  onClick?: () => void;
 };
 
 /** Single back arrow for fullscreen pages (Add / image detail). */
-export function BackButton({ href = "/", className = "" }: BackButtonProps) {
+export function BackButton({
+  href = "/",
+  className = "",
+  onClick,
+}: BackButtonProps) {
   const router = useRouter();
   const { t } = useI18n();
 
-  function onClick() {
+  function handleClick() {
+    if (onClick) {
+      onClick();
+      return;
+    }
     if (typeof window !== "undefined" && window.history.length > 1) {
       router.back();
       return;
@@ -25,7 +35,7 @@ export function BackButton({ href = "/", className = "" }: BackButtonProps) {
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={handleClick}
       aria-label={t("goBack")}
       className={[
         "inline-flex h-11 w-11 items-center justify-center rounded-full",

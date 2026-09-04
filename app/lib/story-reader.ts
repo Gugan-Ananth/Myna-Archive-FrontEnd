@@ -3,6 +3,8 @@
  * Stored HTML from the editor is left unchanged.
  */
 
+import type { StoryCharacter } from "./types";
+
 type QuoteDir = "open" | "close" | "either";
 
 type QuoteMark = {
@@ -15,7 +17,15 @@ type EnhanceCtx = {
   ledeDone: boolean;
   title: string;
   droppedTitle: boolean;
-  dialogueIndex: number;
+  lastSpeakerKey: string | null;
+  lastSide: "left" | "right";
+  hasDialogue: boolean;
+  characters: Map<string, StoryCharacter>;
+};
+
+export type StoryDialogueEnhanceOptions = {
+  title?: string;
+  characters?: StoryCharacter[];
 };
 
 type HtmlToken =
@@ -101,16 +111,53 @@ export function storyReadMinutes(html: string): number {
  */
 export function enhanceStoryHtml(
   html: string,
-  options?: { title?: string },
+  options?: StoryDialogueEnhanceOptions,
 ): string {
   if (!html.trim()) return html;
+  const characters = new Map<string, StoryCharacter>();
+  for (const character of options?.characters ?? []) {
+    const key = character.name.trim().toLowerCase();
+    if (key && !characters.has(key)) characters.set(key, character);
+  }
   const ctx: EnhanceCtx = {
     ledeDone: false,
     title: options?.title?.trim() ?? "",
     droppedTitle: false,
-    dialogueIndex: 0,
+    lastSpeakerKey: null,
+    lastSide: "left",
+    hasDialogue: false,
+    characters,
   };
-  return transformFragment(html, ctx);
+  return markStoryInlineImages(transformFragment(html, ctx));
+}
+
+/** Unique speaker names in document order from `Name: "dialogue"` lines. */
+export function extractStorySpeakers(html: string): string[] {
+  if (!html.trim()) return [];
+  const pairs = pairQuotes(html);
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const pair of pairs) {
+    const inner = html.slice(pair.open.end, pair.close.start);
+    if (!shouldWrapDialogue(inner)) continue;
+    const speaker = findSpeakerBefore(html, pair.open.start);
+    if (!speaker) continue;
+    const key = speaker.name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    names.push(speaker.name);
+  }
+  return names;
+}
+
+/** Stable hue for default initials portraits. */
+export function storyCharacterHue(name: string): number {
+  let hash = 0;
+  const key = name.trim().toLowerCase();
+  for (let i = 0; i < key.length; i += 1) {
+    hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  }
+  return hash % 360;
 }
 
 function transformFragment(html: string, ctx: EnhanceCtx): string {
@@ -222,7 +269,7 @@ function wrapProseBlock(
   const withDialogue = annotateDialogueSides(
     SKIP_DIALOGUE_TAGS.has(name)
       ? cleaned
-      : wrapEmDashDialogue(wrapDialogues(cleaned)),
+      : wrapEmDashDialogue(wrapDialogues(cleaned, ctx), ctx),
     ctx,
   );
 
@@ -231,7 +278,7 @@ function wrapProseBlock(
   if (
     canLede &&
     !ctx.ledeDone &&
-    !withDialogue.includes("story-dialogue-bubble") &&
+    !withDialogue.includes("story-dialogue") &&
     startsWithLetter(withDialogue) &&
     visibleText(withDialogue).length >= LEDE_MIN_CHARS
   ) {
@@ -244,8 +291,8 @@ function wrapProseBlock(
   return open + withDialogue + closeRaw;
 }
 
-function wrapEmDashDialogue(html: string): string {
-  if (html.includes("story-dialogue-bubble")) return html;
+function wrapEmDashDialogue(html: string, ctx: EnhanceCtx): string {
+  if (html.includes("story-dialogue")) return html;
   if (isSceneBreak(html)) return html;
   const trimmed = html.trim();
   const startsWithDash =
@@ -254,7 +301,7 @@ function wrapEmDashDialogue(html: string): string {
   if (!startsWithDash) return html;
   const inner = stripLeadingDash(html);
   if (!visibleText(inner)) return html;
-  return `<span class="story-dialogue-bubble" data-kind="dash">${inner}</span>`;
+  return dialogueMarkup(inner, null, "dash", ctx);
 }
 
 function stripLeadingDash(html: string): string {
@@ -264,35 +311,42 @@ function stripLeadingDash(html: string): string {
   );
 }
 
-/** Give every rendered bubble a stable alternating chat side. */
+/** Same speaker stays on the same side; a new speaker flips, like a chat. */
 function annotateDialogueSides(html: string, ctx: EnhanceCtx): string {
   return html.replace(
-    /<span class="story-dialogue-bubble"([^>]*)>/gi,
+    /<span class="story-dialogue"([^>]*)>/gi,
     (match, attrs: string) => {
-      const existingSide = attrs.match(/\bdata-side\s*=\s*["']([^"']+)["']/i);
-      if (existingSide) {
-        ctx.dialogueIndex += 1;
-        return match;
-      }
-      const side = ctx.dialogueIndex % 2 === 0 ? "left" : "right";
-      ctx.dialogueIndex += 1;
-      return `<span class="story-dialogue-bubble" data-side="${side}"${attrs}>`;
+      if (/\bdata-side\s*=/.test(attrs)) return match;
+      const speakerMatch = attrs.match(
+        /\bdata-speaker\s*=\s*["']([^"']*)["']/i,
+      );
+      const speakerKey = speakerMatch?.[1]?.trim().toLowerCase() || null;
+      const side = nextDialogueSide(ctx, speakerKey);
+      return `<span class="story-dialogue" data-side="${side}"${attrs}>`;
     },
   );
 }
 
-function wrapDialogues(html: string): string {
-  const quotes = findQuotes(html);
-  const pairs: { open: QuoteMark; close: QuoteMark }[] = [];
-  const stack: QuoteMark[] = [];
-  for (const quote of quotes) {
-    if (quote.dir === "open" || (quote.dir === "either" && stack.length === 0)) {
-      stack.push(quote);
-    } else if (stack.length > 0) {
-      const open = stack.pop();
-      if (open) pairs.push({ open, close: quote });
-    }
+function nextDialogueSide(
+  ctx: EnhanceCtx,
+  speakerKey: string | null,
+): "left" | "right" {
+  if (speakerKey && ctx.lastSpeakerKey === speakerKey) {
+    return ctx.lastSide;
   }
+  const side = !ctx.hasDialogue
+    ? "left"
+    : ctx.lastSide === "left"
+      ? "right"
+      : "left";
+  ctx.hasDialogue = true;
+  ctx.lastSide = side;
+  ctx.lastSpeakerKey = speakerKey;
+  return side;
+}
+
+function wrapDialogues(html: string, ctx: EnhanceCtx): string {
+  const pairs = pairQuotes(html);
   if (pairs.length === 0) return html;
 
   const keep = new Set<number>();
@@ -307,14 +361,168 @@ function wrapDialogues(html: string): string {
   for (const pair of reverse) {
     if (!keep.has(pair.open.start)) continue;
     const inner = result.slice(pair.open.end, pair.close.start);
+    const speaker = findSpeakerBefore(result, pair.open.start);
+    const replaceStart = speaker ? speaker.start : pair.open.start;
     result =
-      result.slice(0, pair.open.start) +
-      `<span class="story-dialogue-bubble">` +
-      inner +
-      "</span>" +
+      result.slice(0, replaceStart) +
+      dialogueMarkup(inner, speaker?.name ?? null, "quote", ctx) +
       result.slice(pair.close.end);
   }
   return result;
+}
+
+function pairQuotes(
+  html: string,
+): { open: QuoteMark; close: QuoteMark }[] {
+  const quotes = findQuotes(html);
+  const pairs: { open: QuoteMark; close: QuoteMark }[] = [];
+  const stack: QuoteMark[] = [];
+  for (const quote of quotes) {
+    if (quote.dir === "open" || (quote.dir === "either" && stack.length === 0)) {
+      stack.push(quote);
+    } else if (stack.length > 0) {
+      const open = stack.pop();
+      if (open) pairs.push({ open, close: quote });
+    }
+  }
+  return pairs;
+}
+
+function dialogueMarkup(
+  inner: string,
+  speaker: string | null,
+  kind: "quote" | "dash",
+  ctx: EnhanceCtx,
+): string {
+  const speakerAttr = speaker
+    ? ` data-speaker="${escapeAttr(speaker)}"`
+    : "";
+  const kindAttr = kind === "dash" ? ` data-kind="dash"` : "";
+  const name = speaker
+    ? `<span class="story-dialogue-name">${escapeText(speaker)}</span>`
+    : "";
+  return (
+    `<span class="story-dialogue"${speakerAttr}>` +
+    avatarMarkup(speaker, ctx) +
+    `<span class="story-dialogue-col">` +
+    name +
+    `<span class="story-dialogue-bubble"${kindAttr}>${inner}</span>` +
+    `</span></span>`
+  );
+}
+
+function avatarMarkup(speaker: string | null, ctx: EnhanceCtx): string {
+  const key = speaker?.trim().toLowerCase() ?? "";
+  const match = key ? ctx.characters.get(key) : undefined;
+  const url = match?.thumbnailUrl || match?.mediaUrl || "";
+  if (url) {
+    return `<img class="story-dialogue-avatar" src="${escapeAttr(url)}" alt="">`;
+  }
+  const initial = speaker ? speakerInitial(speaker) : "?";
+  const hue = speaker ? storyCharacterHue(speaker) : 250;
+  return (
+    `<span class="story-dialogue-avatar story-dialogue-avatar-fallback" style="--story-avatar-hue:${hue}" aria-hidden="true">` +
+    escapeText(initial) +
+    "</span>"
+  );
+}
+
+function speakerInitial(name: string): string {
+  const ch = Array.from(name.trim())[0];
+  return ch ? ch.toUpperCase() : "?";
+}
+
+function escapeAttr(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function escapeText(value: string): string {
+  return escapeAttr(value).replace(/'/g, "&#39;");
+}
+
+const NAME_CHAR = /[\p{L}\p{M}\p{N}'\-]/u;
+
+function isSpeakerName(name: string): boolean {
+  if (name.length < 1 || name.length > 40) return false;
+  return /\p{L}/u.test(name);
+}
+
+function findSpeakerBefore(
+  html: string,
+  quoteStart: number,
+): { name: string; start: number } | null {
+  let i = skipWsBack(html, quoteStart);
+  if (i <= 0 || html[i - 1] !== ":") return null;
+  i = skipWsBack(html, i - 1);
+
+  const nameChars: string[] = [];
+  while (i > 0) {
+    if (html[i - 1] === ">") {
+      const tagStart = findTagStartBack(html, i);
+      if (tagStart < 0) break;
+      i = tagStart;
+      continue;
+    }
+    const ch = html[i - 1];
+    if (!ch || !NAME_CHAR.test(ch)) break;
+    nameChars.push(ch);
+    i -= 1;
+  }
+
+  const name = nameChars.reverse().join("").replace(/\s+/g, " ").trim();
+  if (!isSpeakerName(name)) return null;
+  return { name, start: expandOverOpenTags(html, i) };
+}
+
+function expandOverOpenTags(html: string, start: number): number {
+  let i = start;
+  while (i > 0) {
+    const next = skipWsBack(html, i);
+    if (next <= 0 || html[next - 1] !== ">") return i;
+    const tagStart = findTagStartBack(html, next);
+    if (tagStart < 0) return i;
+    const tag = html.slice(tagStart, next);
+    if (tag.startsWith("</") || tag.startsWith("<!")) return i;
+    const name = /^<\/?([a-zA-Z][a-zA-Z0-9:-]*)/.exec(tag)?.[1]?.toLowerCase();
+    if (name && VOID_TAGS.has(name)) return i;
+    i = tagStart;
+  }
+  return i;
+}
+
+function skipWsBack(html: string, from: number): number {
+  let i = from;
+  while (i > 0) {
+    const ch = html[i - 1];
+    if (ch && /\s/.test(ch)) {
+      i -= 1;
+      continue;
+    }
+    const slice = html.slice(Math.max(0, i - 10), i).toLowerCase();
+    const entity = slice.match(
+      /&(nbsp|ensp|emsp|thinsp|#160|#x0*a0);$/i,
+    );
+    if (entity?.[0]) {
+      i -= entity[0].length;
+      continue;
+    }
+    break;
+  }
+  return i;
+}
+
+function findTagStartBack(html: string, end: number): number {
+  // `end` is the index after `>`. Walk back to the matching `<`.
+  let i = end - 1;
+  while (i > 0) {
+    if (html[i - 1] === "<") return i - 1;
+    i -= 1;
+  }
+  return -1;
 }
 
 function findQuotes(html: string): QuoteMark[] {
@@ -398,7 +606,7 @@ function shouldWrapDialogue(inner: string): boolean {
 }
 
 function isAllDialogue(html: string): boolean {
-  return /^\s*<span class="story-dialogue-bubble"[^>]*>[\s\S]*<\/span>\s*$/.test(
+  return /^\s*<span class="story-dialogue"[^>]*>[\s\S]*<\/span>\s*$/.test(
     html,
   );
 }
@@ -467,6 +675,23 @@ function stripIndentStyles(openTag: string): string {
     })
     .replace(/\s{2,}/g, " ")
     .replace(/\s+>/g, ">");
+}
+
+/** Chapter photos: clickable, skip dialogue portraits. */
+function markStoryInlineImages(html: string): string {
+  return html.replace(/<img\b[^>]*>/gi, (tag) => {
+    if (/\bstory-dialogue-avatar\b/i.test(tag)) return tag;
+    let next = addClass(tag, "story-inline-photo");
+    next = addAttr(next, "tabindex", "0");
+    next = addAttr(next, "role", "button");
+    next = addAttr(next, "draggable", "false");
+    return next;
+  });
+}
+
+function addAttr(openTag: string, name: string, value: string): string {
+  if (new RegExp(`\\b${name}\\s*=`, "i").test(openTag)) return openTag;
+  return openTag.replace(/^<([a-zA-Z0-9:-]+)/, `<$1 ${name}="${value}"`);
 }
 
 function addClass(openTag: string, className: string): string {

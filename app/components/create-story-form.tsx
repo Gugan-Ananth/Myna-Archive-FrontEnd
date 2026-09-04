@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import {
   type ClipboardEvent,
+  type DragEvent,
   type FormEvent,
   type ReactNode,
   useCallback,
@@ -18,6 +19,7 @@ import {
   listStoryChapters,
   updateArchiveItem,
   type CreateMediaAssetInput,
+  type StoryCharacterInput,
 } from "../lib/api";
 import {
   batchUploadPercent,
@@ -30,6 +32,7 @@ import { useI18n } from "../lib/i18n";
 import {
   detectMediaType,
   formatBytes,
+  IMAGE_ACCEPT,
   MAX_IMAGE_BYTES,
   normalizeMime,
 } from "../lib/media-constraints";
@@ -44,10 +47,15 @@ import {
   storyPayloadHtml,
 } from "../lib/story-content";
 import {
+  extractStorySpeakers,
+} from "../lib/story-reader";
+import {
   MAX_STORY_ASSETS,
   MAX_STORY_BODY_CHARS,
+  MAX_STORY_CHARACTERS,
   type ArchiveItem,
   type MediaAsset,
+  type StoryCharacter,
 } from "../lib/types";
 import { CHOOSER_SCENE } from "../lib/stickers";
 import { BackButton } from "./back-button";
@@ -56,7 +64,13 @@ import { CategoryTagPicker } from "./category-tag-picker";
 import { MediaLinkInput } from "./media-link-input";
 import { RatingInput } from "./rating-input";
 import { SceneFigure } from "./scene-figure";
+import {
+  StoryCharacterRoster,
+  type StoryCharacterDraft,
+  type StoryCharacterPortrait,
+} from "./story-character-roster";
 import { StatusCallout } from "./status-callout";
+import { StoryImageInsertDialog } from "./story-image-insert-dialog";
 import { UploadProgressOverlay } from "./upload-progress";
 
 const FONT_OPTIONS = [
@@ -114,6 +128,34 @@ function initialCover(item?: ArchiveItem): CoverDraft {
   };
 }
 
+function portraitFromCharacter(character: StoryCharacter): StoryCharacterPortrait {
+  const url = character.thumbnailUrl || character.mediaUrl;
+  if (character.publicId && url) {
+    return {
+      kind: "existing",
+      url,
+      publicId: character.publicId,
+      width: character.width,
+      height: character.height,
+      blurHash: character.blurHash,
+    };
+  }
+  return { kind: "none" };
+}
+
+function draftsFromCharacters(
+  characters: StoryCharacter[] | undefined,
+): StoryCharacterDraft[] {
+  return (characters ?? []).map((character) => ({
+    name: character.name,
+    portrait: portraitFromCharacter(character),
+  }));
+}
+
+function revokePortrait(portrait: StoryCharacterPortrait) {
+  if (portrait.kind === "file") URL.revokeObjectURL(portrait.previewUrl);
+}
+
 /**
  * Google Docs-style story composer: page + toolbar, with tags and rating
  * in the same metadata pattern as image/video create.
@@ -124,7 +166,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   const isEditing = Boolean(item);
   const abortRef = useRef<AbortController | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
+  const editorWrapRef = useRef<HTMLDivElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const savedRange = useRef<Range | null>(null);
   const [title, setTitle] = useState(item?.name ?? "");
@@ -148,7 +190,38 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   const [seriesId, setSeriesId] = useState("");
   const [chapterNumber, setChapterNumber] = useState(1);
   const [seriesRoots, setSeriesRoots] = useState<ArchiveItem[]>([]);
+  const [insertOpen, setInsertOpen] = useState(false);
+  const [editorDragOver, setEditorDragOver] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(
+    null,
+  );
+  const [layoutTick, setLayoutTick] = useState(0);
+  const itemKey = item?.id ?? "new";
+  const [editorSession, setEditorSession] = useState(itemKey);
   const [cover, setCover] = useState<CoverDraft>(() => initialCover(item));
+  const [characters, setCharacters] = useState<StoryCharacterDraft[]>(() =>
+    draftsFromCharacters(item?.characters),
+  );
+  const portraitsByName = useRef<Map<string, StoryCharacterPortrait>>(
+    new Map(
+      (item?.characters ?? []).map((character) => [
+        character.name.trim().toLowerCase(),
+        portraitFromCharacter(character),
+      ]),
+    ),
+  );
+
+  if (editorSession !== itemKey) {
+    setEditorSession(itemKey);
+    setSelectedImage(null);
+    setInsertOpen(false);
+    setEditorDragOver(false);
+  }
+
+  const chipPos =
+    selectedImage?.isConnected && layoutTick >= 0
+      ? selectedImageChipStyle(selectedImage, editorWrapRef.current)
+      : null;
 
   const bodyOverLimit = bodyChars > MAX_STORY_BODY_CHARS;
   const canSubmit =
@@ -196,6 +269,14 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     editor.innerHTML = item.bodyHtml ?? "";
     setBodyEmpty(isEditorEmpty(editor));
     setBodyChars(storyBodyCharCount(editor.innerHTML));
+    portraitsByName.current = new Map(
+      (item.characters ?? []).map((character) => [
+        character.name.trim().toLowerCase(),
+        portraitFromCharacter(character),
+      ]),
+    );
+    setCharacters(draftsFromCharacters(item.characters));
+    syncCharactersFromHtml(editor.innerHTML);
   }, [item]);
 
   useEffect(() => {
@@ -209,6 +290,57 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
       if (cover.kind === "file") URL.revokeObjectURL(cover.previewUrl);
     };
   }, [cover]);
+
+  useEffect(() => {
+    if (!selectedImage) return;
+    const image = selectedImage;
+    image.classList.add("is-selected");
+
+    function onMove() {
+      if (!image.isConnected) {
+        setSelectedImage(null);
+        return;
+      }
+      setLayoutTick((tick) => tick + 1);
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setSelectedImage(null);
+        return;
+      }
+      if (event.key !== "Backspace" && event.key !== "Delete") return;
+      const target = event.target;
+      if (target instanceof HTMLElement && target.isContentEditable) {
+        /* native editing already removes the image */
+        return;
+      }
+      event.preventDefault();
+      image.remove();
+      setSelectedImage(null);
+      syncToolbar();
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onMove);
+    const scroller = editorRef.current?.closest(".overflow-y-auto");
+    scroller?.addEventListener("scroll", onMove, { passive: true });
+    return () => {
+      image.classList.remove("is-selected");
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onMove);
+      scroller?.removeEventListener("scroll", onMove);
+    };
+  }, [selectedImage, syncToolbar]);
+
+  useEffect(() => {
+    const portraits = portraitsByName;
+    return () => {
+      for (const portrait of portraits.current.values()) {
+        revokePortrait(portrait);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (isEditing) return;
@@ -229,6 +361,59 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     };
   }, [isEditing]);
 
+  function rememberPortrait(name: string, portrait: StoryCharacterPortrait) {
+    portraitsByName.current.set(name.trim().toLowerCase(), portrait);
+  }
+
+  function syncCharactersFromHtml(html: string) {
+    const names = extractStorySpeakers(html).slice(0, MAX_STORY_CHARACTERS);
+    setCharacters((prev) => {
+      const prevByName = new Map(
+        prev.map((character) => [character.name.trim().toLowerCase(), character]),
+      );
+      return names.map((name) => {
+        const key = name.toLowerCase();
+        const existing = prevByName.get(key);
+        if (existing) return existing;
+        const saved = portraitsByName.current.get(key);
+        return { name, portrait: saved ?? { kind: "none" } };
+      });
+    });
+  }
+
+  function pickCharacterPfp(name: string, file: File) {
+    if (!validateImageFile(file)) return;
+    const previewUrl = URL.createObjectURL(file);
+    const nextPortrait: StoryCharacterPortrait = {
+      kind: "file",
+      file,
+      previewUrl,
+    };
+    rememberPortrait(name, nextPortrait);
+    setCharacters((prev) =>
+      prev.map((character) => {
+        if (character.name.toLowerCase() !== name.toLowerCase()) {
+          return character;
+        }
+        revokePortrait(character.portrait);
+        return { ...character, portrait: nextPortrait };
+      }),
+    );
+  }
+
+  function clearCharacterPfp(name: string) {
+    rememberPortrait(name, { kind: "none" });
+    setCharacters((prev) =>
+      prev.map((character) => {
+        if (character.name.toLowerCase() !== name.toLowerCase()) {
+          return character;
+        }
+        revokePortrait(character.portrait);
+        return { ...character, portrait: { kind: "none" } };
+      }),
+    );
+  }
+
   function selectSeries(id: string) {
     setSeriesId(id);
     const parent = seriesRoots.find((item) => item.id === id);
@@ -238,6 +423,14 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     setTags(parent.tags);
     if (Number.isFinite(parent.rating)) setRating(parent.rating);
     setChapterNumber((parent.chapterCount ?? 1) + 1);
+    const inherited = draftsFromCharacters(parent.characters);
+    for (const character of inherited) {
+      rememberPortrait(character.name, character.portrait);
+    }
+    setCharacters((prev) => {
+      for (const character of prev) revokePortrait(character.portrait);
+      return inherited;
+    });
     void listStoryChapters(id)
       .then((series) => {
         setChapterNumber(firstFreeChapterNumber(series));
@@ -376,9 +569,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     );
     if (image) {
       event.preventDefault();
-      const list = new DataTransfer();
-      list.items.add(image);
-      onInsertImage(list.files);
+      onInsertImage(image);
       return;
     }
 
@@ -418,27 +609,76 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   }
 
   function insertImageFile(file: File) {
-    if (!validateImageFile(file)) return;
+    if (!validateImageFile(file)) {
+      setInsertOpen(false);
+      return;
+    }
+    const editor = editorRef.current;
+    const count = editor?.querySelectorAll("img").length ?? 0;
+    if (count >= MAX_STORY_ASSETS) {
+      setError(t("maxImagesReached", { max: MAX_STORY_ASSETS }));
+      setInsertOpen(false);
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       const src = typeof reader.result === "string" ? reader.result : "";
       if (!src) return;
       restoreSelection();
       editorRef.current?.focus();
+      const safeSrc = src
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;");
       document.execCommand(
         "insertHTML",
         false,
-        `<img src="${src}" alt="" />`,
+        `<img src="${safeSrc}" alt="">`,
       );
       rememberSelection();
       syncToolbar();
+      setInsertOpen(false);
+      setSelectedImage(null);
     };
     reader.readAsDataURL(file);
   }
 
-  function onInsertImage(files: FileList | null) {
-    const file = files?.[0];
-    if (file) insertImageFile(file);
+  function onInsertImage(file: File) {
+    insertImageFile(file);
+  }
+
+  function removeSelectedImage() {
+    if (!selectedImage) return;
+    selectedImage.remove();
+    setSelectedImage(null);
+    syncToolbar();
+    const editor = editorRef.current;
+    if (editor) {
+      setBodyEmpty(isEditorEmpty(editor));
+      setBodyChars(storyBodyCharCount(editor.innerHTML));
+    }
+  }
+
+  function onEditorDragOver(event: DragEvent<HTMLDivElement>) {
+    if (![...event.dataTransfer.types].includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setEditorDragOver(true);
+  }
+
+  function onEditorDrop(event: DragEvent<HTMLDivElement>) {
+    if (![...event.dataTransfer.types].includes("Files")) return;
+    event.preventDefault();
+    setEditorDragOver(false);
+    const image = [...event.dataTransfer.files].find(
+      (file) => detectMediaType(file) === "image",
+    );
+    if (!image) return;
+    const caret = caretRangeFromPoint(event.clientX, event.clientY);
+    if (caret && editorRef.current && selectionIsInEditor(caret)) {
+      savedRange.current = caret;
+    }
+    insertImageFile(image);
   }
 
   function pickCoverFile(file: File) {
@@ -515,8 +755,11 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
         const src = img.getAttribute("src") ?? "";
         return !findStoryAssetBySrc(src, existingAssets);
       }).length;
+      const newCharacterCount = characters.filter(
+        (character) => character.portrait.kind === "file",
+      ).length;
       const totalUploads =
-        (cover.kind === "file" ? 1 : 0) + newBodyCount;
+        (cover.kind === "file" ? 1 : 0) + newBodyCount + newCharacterCount;
       let completed = 0;
       setUploadTotal(totalUploads);
       if (totalUploads === 0) setUploadPercent(100);
@@ -616,6 +859,48 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
         bodyAssets.push(uploaded);
       }
 
+      const characterPayload: StoryCharacterInput[] = [];
+      for (const character of characters) {
+        if (character.portrait.kind === "file") {
+          const uploaded = await uploadFile(
+            character.portrait.file,
+            t("uploadingCharacterPfp", { name: character.name }),
+          );
+          if (!uploaded) {
+            setSaving(false);
+            return;
+          }
+          characterPayload.push({
+            name: character.name,
+            publicId: uploaded.publicId,
+            resourceType: "image",
+            ...(uploaded.width && uploaded.height
+              ? { width: uploaded.width, height: uploaded.height }
+              : {}),
+            ...(uploaded.blurHash ? { blurHash: uploaded.blurHash } : {}),
+          });
+          continue;
+        }
+        if (character.portrait.kind === "existing") {
+          characterPayload.push({
+            name: character.name,
+            publicId: character.portrait.publicId,
+            resourceType: "image",
+            ...(character.portrait.width && character.portrait.height
+              ? {
+                  width: character.portrait.width,
+                  height: character.portrait.height,
+                }
+              : {}),
+            ...(character.portrait.blurHash
+              ? { blurHash: character.portrait.blurHash }
+              : {}),
+          });
+          continue;
+        }
+        characterPayload.push({ name: character.name });
+      }
+
       setSaveLabel(t("savingToArchive"));
       setUploadPercent(100);
       const bodyHtml = html;
@@ -633,6 +918,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
           author: author.trim(),
           summary: summary.trim(),
           assets,
+          characters: characterPayload,
         });
         abortRef.current = null;
         router.push(`/item/${item.id}`);
@@ -653,6 +939,9 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
             ? { seriesId, chapterNumber }
             : { chapterNumber: 1 }),
           ...(assets.length > 0 ? { assets } : {}),
+          ...(characterPayload.length > 0
+            ? { characters: characterPayload }
+            : {}),
         },
         { signal: controller.signal },
       );
@@ -780,13 +1069,28 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
             <span className="text-sm underline">U</span>
           </ToolButton>
           <span className="mx-1 hidden h-5 w-px bg-border sm:block" />
-          <ToolButton
-            label={t("storyAddImage")}
-            active={false}
-            onClick={() => imageInputRef.current?.click()}
+          <button
+            type="button"
+            aria-label={t("storyAddImage")}
+            aria-haspopup="dialog"
+            aria-expanded={insertOpen}
+            title={t("storyAddImage")}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              rememberSelection();
+              setInsertOpen(true);
+            }}
+            className={[
+              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium transition-colors",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              insertOpen
+                ? "bg-accent-soft text-primary"
+                : "text-foreground-muted hover:bg-surface-muted hover:text-foreground",
+            ].join(" ")}
           >
             <ImageToolIcon className="h-4 w-4" />
-          </ToolButton>
+            <span className="whitespace-nowrap">{t("storyAddImage")}</span>
+          </button>
         </div>
         <button
           type="submit"
@@ -807,19 +1111,9 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
       </header>
 
       <input
-        ref={imageInputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
-        className="sr-only"
-        onChange={(e) => {
-          onInsertImage(e.target.files);
-          e.target.value = "";
-        }}
-      />
-      <input
         ref={coverInputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
+        accept={IMAGE_ACCEPT}
         className="sr-only"
         onChange={(e) => {
           onPickCover(e.target.files);
@@ -829,8 +1123,9 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
         <div className="min-h-[28rem] min-w-0 flex-1 px-3 py-6 sm:px-6 lg:min-h-0 lg:overflow-y-auto lg:px-10">
-          <div className="app-card mx-auto w-full max-w-[816px] rounded-sm px-5 py-8 shadow-[0_12px_40px_-18px_rgba(30,27,46,0.35)] ring-1 ring-border sm:px-14 sm:py-14 dark:shadow-[0_12px_40px_-16px_rgba(0,0,0,0.55)]">
-            <div
+          <div className="app-card relative mx-auto w-full max-w-[816px] rounded-sm px-5 py-8 shadow-[0_12px_40px_-18px_rgba(30,27,46,0.35)] ring-1 ring-border sm:px-14 sm:py-14 dark:shadow-[0_12px_40px_-16px_rgba(0,0,0,0.55)]">
+            <div ref={editorWrapRef} className="relative">
+              <div
               ref={editorRef}
               role="textbox"
               aria-multiline
@@ -839,9 +1134,35 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
               suppressContentEditableWarning
               data-placeholder={t("storyBodyPlaceholder")}
               onPaste={onPaste}
+              onDragEnter={onEditorDragOver}
+              onDragOver={onEditorDragOver}
+              onDragLeave={(event) => {
+                const next = event.relatedTarget as Node | null;
+                if (!next || !event.currentTarget.contains(next)) {
+                  setEditorDragOver(false);
+                }
+              }}
+              onDrop={onEditorDrop}
+              onDragEnd={() => setEditorDragOver(false)}
+              onClick={(event) => {
+                const target = event.target;
+                if (
+                  target instanceof HTMLImageElement &&
+                  editorRef.current?.contains(target)
+                ) {
+                  setSelectedImage(target);
+                  return;
+                }
+                setSelectedImage(null);
+              }}
               onInput={() => {
                 rememberSelection();
                 syncToolbar();
+                const editor = editorRef.current;
+                if (editor) syncCharactersFromHtml(editor.innerHTML);
+                setSelectedImage((current) =>
+                  current?.isConnected ? current : null,
+                );
               }}
               onKeyUp={() => {
                 rememberSelection();
@@ -860,6 +1181,30 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                 bodyEmpty ? "story-doc-empty" : "",
               ].join(" ")}
             />
+            {selectedImage?.isConnected && chipPos ? (
+              <button
+                type="button"
+                aria-label={t("storyRemoveInlineImage")}
+                title={t("storyRemoveInlineImage")}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={removeSelectedImage}
+                style={chipPos}
+                className="absolute z-10 inline-flex h-8 w-8 items-center justify-center rounded-full bg-surface/95 text-foreground shadow-sm ring-1 ring-border transition-colors hover:bg-danger/10 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <CloseIcon className="h-4 w-4" />
+              </button>
+            ) : null}
+            {editorDragOver ? (
+              <div
+                className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-accent-soft/80 ring-2 ring-primary"
+                aria-hidden
+              >
+                <p className="rounded-full bg-surface px-4 py-2 text-sm font-medium text-primary shadow-sm ring-1 ring-border">
+                  {t("storyDropImage")}
+                </p>
+              </div>
+            ) : null}
+            </div>
             <p
               className={[
                 "mt-3 text-right text-xs tabular-nums",
@@ -1049,6 +1394,12 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                 className="rounded-xl border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
               />
             </label>
+            <StoryCharacterRoster
+              characters={characters}
+              disabled={saving}
+              onPick={pickCharacterPfp}
+              onClear={clearCharacterPfp}
+            />
             <label className="flex min-w-0 flex-col gap-1">
               <span className="text-sm font-medium uppercase tracking-wide text-foreground-muted">
                 {t("storySummary")}{" "}
@@ -1098,6 +1449,12 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
           </div>
         </aside>
       </div>
+
+      <StoryImageInsertDialog
+        open={insertOpen}
+        onClose={() => setInsertOpen(false)}
+        onFile={onInsertImage}
+      />
 
       <UploadProgressOverlay
         open={saving}
@@ -1152,6 +1509,54 @@ function ToolButton({
       {children}
     </button>
   );
+}
+
+function CloseIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden
+    >
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  );
+}
+
+function selectedImageChipStyle(
+  img: HTMLImageElement,
+  wrapper: HTMLElement | null,
+): { top: number; right: number } {
+  if (!wrapper) return { top: 8, right: 8 };
+  const imgRect = img.getBoundingClientRect();
+  const wrapRect = wrapper.getBoundingClientRect();
+  return {
+    top: imgRect.top - wrapRect.top + 8,
+    right: wrapRect.right - imgRect.right + 8,
+  };
+}
+
+function caretRangeFromPoint(x: number, y: number): Range | null {
+  const doc = document as Document & {
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    caretPositionFromPoint?: (
+      x: number,
+      y: number,
+    ) => { offsetNode: Node; offset: number } | null;
+  };
+  if (typeof doc.caretRangeFromPoint === "function") {
+    return doc.caretRangeFromPoint(x, y);
+  }
+  const pos = doc.caretPositionFromPoint?.(x, y);
+  if (!pos) return null;
+  const range = document.createRange();
+  range.setStart(pos.offsetNode, pos.offset);
+  range.collapse(true);
+  return range;
 }
 
 function ImageToolIcon({ className }: { className?: string }) {

@@ -1,25 +1,40 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, type Ref } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+} from "react";
 import bunnyImageLoader from "../lib/bunny-image-loader";
+import { attachBrokenMediaHandler } from "../lib/image-recovery";
 import { useI18n } from "../lib/i18n";
 import { gridMediaSrc, STORY_COVER_TEMPLATE } from "../lib/media-display";
 import { enhanceStoryHtml, storyReadMinutes } from "../lib/story-reader";
 import type { ArchiveItem } from "../lib/types";
 import { LoadingImage } from "./global-loading";
+import { RatingBadge } from "./rating-badge";
+import { StoryImageLightbox } from "./story-image-lightbox";
 
 type StoryReaderProps = {
   item: ArchiveItem;
   chapters: ArchiveItem[];
-  bodyRef?: Ref<HTMLElement>;
 };
 
 /**
  * Chapter reading view: cover card, aligned prose, and quoted speech as bubbles.
  */
-export function StoryReader({ item, chapters, bodyRef }: StoryReaderProps) {
+export function StoryReader({ item, chapters }: StoryReaderProps) {
   const { t } = useI18n();
+  const articleRef = useRef<HTMLElement>(null);
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(
+    null,
+  );
+  const closeLightbox = useCallback(() => setLightbox(null), []);
   const ordered = useMemo(
     () =>
       [...chapters].sort(
@@ -41,13 +56,55 @@ export function StoryReader({ item, chapters, bodyRef }: StoryReaderProps) {
     [item.bodyHtml],
   );
   const body = useMemo(
-    () => enhanceStoryHtml(item.bodyHtml ?? "", { title: item.name }),
-    [item.bodyHtml, item.name],
+    () =>
+      enhanceStoryHtml(item.bodyHtml ?? "", {
+        title: item.name,
+        characters: item.characters,
+      }),
+    [item.bodyHtml, item.name, item.characters],
   );
   const cover = item.mediaUrl || item.thumbnailUrl;
   const hasCover = Boolean(cover);
   const coverSrc = hasCover ? gridMediaSrc(item) : STORY_COVER_TEMPLATE.src;
-  const rating = Number.isFinite(item.rating) ? item.rating.toFixed(1) : null;
+
+  useEffect(() => {
+    const root = articleRef.current;
+    if (!root) return;
+    return attachBrokenMediaHandler(root);
+  }, [item.bodyHtml]);
+
+  useEffect(() => {
+    const root = articleRef.current;
+    if (!root) return;
+    const label = t("storyViewImage");
+    root.querySelectorAll("img.story-inline-photo").forEach((img) => {
+      img.setAttribute("aria-label", label);
+    });
+  }, [body, t]);
+
+  function openStoryPhoto(img: HTMLImageElement) {
+    const src = img.currentSrc || img.getAttribute("src") || "";
+    if (!src) return;
+    setLightbox({
+      src,
+      alt: img.getAttribute("alt")?.trim() || t("storyViewImage"),
+    });
+  }
+
+  function onBodyClick(event: MouseEvent<HTMLElement>) {
+    const img = storyPhotoFromTarget(event.target);
+    if (!img) return;
+    event.preventDefault();
+    openStoryPhoto(img);
+  }
+
+  function onBodyKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const img = storyPhotoFromTarget(event.target);
+    if (!img) return;
+    event.preventDefault();
+    openStoryPhoto(img);
+  }
 
   return (
     <div className="mx-auto w-full max-w-3xl px-3 pb-16 pt-1 sm:px-4">
@@ -92,6 +149,10 @@ export function StoryReader({ item, chapters, bodyRef }: StoryReaderProps) {
               className="object-cover"
               fallbackLabel={t("previewUnavailable")}
             />
+            <RatingBadge
+              rating={item.rating}
+              className="absolute right-2 bottom-2 z-10"
+            />
           </div>
           <div className="flex min-w-0 flex-1 flex-col px-4 py-3.5 sm:px-6 sm:py-5">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -109,12 +170,6 @@ export function StoryReader({ item, chapters, bodyRef }: StoryReaderProps) {
                   {t("navStories")}
                 </p>
               )}
-              {rating ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-sm font-semibold tabular-nums text-primary">
-                  <StarIcon className="h-3.5 w-3.5" />
-                  {rating}
-                </span>
-              ) : null}
             </div>
             <h1 className="mt-1.5 text-xl font-semibold leading-snug tracking-tight text-foreground sm:text-3xl">
               {item.name}
@@ -149,10 +204,20 @@ export function StoryReader({ item, chapters, bodyRef }: StoryReaderProps) {
       </div>
 
       <article
-        ref={bodyRef}
+        ref={articleRef}
         className="story-read w-full"
+        onClick={onBodyClick}
+        onKeyDown={onBodyKeyDown}
         dangerouslySetInnerHTML={{ __html: body }}
       />
+
+      {lightbox ? (
+        <StoryImageLightbox
+          src={lightbox.src}
+          alt={lightbox.alt}
+          onClose={closeLightbox}
+        />
+      ) : null}
 
       {hasSeries ? (
         <nav
@@ -199,15 +264,12 @@ export function StoryReader({ item, chapters, bodyRef }: StoryReaderProps) {
   );
 }
 
-function StarIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 20 20"
-      fill="currentColor"
-      aria-hidden
-      className={className}
-    >
-      <path d="M9.05 2.93c.38-.9 1.52-.9 1.9 0l1.52 3.62 3.92.34c.97.08 1.36 1.29.62 1.93l-2.99 2.57.91 3.84c.23.95-.8 1.69-1.63 1.18L10 14.7l-3.3 2.01c-.83.51-1.86-.23-1.63-1.18l.91-3.84-2.99-2.57c-.74-.64-.35-1.85.62-1.93l3.92-.34 1.52-3.62Z" />
-    </svg>
-  );
+function storyPhotoFromTarget(target: EventTarget | null): HTMLImageElement | null {
+  if (!(target instanceof Element)) return null;
+  const img =
+    target instanceof HTMLImageElement ? target : target.closest("img");
+  if (!(img instanceof HTMLImageElement)) return null;
+  if (img.classList.contains("story-dialogue-avatar")) return null;
+  if (img.closest(".story-dialogue")) return null;
+  return img;
 }

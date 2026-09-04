@@ -9,6 +9,7 @@ import { storyCardBlurb } from "../lib/story-content";
 import type { ArchiveItem } from "../lib/types";
 import { warmArchiveItem } from "../lib/warm-preview";
 import { LoadingImage } from "./global-loading";
+import { RatingBadge } from "./rating-badge";
 import { StarButton } from "./star-button";
 
 type StoryWorkCardProps = {
@@ -18,7 +19,7 @@ type StoryWorkCardProps = {
 
 /**
  * Magazine-style story card: book-cover panel plus title, summary (or
- * opening lines), rating, and chapter count — not a plain image pin.
+ * opening lines), and chapter count — not a plain image pin.
  */
 export function StoryWorkCard({
   item,
@@ -29,7 +30,6 @@ export function StoryWorkCard({
   const hasCover = Boolean(cover);
   const src = hasCover ? gridMediaSrc(item) : STORY_COVER_TEMPLATE.src;
   const chapters = item.chapterCount ?? 1;
-  const rating = Number.isFinite(item.rating) ? item.rating.toFixed(1) : null;
   const blurb = storyCardBlurb(item);
   const author = item.author?.trim();
 
@@ -55,6 +55,10 @@ export function StoryWorkCard({
             className="object-cover"
             fallbackLabel={t("previewUnavailable")}
           />
+          <RatingBadge
+            rating={item.rating}
+            className="absolute right-2 bottom-2 z-10"
+          />
         </div>
         <div className="flex min-w-0 flex-1 flex-col px-4 py-5 sm:px-7 sm:py-7">
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
@@ -74,17 +78,11 @@ export function StoryWorkCard({
               <strong className="font-semibold text-primary">{author}</strong>
             </p>
           ) : null}
-          <p className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-4 text-sm text-foreground-muted">
-            {rating ? (
-              <span className="inline-flex items-center gap-1 font-semibold tabular-nums text-primary">
-                <StarIcon className="h-3.5 w-3.5" />
-                {rating}
-              </span>
-            ) : null}
-            {chapters > 1 ? (
-              <span>{t("chaptersAvailable", { count: chapters })}</span>
-            ) : null}
-          </p>
+          {chapters > 1 ? (
+            <p className="mt-auto pt-4 text-sm text-foreground-muted">
+              {t("chaptersAvailable", { count: chapters })}
+            </p>
+          ) : null}
         </div>
         </article>
       </Link>
@@ -97,18 +95,5 @@ export function StoryWorkCard({
         className="absolute right-2 top-2 z-20"
       />
     </div>
-  );
-}
-
-function StarIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 20 20"
-      fill="currentColor"
-      aria-hidden
-      className={className}
-    >
-      <path d="M9.05 2.93c.38-.9 1.52-.9 1.9 0l1.52 3.62 3.92.34c.97.08 1.36 1.29.62 1.93l-2.99 2.57.91 3.84c.23.95-.8 1.69-1.63 1.18L10 14.7l-3.3 2.01c-.83.51-1.86-.23-1.63-1.18l.91-3.84-2.99-2.57c-.74-.64-.35-1.85.62-1.93l3.92-.34 1.52-3.62Z" />
-    </svg>
   );
 }

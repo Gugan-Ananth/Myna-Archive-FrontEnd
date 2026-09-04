@@ -2,14 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ApiError,
   deleteArchiveItem,
   listStoryChapters,
   updateArchiveItem,
 } from "../lib/api";
-import { attachBrokenMediaHandler } from "../lib/image-recovery";
 import { useI18n } from "../lib/i18n";
 import { itemMediaAssets } from "../lib/media-display";
 import { storyCardBlurb } from "../lib/story-content";
@@ -20,6 +19,7 @@ import { CategoryTagPicker } from "./category-tag-picker";
 import { ComicReader } from "./comic-reader";
 import { ConfirmDialog } from "./confirm-dialog";
 import { ImageGroupCarousel } from "./image-group-carousel";
+import { RatingBadge } from "./rating-badge";
 import { RatingInput } from "./rating-input";
 import { StatusCallout } from "./status-callout";
 import { BunnyStreamEmbed } from "./bunny-stream-embed";
@@ -38,7 +38,9 @@ type DeleteConfirmation = {
 
 /**
  * Fullscreen media view: image or video covers the stage; controls overlay.
- * Details panel slides in from the right when opened.
+ * The overlay pencil opens the right-hand panel directly in the edit flow
+ * for photos and videos. Stories and comics still toggle a read-only
+ * details panel (their editors live on dedicated pages).
  * Metadata edits and delete hit the Nest API.
  */
 export function ItemDetail({ item }: ItemDetailProps) {
@@ -60,8 +62,6 @@ export function ItemDetail({ item }: ItemDetailProps) {
   const [chapters, setChapters] = useState<ArchiveItem[]>(
     item.mediaType === "story" ? [item] : [],
   );
-  const storyBodyRef = useRef<HTMLElement>(null);
-
   const handleGroupIndexChange = useCallback((index: number, total: number) => {
     setGroupSlide((prev) =>
       prev.index === index && prev.total === total
@@ -94,13 +94,8 @@ export function ItemDetail({ item }: ItemDetailProps) {
             ? t("navCollections")
             : t("navPhotos");
   const busy = saving || deleting;
-
-  useEffect(() => {
-    if (!isStory) return;
-    const root = storyBodyRef.current;
-    if (!root) return;
-    return attachBrokenMediaHandler(root);
-  }, [isStory, draft.bodyHtml]);
+  /** Photos and videos edit metadata in the side panel; stories/comics do not. */
+  const canInlineEdit = !isStory && !isComic;
 
   useEffect(() => {
     if (item.mediaType !== "story") return;
@@ -129,6 +124,15 @@ export function ItemDetail({ item }: ItemDetailProps) {
     setEditing(false);
     setRatingValid(true);
     setError(null);
+  }
+
+  function toggleEditPanel() {
+    if (panelOpen) {
+      setPanelOpen(false);
+      return;
+    }
+    setPanelOpen(true);
+    if (canInlineEdit && !editing) startEdit();
   }
 
   async function toggleStar(starred: boolean): Promise<void> {
@@ -268,7 +272,6 @@ export function ItemDetail({ item }: ItemDetailProps) {
               <StoryReader
                 item={draft}
                 chapters={chapters}
-                bodyRef={storyBodyRef}
               />
             </div>
           </>
@@ -309,7 +312,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
                 )}
                 {(isGroup || isComic) && (
                   <span
-                    className="inline-flex items-center gap-1.5 rounded-full bg-surface/90 px-3 py-2 text-sm font-semibold text-primary shadow-sm ring-1 ring-border backdrop-blur-md"
+                    className="inline-flex h-10 items-center gap-1.5 rounded-full bg-surface/90 px-3 text-sm font-semibold text-primary shadow-sm ring-1 ring-border backdrop-blur-md"
                     title={
                       isComic
                         ? t("pageCount", { count: mediaAssets.length })
@@ -327,17 +330,38 @@ export function ItemDetail({ item }: ItemDetailProps) {
                     </span>
                   </span>
                 )}
-                <DetailsToggle
-                  open={panelOpen}
-                  hideLabel={t("hideDetails")}
-                  showLabel={t("showDetails")}
-                  onToggle={() => setPanelOpen((open) => !open)}
-                />
+                {isComic ? (
+                  <DetailsToggle
+                    open={panelOpen}
+                    hideLabel={t("hideDetails")}
+                    showLabel={t("showDetails")}
+                    onToggle={() => setPanelOpen((open) => !open)}
+                  />
+                ) : (
+                  <EditPanelButton
+                    open={panelOpen}
+                    editLabel={
+                      isVideo ? t("editVideoDetails") : t("editImageDetails")
+                    }
+                    closeLabel={t("hideDetails")}
+                    onToggle={toggleEditPanel}
+                  />
+                )}
                 <StarButton
                   starred={draft.starred}
                   onToggle={toggleStar}
                 />
               </div>
+            </div>
+            <div
+              className={[
+                "pointer-events-none absolute right-3 z-30 sm:right-4",
+                isGroup || isComic
+                  ? "bottom-[5.75rem] sm:bottom-[6.25rem]"
+                  : "bottom-3 sm:bottom-4",
+              ].join(" ")}
+            >
+              <RatingBadge rating={draft.rating} />
             </div>
           </>
         )}
@@ -562,7 +586,7 @@ function DetailsToggle({
       aria-label={open ? hideLabel : showLabel}
       aria-expanded={open}
       className={[
-        "inline-flex h-11 w-11 items-center justify-center rounded-full",
+        "inline-flex h-10 w-10 items-center justify-center rounded-full",
         "bg-surface/90 text-foreground shadow-sm ring-1 ring-border backdrop-blur-md",
         "transition-colors hover:bg-accent-soft hover:text-primary",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -573,6 +597,37 @@ function DetailsToggle({
       ) : (
         <PanelOpenIcon className="h-5 w-5" />
       )}
+    </button>
+  );
+}
+
+/** Overlay control: opens the side panel already in the metadata edit flow. */
+function EditPanelButton({
+  open,
+  editLabel,
+  closeLabel,
+  onToggle,
+}: {
+  open: boolean;
+  editLabel: string;
+  closeLabel: string;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={open ? closeLabel : editLabel}
+      aria-expanded={open}
+      title={open ? closeLabel : editLabel}
+      className={[
+        "inline-flex h-10 w-10 items-center justify-center rounded-full shadow-sm ring-1 backdrop-blur-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        open
+          ? "bg-star text-star-foreground ring-star-ring hover:bg-star-hover"
+          : "bg-star-muted/95 text-primary ring-star-ring hover:bg-star-muted-hover hover:text-star",
+      ].join(" ")}
+    >
+      <EditIcon className="h-5 w-5" strokeWidth={1.75} />
     </button>
   );
 }
@@ -617,14 +672,20 @@ function PanelCloseIcon({ className }: { className?: string }) {
   );
 }
 
-function EditIcon({ className }: { className?: string }) {
+function EditIcon({
+  className,
+  strokeWidth = 2,
+}: {
+  className?: string;
+  strokeWidth?: number;
+}) {
   return (
     <svg
       viewBox="0 0 24 24"
       className={className}
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden

@@ -45,7 +45,7 @@ export function RatingInput({
     const display = Number.isFinite(value) ? formatDisplay(value) : "—";
     return (
       <p
-        className="text-2xl font-semibold tabular-nums tracking-tight text-foreground"
+        className="font-rating text-2xl font-semibold tabular-nums tracking-tight text-foreground"
         aria-label={t("ratingAria", { value: display })}
       >
         {display}
@@ -84,7 +84,7 @@ export function RatingInput({
           }
         }}
         className={[
-          "h-10 w-28 rounded-xl border bg-background px-3 text-lg font-semibold tabular-nums text-foreground outline-none",
+          "font-rating h-10 w-28 rounded-xl border bg-background px-3 text-lg font-semibold tabular-nums text-foreground outline-none",
           showError
             ? "border-danger focus:border-danger focus:ring-2 focus:ring-danger/20"
             : "border-border focus:border-primary focus:ring-2 focus:ring-ring/25",
