@@ -6,6 +6,7 @@ import { useI18n } from "../lib/i18n";
 import { gridMediaSrc } from "../lib/media-display";
 import type { ArchiveItem } from "../lib/types";
 import { LoadingImage } from "./global-loading";
+import { RatingBadge } from "./rating-badge";
 
 type CollectionMastheadProps = {
   items: ArchiveItem[];
@@ -93,7 +94,11 @@ export function CollectionMasthead({
                 className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/5 to-transparent"
                 aria-hidden
               />
-              <div className="absolute inset-x-0 bottom-0 p-4 text-white">
+              <RatingBadge
+                rating={featured.rating}
+                className="absolute right-3 bottom-3 z-10"
+              />
+              <div className="absolute inset-x-0 bottom-0 p-4 pr-16 text-white">
                 <p className="text-[10px] font-bold tracking-[0.18em] text-white/70 uppercase">
                   {t("homeFeatured")}
                 </p>

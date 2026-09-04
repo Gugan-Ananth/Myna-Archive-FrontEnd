@@ -27,6 +27,7 @@ import {
 import type { ArchiveItem } from "../lib/types";
 import { warmArchiveItem } from "../lib/warm-preview";
 import { LoadingImage } from "./global-loading";
+import { RatingBadge } from "./rating-badge";
 import { StarButton } from "./star-button";
 
 /** True only after client hydration — avoids BlurHash canvas SSR mismatch. */
@@ -181,6 +182,10 @@ export function ArchiveCard({
               {itemMediaAssets(item).length}
             </span>
           ) : null}
+          <RatingBadge
+            rating={item.rating}
+            className="absolute right-2 bottom-2 z-10"
+          />
           </div>
         </article>
         <span className="sr-only">

@@ -4,6 +4,8 @@ import type {
   ArchiveSection,
   MediaType,
   OriginalCharacter,
+  StoryCharacter,
+  StoryCharacterInput,
   TagSummary,
   TaxonomyCategoryDto,
   TaxonomyTagDto,
@@ -15,6 +17,8 @@ export type {
   ArchiveSection,
   MediaType,
   OriginalCharacter,
+  StoryCharacter,
+  StoryCharacterInput,
   TagSummary,
   TaxonomyCategoryDto,
   TaxonomyTagDto,
@@ -144,6 +148,8 @@ export type CreateArchiveItemInput = {
   summary?: string;
   seriesId?: string;
   chapterNumber?: number;
+  /** Named speakers for this chapter. Portraits are not mixed into `assets`. */
+  characters?: StoryCharacterInput[];
   /**
    * Preferred: ordered assets (image 1–10, comic 1–80, video exactly 1).
    * When set, top-level publicId/resourceType/dims are not required.
@@ -166,6 +172,8 @@ export type UpdateArchiveItemInput = {
   summary?: string;
   /** Replace story cover + body images (cover is the extra leading asset). */
   assets?: CreateMediaAssetInput[];
+  /** Replace this chapter's named speakers. Omit to leave unchanged. */
+  characters?: StoryCharacterInput[];
   tags?: string[];
   rating?: number;
 };

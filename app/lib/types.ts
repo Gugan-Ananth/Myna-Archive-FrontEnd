@@ -63,6 +63,32 @@ export type ArchiveItem = {
    * 2–25 for an image group; 1–80 for a comic (cover is always index 0).
    */
   mediaAssets: MediaAsset[];
+  /**
+   * Named speakers for a written story. Empty/omitted for other media types
+   * and for chapters saved before this field existed.
+   */
+  characters?: StoryCharacter[];
+};
+
+/** A named speaker in a written story, with an optional portrait. */
+export type StoryCharacter = {
+  name: string;
+  publicId: string | null;
+  mediaUrl: string;
+  thumbnailUrl: string;
+  width: number | null;
+  height: number | null;
+  blurHash: string | null;
+};
+
+/** Client payload for one story character on create/update. */
+export type StoryCharacterInput = {
+  name: string;
+  publicId?: string;
+  resourceType?: "image";
+  width?: number;
+  height?: number;
+  blurHash?: string;
 };
 
 /** Min images in one image-group Archive Item. */
@@ -76,6 +102,9 @@ export const MAX_COMIC_ASSETS = 80;
 
 /** Max inline images in one written story. */
 export const MAX_STORY_ASSETS = 20;
+
+/** Max named speakers stored on one story chapter. */
+export const MAX_STORY_CHARACTERS = 40;
 
 /** Max story `bodyHtml` characters. Must match backend `MAX_STORY_BODY_CHARS`. */
 export const MAX_STORY_BODY_CHARS = 200_000;

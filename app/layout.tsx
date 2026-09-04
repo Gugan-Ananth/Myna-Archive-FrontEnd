@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist_Mono, Playfair } from "next/font/google";
+import { Geist_Mono, Jost, Playfair } from "next/font/google";
 import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { AppMobileNav, AppNavRail } from "./components/app-nav-rail";
@@ -26,6 +26,12 @@ const playfair = Playfair({
   variable: "--font-playfair",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
+});
+
+/** Geometric sans for rating numerals — Playfair figures read poorly at small sizes. */
+const jost = Jost({
+  variable: "--font-jost",
+  subsets: ["latin"],
 });
 
 const geistMono = Geist_Mono({
@@ -81,7 +87,7 @@ export default async function RootLayout({
   return (
     <html
       lang={LOCALE_META[locale].htmlLang}
-      className={`${playfair.variable} ${geistMono.variable} h-full antialiased${theme === "dark" ? " dark" : ""}`}
+      className={`${playfair.variable} ${jost.variable} ${geistMono.variable} h-full antialiased${theme === "dark" ? " dark" : ""}`}
       style={{ colorScheme: theme }}
       // Extensions often inject attrs on <html>/<body> before hydrate (e.g. bis_register).
       suppressHydrationWarning
