@@ -1030,6 +1030,7 @@ html {
 .top-ten-card.is-featured {
   --card-max-w: var(--top-ten-featured-max-w);
   --card-max-h: var(--top-ten-featured-max-h);
+  transition: width 280ms ease;
 }
 
 .top-ten-card.is-featured.is-landscape {
@@ -1277,8 +1278,20 @@ html {
 }
 
 .top-ten-orbit-sizer {
-  aspect-ratio: var(--media-ratio);
+  position: relative;
+  z-index: 8;
+  width: max-content;
+  max-width: 100%;
   margin-bottom: 1.35rem;
+}
+
+.top-ten-orbit.is-spinning .top-ten-orbit-sizer {
+  z-index: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.top-ten-orbit:not(.is-spinning) .top-ten-orbit-ring {
   pointer-events: none;
   visibility: hidden;
 }
@@ -1320,7 +1333,7 @@ html {
 
 .top-ten-orbit-planet.is-front {
   z-index: 6;
-  pointer-events: auto;
+  pointer-events: none;
   opacity: 1;
   backface-visibility: visible;
 }
@@ -1329,13 +1342,10 @@ html {
   z-index: 1;
 }
 
-.top-ten-orbit-planet.is-front .top-ten-card {
-  width: 100%;
-}
-
-.top-ten-orbit-planet:not(.is-front) .top-ten-card {
-  --card-max-w: min(var(--planet-w), var(--top-ten-featured-max-w));
-  --card-max-h: var(--top-ten-featured-max-h);
+.top-ten-orbit-planet .top-ten-card {
+  width: min(var(--card-max-w), calc(var(--card-max-h) * var(--media-ratio)));
+  max-width: 100%;
+  margin-inline: auto;
 }
 
 .top-ten-orbit-planet:not(.is-front) .top-ten-frame {

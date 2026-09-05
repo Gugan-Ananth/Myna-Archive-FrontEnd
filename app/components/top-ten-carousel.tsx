@@ -12,12 +12,7 @@ import {
 } from "react";
 import { useI18n } from "../lib/i18n";
 import type { TopTenGroupId } from "../lib/top-ten";
-import {
-  TopTenCard,
-  entryIsLandscape,
-  entryMediaSize,
-  type TopTenEntry,
-} from "./top-ten-board";
+import { TopTenCard, entryId, type TopTenEntry } from "./top-ten-board";
 
 export type TopTenSlide = {
   id: TopTenGroupId;
@@ -250,10 +245,6 @@ export function TopTenCarousel({
 
   const title = t("topTenCategoryTitle", { category: current.category });
   const frontEntry = current.entries[0];
-  const frontDims = frontEntry ? entryMediaSize(frontEntry) : { w: 3, h: 4 };
-  const frontLandscape = frontEntry
-    ? entryIsLandscape(frontEntry)
-    : false;
   const stepAngle = count > 0 ? 360 / count : 0;
   const ringAngle = -(visualStep * stepAngle + extraLaps * 360);
 
@@ -288,7 +279,6 @@ export function TopTenCarousel({
             {
               "--orbit-count": count,
               "--orbit-spin-ms": `${spinMs}ms`,
-              "--media-ratio": `${frontDims.w} / ${frontDims.h}`,
             } as CSSProperties
           }
         >
@@ -306,22 +296,34 @@ export function TopTenCarousel({
               onClick={() => go(1)}
             />
           ) : null}
+          {/*
+            Clickable #1 lives on this untransformed sizer. The 3D planet is
+            visual-only: landscape cards foreshorten under perspective and
+            miss pointer hits.
+          */}
           <div
             ref={sizerRef}
-            className={[
-              "top-ten-orbit-sizer",
-              "top-ten-card",
-              "is-featured",
-              frontLandscape ? "is-landscape" : "is-portrait",
-            ].join(" ")}
-            style={{ ["--media-ratio" as string]: `${frontDims.w} / ${frontDims.h}` }}
-            aria-hidden
-          />
+            className="top-ten-orbit-sizer"
+            aria-hidden={spinning || undefined}
+          >
+            {frontEntry ? (
+              <TopTenCard
+                key={entryId(frontEntry)}
+                entry={frontEntry}
+                rank={1}
+                size="featured"
+              />
+            ) : (
+              <EmptyHint />
+            )}
+          </div>
           <div
             className="top-ten-orbit-ring"
             style={{
               transform: `translateZ(calc(-1 * var(--orbit-radius))) rotateY(${ringAngle}deg)`,
             }}
+            aria-hidden
+            inert
           >
             {slides.map((slide, slideIndex) => {
               const entry = slide.entries[0];
@@ -340,47 +342,34 @@ export function TopTenCarousel({
                   }
                 >
                   {entry ? (
-                    isFront ? (
-                      <TopTenCard entry={entry} rank={1} size="featured" />
-                    ) : (
-                      <button
-                        type="button"
-                        className="top-ten-peek-button"
-                        onClick={() => {
-                          let delta = slideIndex - safeIndex;
-                          if (delta > count / 2) delta -= count;
-                          if (delta < -count / 2) delta += count;
-                          go(delta);
-                        }}
-                        aria-label={t("topTenShowCategory", {
-                          category: slide.category,
-                        })}
-                      >
-                        <TopTenCard
-                          entry={entry}
-                          rank={1}
-                          size="featured"
-                          linked={false}
-                        />
-                      </button>
-                    )
+                    <TopTenCard
+                      entry={entry}
+                      rank={1}
+                      size="featured"
+                      linked={false}
+                    />
                   ) : (
-                    <div className="top-ten-card is-featured is-portrait">
-                      <div className="flex aspect-[3/4] w-full flex-col items-center justify-center rounded-[1.35rem] border border-dashed border-border-strong bg-surface/80 px-5 text-center shadow-sm">
-                        <p className="text-sm font-medium text-foreground">
-                          {t("topTenEmpty")}
-                        </p>
-                        <p className="mt-1 max-w-[16rem] text-xs text-foreground-subtle">
-                          {t("topTenEmptyHint")}
-                        </p>
-                      </div>
-                    </div>
+                    <EmptyHint />
                   )}
                 </div>
               );
             })}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyHint() {
+  const { t } = useI18n();
+  return (
+    <div className="top-ten-card is-featured is-portrait">
+      <div className="flex aspect-[3/4] w-full flex-col items-center justify-center rounded-[1.35rem] border border-dashed border-border-strong bg-surface/80 px-5 text-center shadow-sm">
+        <p className="text-sm font-medium text-foreground">{t("topTenEmpty")}</p>
+        <p className="mt-1 max-w-[16rem] text-xs text-foreground-subtle">
+          {t("topTenEmptyHint")}
+        </p>
       </div>
     </div>
   );

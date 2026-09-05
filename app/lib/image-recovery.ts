@@ -1,4 +1,4 @@
-import { originalMediaUrl } from "./media-display";
+import { originalMediaUrl, thumbProxySource } from "./media-display";
 
 /**
  * URL to try after an optimized / loader-derived image fails.
@@ -10,6 +10,8 @@ export function recoveryImageSrc(
   hasCustomLoader: boolean,
 ): string | null {
   if (!src) return null;
+  const nested = thumbProxySource(src);
+  if (nested) return nested;
   const original = originalMediaUrl(src) || src;
   if (hasCustomLoader) return original;
   return original !== src ? original : null;
