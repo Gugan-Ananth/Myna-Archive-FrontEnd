@@ -37,10 +37,10 @@ type TopTenBoardProps = {
 
 const IMAGE_SIZES: Record<TopTenSize, string> = {
   featured:
-    "(max-width: 639px) 86vw, (max-width: 1023px) 70vw, 40rem",
-  medium: "(max-width: 639px) 46vw, 20rem",
-  pair: "(max-width: 639px) 46vw, 18rem",
-  regular: "(max-width: 639px) 42vw, 12rem",
+    "(max-width: 639px) 86vw, (max-width: 1023px) 70vw, 42rem",
+  medium: "(max-width: 639px) 48vw, 22rem",
+  pair: "(max-width: 639px) 48vw, 20rem",
+  regular: "(max-width: 639px) 48vw, 20rem",
 };
 
 const PLACEHOLDER = { w: 3, h: 4 };
@@ -94,7 +94,7 @@ export function entryIsLandscape(entry: TopTenEntry): boolean {
 function sizeForRank(rank: number): TopTenSize {
   if (rank === 1) return "featured";
   if (rank <= 3) return "medium";
-  if (rank <= 5) return "pair";
+  if (rank <= 6) return "pair";
   return "regular";
 }
 
@@ -104,7 +104,7 @@ function rankSizeForCard(size: TopTenSize): "featured" | "medium" | "regular" {
   return "regular";
 }
 
-/** Podium ranking: featured #1, metal #2–3, then 4–5 and 6–10 in their own rows. */
+/** Podium ranking: featured #1, metal #2–3, then 4–6 and 7–10 in their own rows. */
 export function TopTenBoard({
   entries,
   startRank = 1,
@@ -116,15 +116,15 @@ export function TopTenBoard({
     rank: startRank + index,
   }));
   const podium = items.filter(({ rank }) => rank === 2 || rank === 3);
-  const pair = items.filter(({ rank }) => rank === 4 || rank === 5);
-  const rest = items.filter(({ rank }) => rank >= 6);
+  const trio = items.filter(({ rank }) => rank >= 4 && rank <= 6);
+  const rest = items.filter(({ rank }) => rank >= 7);
 
   return (
     <div className="top-ten-board">
       {podium.length > 0 ? (
         <RankRow items={podium} row="medium" />
       ) : null}
-      {pair.length > 0 ? <RankRow items={pair} row="pair" /> : null}
+      {trio.length > 0 ? <RankRow items={trio} row="pair" /> : null}
       {rest.length > 0 ? <RankRow items={rest} row="regular" /> : null}
     </div>
   );

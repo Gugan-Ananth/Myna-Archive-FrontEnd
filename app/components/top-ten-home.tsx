@@ -146,7 +146,6 @@ export function TopTenHome({
   const safeIndex =
     slides.length === 0 ? 0 : matchedIndex >= 0 ? matchedIndex : 0;
   const currentSlide = slides[safeIndex];
-  const [featuredHeight, setFeaturedHeight] = useState<number | null>(null);
   const errorBody = loadError
     ? usedFallback
       ? t("loadErrorFallback")
@@ -177,7 +176,6 @@ export function TopTenHome({
             <TopTenCarousel
               slides={slides}
               index={safeIndex}
-              onFrontHeight={setFeaturedHeight}
               onIndexChange={(index) => {
                 const nextId = slides[index]?.id;
                 if (!nextId) return;
@@ -188,17 +186,7 @@ export function TopTenHome({
               }}
             />
             {currentSlide.entries.length > 1 ? (
-              <div
-                key={currentSlide.id}
-                className="top-ten-rest"
-                style={
-                  featuredHeight
-                    ? {
-                        ["--top-ten-prev-h" as string]: `${featuredHeight}px`,
-                      }
-                    : undefined
-                }
-              >
+              <div key={currentSlide.id} className="top-ten-rest">
                 <TopTenBoard
                   entries={currentSlide.entries.slice(1)}
                   startRank={2}

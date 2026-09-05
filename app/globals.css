@@ -992,36 +992,16 @@ html {
 .top-ten-rest {
   --top-ten-featured-max-w: min(22rem, calc(72vw - 5.5rem));
   --top-ten-featured-max-h: min(34rem, 68vh);
-  --top-ten-featured-land-max-w: min(40rem, calc(86vw - 6.5rem));
-  --top-ten-featured-land-max-h: min(22rem, 52vh);
-  --top-ten-card-max-w: min(18.5rem, calc(44vw - 2rem));
-  --top-ten-card-max-h: min(26rem, var(--top-ten-prev-h, 26rem), 56vh);
-  --top-ten-card-land-max-w: min(26rem, calc(46vw - 2rem));
-  --top-ten-card-land-max-h: min(16rem, var(--top-ten-prev-h, 16rem), 40vh);
-  --top-ten-pair-max-w: min(16.5rem, calc(42vw - 2rem));
-  --top-ten-pair-max-h: min(
-    22rem,
-    calc(var(--top-ten-prev-h, 22rem) * 0.88),
-    48vh
-  );
-  --top-ten-pair-land-max-w: min(22rem, calc(44vw - 2rem));
-  --top-ten-pair-land-max-h: min(
-    14rem,
-    calc(var(--top-ten-prev-h, 14rem) * 0.88),
-    34vh
-  );
-  --top-ten-regular-max-w: min(11.25rem, calc(18vw - 1.25rem));
-  --top-ten-regular-max-h: min(
-    16rem,
-    calc(var(--top-ten-prev-h, 16rem) * 0.62),
-    36vh
-  );
-  --top-ten-regular-land-max-w: min(13rem, calc(18vw - 1.25rem));
-  --top-ten-regular-land-max-h: min(
-    9rem,
-    calc(var(--top-ten-prev-h, 9rem) * 0.62),
-    22vh
-  );
+  --top-ten-featured-land-max-w: min(42rem, calc(88vw - 6.5rem));
+  --top-ten-featured-land-max-h: min(24rem, 54vh);
+  --top-ten-card-max-w: min(20.5rem, calc(46vw - 2rem));
+  --top-ten-card-max-h: min(28rem, 58vh);
+  --top-ten-card-land-max-w: min(30rem, calc(50vw - 2rem));
+  --top-ten-card-land-max-h: min(18.5rem, 44vh);
+  --top-ten-pair-max-w: min(19rem, calc(22vw - 1.5rem));
+  --top-ten-pair-max-h: min(26rem, 54vh);
+  --top-ten-pair-land-max-w: min(28rem, calc(48vw - 2rem));
+  --top-ten-pair-land-max-h: min(17rem, 40vh);
 }
 
 @media (max-width: 639px) {
@@ -1029,12 +1009,10 @@ html {
   .top-ten-rest {
     --top-ten-featured-max-w: min(20rem, calc(78vw - 4.5rem));
     --top-ten-featured-land-max-w: min(22rem, calc(86vw - 4.5rem));
-    --top-ten-card-max-w: min(16rem, calc(46vw - 1.25rem));
-    --top-ten-card-land-max-w: min(18rem, calc(48vw - 1.25rem));
-    --top-ten-pair-max-w: min(15rem, calc(46vw - 1.25rem));
-    --top-ten-pair-land-max-w: min(17rem, calc(48vw - 1.25rem));
-    --top-ten-regular-max-w: min(11rem, calc(42vw - 1.25rem));
-    --top-ten-regular-land-max-w: min(12rem, calc(42vw - 1.25rem));
+    --top-ten-card-max-w: min(17.5rem, calc(48vw - 1.25rem));
+    --top-ten-card-land-max-w: min(19.5rem, calc(52vw - 1.25rem));
+    --top-ten-pair-max-w: min(16.5rem, calc(48vw - 1.25rem));
+    --top-ten-pair-land-max-w: min(18.5rem, calc(52vw - 1.25rem));
   }
 }
 
@@ -1080,13 +1058,13 @@ html {
 }
 
 .top-ten-card.is-regular {
-  --card-max-w: var(--top-ten-regular-max-w);
-  --card-max-h: var(--top-ten-regular-max-h);
+  --card-max-w: var(--top-ten-pair-max-w);
+  --card-max-h: var(--top-ten-pair-max-h);
 }
 
 .top-ten-card.is-regular.is-landscape {
-  --card-max-w: var(--top-ten-regular-land-max-w);
-  --card-max-h: var(--top-ten-regular-land-max-h);
+  --card-max-w: var(--top-ten-pair-land-max-w);
+  --card-max-h: var(--top-ten-pair-land-max-h);
 }
 
 .top-ten-media {
@@ -1097,8 +1075,8 @@ html {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2.25rem;
-  padding-top: 0.25rem;
+  gap: 2.85rem;
+  padding-top: 1.35rem;
 }
 
 .top-ten-row {
@@ -1107,22 +1085,31 @@ html {
   list-style: none;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 1.15rem 1.35rem;
+  gap: 1.75rem 2rem;
   margin: 0;
   padding: 0;
 }
 
 .top-ten-row.is-medium {
-  gap: 1.35rem 1.75rem;
+  gap: 2.15rem 3.5rem;
 }
 
+.top-ten-row.is-pair,
 .top-ten-row.is-regular {
-  gap: 1.1rem 1rem;
+  gap: 1.85rem 1.75rem;
+}
+
+@media (min-width: 768px) {
+  .top-ten-row.is-pair,
+  .top-ten-row.is-regular {
+    flex-wrap: nowrap;
+  }
 }
 
 .top-ten-slot {
   display: flex;
   min-width: 0;
+  flex: 0 1 auto;
   justify-content: center;
 }
 
@@ -1335,6 +1322,7 @@ html {
   z-index: 6;
   pointer-events: auto;
   opacity: 1;
+  backface-visibility: visible;
 }
 
 .top-ten-orbit-planet:not(.is-front) {

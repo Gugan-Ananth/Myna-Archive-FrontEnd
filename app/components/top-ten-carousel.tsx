@@ -62,12 +62,10 @@ export function TopTenCarousel({
   slides,
   index,
   onIndexChange,
-  onFrontHeight,
 }: {
   slides: TopTenSlide[];
   index: number;
   onIndexChange: (index: number) => void;
-  onFrontHeight?: (height: number) => void;
 }) {
   const { t } = useI18n();
   const reduceMotion = usePrefersReducedMotion();
@@ -149,23 +147,18 @@ export function TopTenCarousel({
     const orbit = sizer.parentElement;
     if (!orbit) return;
     const publish = () => {
-      const front = orbit.querySelector(
-        ".top-ten-orbit-planet.is-front .top-ten-card",
-      );
-      const el = front instanceof HTMLElement ? front : sizer;
-      const rect = el.getBoundingClientRect();
-      orbit.style.setProperty("--planet-w", `${rect.width}px`);
-      onFrontHeight?.(rect.height);
+      // Layout box of the untransformed sizer. getBoundingClientRect on a
+      // spinning 3D planet foreshortens width and collapses --planet-w to 0.
+      const width = sizer.offsetWidth;
+      if (width > 1) {
+        orbit.style.setProperty("--planet-w", `${width}px`);
+      }
     };
     publish();
     const observer = new ResizeObserver(publish);
     observer.observe(sizer);
-    const front = orbit.querySelector(
-      ".top-ten-orbit-planet.is-front .top-ten-card",
-    );
-    if (front instanceof HTMLElement) observer.observe(front);
     return () => observer.disconnect();
-  }, [current, onFrontHeight]);
+  }, [current]);
 
   useEffect(() => {
     function onUp() {
