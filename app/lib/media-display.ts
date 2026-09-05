@@ -133,6 +133,19 @@ export function nextOptimizerSrc(
   return `/api/media/thumb?${params.toString()}`;
 }
 
+/** Nested CDN URL inside `/api/media/thumb?url=…`, if this is a thumb proxy. */
+export function thumbProxySource(src: string): string | null {
+  if (!src) return null;
+  try {
+    const parsed = new URL(src, "http://local.invalid");
+    if (!parsed.pathname.endsWith("/api/media/thumb")) return null;
+    const nested = parsed.searchParams.get("url")?.trim() ?? "";
+    return nested || null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Apply Bunny Optimizer resize params when the host is a Pull Zone.
  * No-ops for non-Bunny URLs.
@@ -173,6 +186,21 @@ export function previewAssetSrc(asset: MediaAsset): string {
   }
   const source = asset.thumbnailUrl || asset.mediaUrl;
   return nextOptimizerSrc(source, DETAIL_PREVIEW_WIDTH, DETAIL_PREVIEW_QUALITY);
+}
+
+/**
+ * Collection / comic filmstrip thumb. Use the stored preview (or original)
+ * on the CDN — do not proxy through `/api/media/thumb`, which often 401/502s
+ * in production while localhost can still Sharp-resize the original.
+ */
+export function filmstripAssetSrc(asset: MediaAsset): string {
+  if (isStoredPreviewUrl(asset.thumbnailUrl, asset.mediaUrl)) {
+    return originalMediaUrl(asset.thumbnailUrl);
+  }
+  if (isStoredPreviewPath(asset.thumbnailUrl)) {
+    return originalMediaUrl(asset.thumbnailUrl);
+  }
+  return originalMediaUrl(asset.thumbnailUrl || asset.mediaUrl);
 }
 
 export function previewMediaSrc(item: ArchiveItem): string {

@@ -86,11 +86,6 @@ export function entryMediaSize(entry: TopTenEntry): { w: number; h: number } {
   return PLACEHOLDER;
 }
 
-export function entryIsLandscape(entry: TopTenEntry): boolean {
-  const { w, h } = entryMediaSize(entry);
-  return orientationFromSize(w, h) === "landscape";
-}
-
 function sizeForRank(rank: number): TopTenSize {
   if (rank === 1) return "featured";
   if (rank <= 3) return "medium";
@@ -169,17 +164,29 @@ export function TopTenCard({
   const name = entryName(entry);
   const href = entryHref(entry);
   const featured = size === "featured";
+  const id = entryId(entry);
   const stored = entryMediaSize(entry);
   const hasStoredDims =
     entry.kind === "archive"
       ? Boolean(entry.item.width && entry.item.height)
       : Boolean(entry.oc.width && entry.oc.height);
-  const [dims, setDims] = useState(stored);
+  const [natural, setNatural] = useState<{
+    id: string;
+    w: number;
+    h: number;
+  } | null>(null);
+  const dims =
+    hasStoredDims || natural?.id !== id
+      ? stored
+      : { w: natural.w, h: natural.h };
   const landscape = orientationFromSize(dims.w, dims.h) === "landscape";
 
   function applyNaturalSize(width: number, height: number) {
     if (hasStoredDims || width <= 0 || height <= 0) return;
-    setDims({ w: width, h: height });
+    if (natural?.id === id && natural.w === width && natural.h === height) {
+      return;
+    }
+    setNatural({ id, w: width, h: height });
   }
 
   const frame = (
@@ -210,6 +217,7 @@ export function TopTenCard({
             aria-label={t("topTenRankAria", { rank, name })}
           >
             <TopTenMedia
+              key={id}
               entry={entry}
               size={size}
               priority={rank <= 3}
@@ -219,6 +227,7 @@ export function TopTenCard({
           </Link>
         ) : (
           <TopTenMedia
+            key={id}
             entry={entry}
             size={size}
             priority={rank <= 3}
