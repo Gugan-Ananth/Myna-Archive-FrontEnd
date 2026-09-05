@@ -1,12 +1,19 @@
 import {
   listArchiveItems,
   listOriginalCharacters,
+  peekListCache,
+  peekOcListCache,
   type FetchCacheOptions,
 } from "./api";
-import { listParamsForView, type CollectionView } from "./collection-view";
+import {
+  isStorySeriesRoot,
+  listParamsForView,
+  type CollectionView,
+  type TopTenSourceView,
+} from "./collection-view";
 import type { ArchiveItem, OriginalCharacter } from "./types";
 
-const TOP_TEN_PAGE_SIZE = 10;
+export const TOP_TEN_PAGE_SIZE = 10;
 
 /** Dashboard categories shown in the Top 10 board. */
 export const TOP_TEN_GROUPS = [
@@ -20,6 +27,51 @@ export const TOP_TEN_GROUPS = [
 ] as const;
 
 export type TopTenGroupId = (typeof TOP_TEN_GROUPS)[number]["id"];
+
+function starredListParams(view: Exclude<TopTenSourceView, "oc">) {
+  return {
+    ...listParamsForView(view),
+    starred: true,
+    page: 1,
+    pageSize: TOP_TEN_PAGE_SIZE,
+  };
+}
+
+function countFromItems(view: TopTenSourceView, items: ArchiveItem[]): number {
+  const starred =
+    view === "stories" ? items.filter(isStorySeriesRoot) : items;
+  return Math.min(starred.length, TOP_TEN_PAGE_SIZE);
+}
+
+/** Instant read of how many Top 10 slots the current section has filled. */
+export function peekStarredCount(view: TopTenSourceView): number | null {
+  if (view === "oc") {
+    const peeked = peekOcListCache({
+      starred: true,
+      page: 1,
+      pageSize: TOP_TEN_PAGE_SIZE,
+    });
+    return peeked ? Math.min(peeked.data.length, TOP_TEN_PAGE_SIZE) : null;
+  }
+  const peeked = peekListCache(starredListParams(view));
+  return peeked ? countFromItems(view, peeked.data) : null;
+}
+
+/** How many starred entries occupy this section's Top 10 (0–10). */
+export async function loadStarredCount(
+  view: TopTenSourceView,
+): Promise<number> {
+  if (view === "oc") {
+    const result = await listOriginalCharacters({
+      starred: true,
+      page: 1,
+      pageSize: TOP_TEN_PAGE_SIZE,
+    });
+    return Math.min(result.data.length, TOP_TEN_PAGE_SIZE);
+  }
+  const result = await listArchiveItems(starredListParams(view));
+  return countFromItems(view, result.data);
+}
 
 export type TopTenData = {
   photos: ArchiveItem[];

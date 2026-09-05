@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { parseCollectionView } from "../lib/collection-view";
@@ -10,9 +9,10 @@ import { AddMediaTrigger } from "./add-media-trigger";
 import { CopyFromLinkTrigger } from "./copy-from-link-trigger";
 import { SearchBar } from "./search-bar";
 import { TagChipBar } from "./tag-chip-bar";
+import { TopTenCount } from "./top-ten-count";
 
 /**
- * Top bar: logo (left) · search + tags (center) · Add + theme + language (right).
+ * Top bar: favorites count (left) · search + tags (center) · copy + Add (right).
  */
 export function AppHeader() {
   const { t } = useI18n();
@@ -95,23 +95,9 @@ export function AppHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-transparent bg-transparent">
       <div className="flex h-16 w-full min-w-0 items-center gap-2 px-3 sm:gap-3 sm:px-4 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,40rem)_minmax(0,1fr)] md:gap-4 md:px-6">
-        <Link
-          href="/"
-          className="hidden min-w-0 shrink-0 items-center gap-2 justify-self-start rounded-lg outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring md:invisible md:flex"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element -- brand SVG mark */}
-          <img
-            src="/myna-mark.svg"
-            alt=""
-            width={32}
-            height={32}
-            className="h-8 w-8 rounded-xl shadow-sm ring-1 ring-border"
-            aria-hidden
-          />
-          <span className="text-sm font-semibold tracking-tight text-foreground">
-            {t("brandName")}
-          </span>
-        </Link>
+        <div className="flex min-w-0 shrink-0 items-center justify-self-start">
+          {view === "top-10" ? null : <TopTenCount view={view} />}
+        </div>
 
         <div className="flex min-w-0 flex-1 items-center gap-2 md:w-full">
           <div className="min-w-0 flex-1">

@@ -3,16 +3,25 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ApiError } from "../lib/api";
-import { useI18n } from "../lib/i18n";
-import { loadTopTen, type TopTenData } from "../lib/top-ten";
+import { replaceUrlWithoutRefresh } from "../lib/client-navigation";
+import {
+  isStorySeriesRoot,
+  parseTopTenGroup,
+} from "../lib/collection-view";
+import { useI18n, type MessageKey } from "../lib/i18n";
+import {
+  loadTopTen,
+  TOP_TEN_GROUPS,
+  type TopTenData,
+  type TopTenGroupId,
+} from "../lib/top-ten";
 import type { ArchiveItem, OriginalCharacter } from "../lib/types";
-import { ArchiveGrid } from "./archive-grid";
 import { EmptyBoard } from "./empty-board";
 import { HomeBackdrop } from "./home-backdrop";
 import { HomeFiltersNotice } from "./home-filters-notice";
-import { OcGrid } from "./oc-grid";
 import { StatusCallout } from "./status-callout";
-import { StoryWorksList } from "./story-works-list";
+import { TopTenBoard } from "./top-ten-board";
+import { TopTenCarousel, type TopTenSlide } from "./top-ten-carousel";
 
 type TopTenHomeProps = {
   initialData: TopTenData;
@@ -23,11 +32,27 @@ type TopTenHomeProps = {
   seeded: boolean;
 };
 
-type ArchiveGroup = {
-  id: "photos" | "cute-things" | "collections" | "comics" | "videos";
-  category: string;
-  items: ArchiveItem[];
+const CATEGORY_KEY: Record<TopTenGroupId, MessageKey> = {
+  photos: "topTenCategoryImages",
+  "cute-things": "topTenCategoryCuteThings",
+  collections: "topTenCategoryCollections",
+  comics: "topTenCategoryComics",
+  videos: "topTenCategoryVideos",
+  stories: "topTenCategoryStories",
+  oc: "topTenCategoryOcs",
 };
+
+function entriesForGroup(
+  data: TopTenData,
+  id: TopTenGroupId,
+): TopTenSlide["entries"] {
+  if (id === "oc") {
+    return data.oc.map((oc: OriginalCharacter) => ({ kind: "oc" as const, oc }));
+  }
+  const items: ArchiveItem[] =
+    id === "stories" ? data.stories.filter(isStorySeriesRoot) : data[id];
+  return items.map((item) => ({ kind: "archive" as const, item }));
+}
 
 /** Top 10 dashboard: each category keeps its own ten starred entries. */
 export function TopTenHome({
@@ -48,18 +73,13 @@ export function TopTenHome({
     error: string | null;
     usedFallback: boolean;
   } | null>(null);
-  const [removedIds, setRemovedIds] = useState<Set<string>>(() => new Set());
   const requestIdRef = useRef(0);
 
-  const loadedData = matchesServer
+  const data = matchesServer
     ? initialData
     : clientState?.query === liveQuery
       ? clientState.data
       : emptyData;
-  const data = useMemo(
-    () => filterRemovedItems(loadedData, removedIds),
-    [loadedData, removedIds],
-  );
   const loadError = matchesServer
     ? initialLoadError
     : clientState?.query === liveQuery
@@ -71,15 +91,6 @@ export function TopTenHome({
       ? clientState.usedFallback
       : false;
   const isLoading = !matchesServer && clientState?.query !== liveQuery;
-
-  function handleStarChange(item: ArchiveItem | OriginalCharacter) {
-    if (item.starred) return;
-    setRemovedIds((current) => {
-      const next = new Set(current);
-      next.add(item.id);
-      return next;
-    });
-  }
 
   useEffect(() => {
     if (matchesServer) {
@@ -114,40 +125,27 @@ export function TopTenHome({
     };
   }, [liveQuery, matchesServer]);
 
-  const archiveGroups = useMemo<ArchiveGroup[]>(
-    () => [
-      {
-        id: "photos",
-        category: t("topTenCategoryImages"),
-        items: data.photos,
-      },
-      {
-        id: "cute-things",
-        category: t("topTenCategoryCuteThings"),
-        items: data["cute-things"],
-      },
-      {
-        id: "collections",
-        category: t("topTenCategoryCollections"),
-        items: data.collections,
-      },
-      {
-        id: "comics",
-        category: t("topTenCategoryComics"),
-        items: data.comics,
-      },
-      {
-        id: "videos",
-        category: t("topTenCategoryVideos"),
-        items: data.videos,
-      },
-    ],
-    [data, t],
-  );
-  const hasItems =
-    archiveGroups.some((group) => group.items.length > 0) ||
-    data.stories.length > 0 ||
-    data.oc.length > 0;
+  const requestedGroup = parseTopTenGroup(searchParams.get("group"));
+
+  const slides = useMemo<TopTenSlide[]>(() => {
+    const next: TopTenSlide[] = [];
+    for (const group of TOP_TEN_GROUPS) {
+      const entries = entriesForGroup(data, group.id);
+      if (entries.length === 0 && group.id !== requestedGroup) continue;
+      next.push({
+        id: group.id,
+        category: t(CATEGORY_KEY[group.id]),
+        entries,
+      });
+    }
+    return next;
+  }, [data, requestedGroup, t]);
+  const matchedIndex = requestedGroup
+    ? slides.findIndex((slide) => slide.id === requestedGroup)
+    : -1;
+  const safeIndex =
+    slides.length === 0 ? 0 : matchedIndex >= 0 ? matchedIndex : 0;
+  const currentSlide = slides[safeIndex];
   const errorBody = loadError
     ? usedFallback
       ? t("loadErrorFallback")
@@ -167,79 +165,38 @@ export function TopTenHome({
           />
         ) : null}
 
-        {isLoading && !hasItems ? (
+        {isLoading && slides.length === 0 ? (
           <div className="flex min-h-48 items-center justify-center text-sm text-foreground-muted">
             {t("loadingMore")}
           </div>
-        ) : !hasItems ? (
+        ) : slides.length === 0 ? (
           <EmptyBoard title={t("topTenEmpty")} hint={t("topTenEmptyHint")} />
-        ) : (
-          <div className="space-y-10">
-            {archiveGroups.map((group) =>
-              group.items.length > 0 ? (
-                <TopTenArchiveSection
-                  key={group.id}
-                  group={group}
-                  onStarChange={handleStarChange}
+        ) : currentSlide ? (
+          <section className="flex flex-col">
+            <TopTenCarousel
+              slides={slides}
+              index={safeIndex}
+              onIndexChange={(index) => {
+                const nextId = slides[index]?.id;
+                if (!nextId) return;
+                const next = new URLSearchParams(searchParams.toString());
+                next.set("view", "top-10");
+                next.set("group", nextId);
+                replaceUrlWithoutRefresh(`/?${next.toString()}`);
+              }}
+            />
+            {currentSlide.entries.length > 1 ? (
+              <div key={currentSlide.id} className="top-ten-rest">
+                <TopTenBoard
+                  entries={currentSlide.entries.slice(1)}
+                  startRank={2}
                 />
-              ) : null,
-            )}
-            {data.stories.length > 0 ? (
-              <section>
-                <TopTenSectionHeading
-                  category={t("topTenCategoryStories")}
-                />
-                <StoryWorksList
-                  items={data.stories}
-                  showRank
-                  onStarChange={handleStarChange}
-                />
-              </section>
+              </div>
             ) : null}
-            {data.oc.length > 0 ? (
-              <section>
-                <TopTenSectionHeading category={t("topTenCategoryOcs")} />
-                <OcGrid
-                  items={data.oc}
-                  showRank
-                  onStarChange={handleStarChange}
-                />
-              </section>
-            ) : null}
-          </div>
-        )}
+          </section>
+        ) : null}
       </div>
     </main>
-  );
-}
-
-function TopTenArchiveSection({
-  group,
-  onStarChange,
-}: {
-  group: ArchiveGroup;
-  onStarChange: (item: ArchiveItem) => void;
-}) {
-  return (
-    <section>
-      <TopTenSectionHeading category={group.category} />
-      <ArchiveGrid
-        items={group.items}
-        showRank
-        onStarChange={onStarChange}
-      />
-    </section>
-  );
-}
-
-function TopTenSectionHeading({ category }: { category: string }) {
-  const { t } = useI18n();
-  return (
-    <div className="mb-5 flex justify-center px-1">
-      <h2 className="text-2xl font-bold tracking-tight text-purple-700 drop-shadow-[0_2px_5px_rgba(76,29,149,0.2)] dark:text-purple-300 dark:drop-shadow-[0_2px_8px_rgba(221,214,254,0.16)] sm:text-3xl">
-        {t("topTenCategoryTitle", { category })}
-      </h2>
-    </div>
   );
 }
 
@@ -252,20 +209,3 @@ const emptyData: TopTenData = {
   stories: [],
   oc: [],
 };
-
-function filterRemovedItems(
-  data: TopTenData,
-  removedIds: Set<string>,
-): TopTenData {
-  return {
-    photos: data.photos.filter((item) => !removedIds.has(item.id)),
-    "cute-things": data["cute-things"].filter(
-      (item) => !removedIds.has(item.id),
-    ),
-    collections: data.collections.filter((item) => !removedIds.has(item.id)),
-    comics: data.comics.filter((item) => !removedIds.has(item.id)),
-    videos: data.videos.filter((item) => !removedIds.has(item.id)),
-    stories: data.stories.filter((item) => !removedIds.has(item.id)),
-    oc: data.oc.filter((item) => !removedIds.has(item.id)),
-  };
-}

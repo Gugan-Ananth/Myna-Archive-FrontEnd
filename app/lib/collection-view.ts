@@ -15,6 +15,7 @@ export const COLLECTION_VIEWS = [
 
 export type CollectionView = (typeof COLLECTION_VIEWS)[number];
 export type ArchiveCollectionView = Exclude<CollectionView, "top-10" | "oc">;
+export type TopTenSourceView = Exclude<CollectionView, "top-10">;
 
 export function isCollectionView(
   value: string | null | undefined,
@@ -67,8 +68,27 @@ export function applyCollectionView(
   else next.set("view", view);
   next.delete("created");
   next.delete("video");
+  next.delete("group");
   if (view === "top-10") next.delete("tag");
   return next;
+}
+
+/** Open Top 10 on the category the user is currently browsing. */
+export function applyTopTenGroup(
+  params: URLSearchParams,
+  group: TopTenSourceView,
+): URLSearchParams {
+  const next = applyCollectionView(params, "top-10");
+  next.set("group", group);
+  return next;
+}
+
+export function parseTopTenGroup(
+  value: string | string[] | null | undefined,
+): TopTenSourceView | null {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (raw && isCollectionView(raw) && raw !== "top-10") return raw;
+  return null;
 }
 
 /** Add destination for a home section — skips the 4-option chooser. */

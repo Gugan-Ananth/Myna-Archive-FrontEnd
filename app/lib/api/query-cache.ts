@@ -23,9 +23,28 @@ type Entry<T> = {
 
 const store = new Map<string, Entry<unknown>>();
 const inFlight = new Map<string, Promise<unknown>>();
+const cacheListeners = new Set<() => void>();
+let cacheGeneration = 0;
 
 const DEFAULT_TTL_MS = 45_000;
 const DEFAULT_STALE_MS = 5 * 60_000;
+
+/** Subscribe to list/tag cache invalidation (star, save, delete). */
+export function subscribeQueryCache(onStoreChange: () => void): () => void {
+  cacheListeners.add(onStoreChange);
+  return () => {
+    cacheListeners.delete(onStoreChange);
+  };
+}
+
+export function getQueryCacheGeneration(): number {
+  return cacheGeneration;
+}
+
+function notifyQueryCacheListeners(): void {
+  cacheGeneration += 1;
+  for (const listener of cacheListeners) listener();
+}
 
 export function buildQueryCacheKey(
   scope: string,
@@ -84,6 +103,7 @@ export function invalidateQueryCache(prefixOrKey?: string): void {
   if (!prefixOrKey) {
     store.clear();
     inFlight.clear();
+    notifyQueryCacheListeners();
     return;
   }
   if (store.has(prefixOrKey)) {
@@ -97,6 +117,7 @@ export function invalidateQueryCache(prefixOrKey?: string): void {
       inFlight.delete(key);
     }
   }
+  notifyQueryCacheListeners();
 }
 
 export function isBrowser(): boolean {
