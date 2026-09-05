@@ -1,7 +1,6 @@
 "use client";
 
 import { useId } from "react";
-import { useI18n, type Locale } from "../lib/i18n";
 
 type TopTenRankProps = {
   rank: number;
@@ -18,13 +17,12 @@ export function podiumMetal(
   return "plain";
 }
 
-/** Rank marker: golden crown.png for #1, metal discs for #2–3, "Nth most" after. */
+/** Rank marker: golden crown.png for #1, metal discs for #2–3, numbers after. */
 export function TopTenRank({
   rank,
   size = "regular",
   className,
 }: TopTenRankProps) {
-  const { t, locale } = useI18n();
   const metal = podiumMetal(rank);
   const featured = size === "featured";
   const medium = size === "medium";
@@ -35,12 +33,12 @@ export function TopTenRank({
         aria-hidden
         className={[
           "pointer-events-none absolute left-1/2 top-0 z-20 -translate-x-1/2 -translate-y-1/2",
-          "inline-flex items-center justify-center whitespace-nowrap rounded-full",
-          "bg-star px-2.5 py-1 text-[11px] font-semibold tracking-wide text-star-foreground shadow-sm ring-1 ring-star-ring sm:text-xs",
+          "inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2",
+          "bg-star text-sm font-semibold tabular-nums tracking-tight text-star-foreground shadow-sm ring-1 ring-star-ring",
           className ?? "",
         ].join(" ")}
       >
-        {t("topTenMost", { ordinal: rankOrdinal(rank, locale) })}
+        {rank}
       </span>
     );
   }
@@ -120,27 +118,4 @@ function MetalDisc({ rank }: { rank: number }) {
       />
     </svg>
   );
-}
-
-function rankOrdinal(rank: number, locale: Locale): string {
-  if (locale === "es") return `${rank}.º`;
-  if (locale === "ca") {
-    if (rank === 1) return "1r";
-    if (rank === 2) return "2n";
-    if (rank === 3) return "3r";
-    if (rank === 4) return "4t";
-    return `${rank}è`;
-  }
-  const teen = rank % 100;
-  if (teen >= 11 && teen <= 13) return `${rank}th`;
-  switch (rank % 10) {
-    case 1:
-      return `${rank}st`;
-    case 2:
-      return `${rank}nd`;
-    case 3:
-      return `${rank}rd`;
-    default:
-      return `${rank}th`;
-  }
 }
