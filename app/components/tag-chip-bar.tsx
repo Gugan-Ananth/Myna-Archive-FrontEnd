@@ -18,6 +18,8 @@ import { replaceUrlWithoutRefresh } from "../lib/client-navigation";
 import { useI18n } from "../lib/i18n";
 import {
   buildTaxonomyFromApi,
+  formatTagLabel,
+  formatTagNameOnly,
   scopeTaxonomyToSummaries,
   tagStorageValue,
   type TaxonomyCategory,
@@ -91,15 +93,17 @@ export function TagChipBar({
   const apiTaxonomy = scopedFetch?.taxonomy ?? initialTaxonomy;
   const tagSummaries = scopedFetch?.summaries ?? initialSummaries;
 
-  const taxonomy = useMemo(
+  const fullTaxonomy = useMemo(
     () =>
-      scopeTaxonomyToSummaries(
-        buildTaxonomyFromApi(apiTaxonomy, tagSummaries, {
-          includeUnused: true,
-        }),
-        tagSummaries,
-      ),
+      buildTaxonomyFromApi(apiTaxonomy, tagSummaries, {
+        includeUnused: true,
+      }),
     [apiTaxonomy, tagSummaries],
+  );
+
+  const taxonomy = useMemo(
+    () => scopeTaxonomyToSummaries(fullTaxonomy, tagSummaries),
+    [fullTaxonomy, tagSummaries],
   );
 
   const filteredTaxonomy = useMemo(() => {
@@ -180,6 +184,10 @@ export function TagChipBar({
     } else {
       setTags([...current, tag]);
     }
+  }
+
+  function removeTag(tag: string) {
+    setTags(searchParams.getAll("tag").filter((x) => x !== tag));
   }
 
   function clearTags() {
@@ -275,6 +283,14 @@ export function TagChipBar({
               placeholder={t("findATag")}
               className="h-9 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none placeholder:text-foreground-subtle focus:border-primary focus:ring-2 focus:ring-ring/25"
             />
+            {hasSelection ? (
+              <SelectedTagsStrip
+                tags={selectedTags}
+                taxonomy={fullTaxonomy}
+                onRemove={removeTag}
+                t={t}
+              />
+            ) : null}
           </div>
 
           {taxonomy.length === 0 ? (
@@ -302,6 +318,54 @@ export function TagChipBar({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+type SelectedTagsStripProps = {
+  tags: string[];
+  taxonomy: TaxonomyCategory[];
+  onRemove: (encoded: string) => void;
+  t: ReturnType<typeof useI18n>["t"];
+};
+
+function SelectedTagsStrip({
+  tags,
+  taxonomy,
+  onRemove,
+  t,
+}: SelectedTagsStripProps) {
+  return (
+    <div className="mt-2.5">
+      <p className="mb-1.5 text-xs font-semibold tracking-wide text-foreground-muted uppercase">
+        {t("selectedTags")}
+      </p>
+      <ul className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto">
+        {tags.map((encoded) => {
+          const short = formatTagNameOnly(encoded, taxonomy);
+          const full = formatTagLabel(encoded, taxonomy);
+          return (
+            <li key={encoded} className="max-w-full min-w-0">
+              <button
+                type="button"
+                onClick={() => onRemove(encoded)}
+                aria-label={t("removeFilter", { tag: full })}
+                title={full}
+                className={[
+                  "inline-flex max-w-full items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[13px] font-medium text-primary",
+                  "transition-colors hover:bg-primary/15",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-surface",
+                ].join(" ")}
+              >
+                <span className="min-w-0 truncate">{short}</span>
+                <span className="text-primary/70" aria-hidden>
+                  ×
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

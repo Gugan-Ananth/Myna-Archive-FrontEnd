@@ -39,8 +39,8 @@ type DeleteConfirmation = {
 /**
  * Fullscreen media view: image or video covers the stage; controls overlay.
  * The overlay pencil opens the right-hand panel directly in the edit flow
- * for photos and videos. Stories and comics still toggle a read-only
- * details panel (their editors live on dedicated pages).
+ * for photos, videos, and comics. Stories still toggle a read-only
+ * details panel (their editor lives on a dedicated page).
  * Metadata edits and delete hit the Nest API.
  */
 export function ItemDetail({ item }: ItemDetailProps) {
@@ -94,8 +94,13 @@ export function ItemDetail({ item }: ItemDetailProps) {
             ? t("navCollections")
             : t("navPhotos");
   const busy = saving || deleting;
-  /** Photos and videos edit metadata in the side panel; stories/comics do not. */
-  const canInlineEdit = !isStory && !isComic;
+  /** Photos, videos, and comics edit metadata in the side panel; stories do not. */
+  const canInlineEdit = !isStory;
+  const editDetailsLabel = isComic
+    ? t("editComic")
+    : isVideo
+      ? t("editVideoDetails")
+      : t("editImageDetails");
 
   useEffect(() => {
     if (item.mediaType !== "story") return;
@@ -330,23 +335,12 @@ export function ItemDetail({ item }: ItemDetailProps) {
                     </span>
                   </span>
                 )}
-                {isComic ? (
-                  <DetailsToggle
-                    open={panelOpen}
-                    hideLabel={t("hideDetails")}
-                    showLabel={t("showDetails")}
-                    onToggle={() => setPanelOpen((open) => !open)}
-                  />
-                ) : (
-                  <EditPanelButton
-                    open={panelOpen}
-                    editLabel={
-                      isVideo ? t("editVideoDetails") : t("editImageDetails")
-                    }
-                    closeLabel={t("hideDetails")}
-                    onToggle={toggleEditPanel}
-                  />
-                )}
+                <EditPanelButton
+                  open={panelOpen}
+                  editLabel={editDetailsLabel}
+                  closeLabel={t("hideDetails")}
+                  onToggle={toggleEditPanel}
+                />
                 <StarButton
                   starred={draft.starred}
                   onToggle={toggleStar}
@@ -405,11 +399,11 @@ export function ItemDetail({ item }: ItemDetailProps) {
             </div>
 
             {!editing &&
-              (isStory || isComic ? (
+              (isStory ? (
                 <Link
                   href={`/item/${saved.id}/edit`}
                   className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-foreground shadow-sm transition-colors hover:bg-accent-soft hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={isComic ? t("editComic") : t("editStory")}
+                  aria-label={t("editStory")}
                   title={t("edit")}
                 >
                   <EditIcon className="h-5 w-5" />
@@ -419,9 +413,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
                   type="button"
                   onClick={startEdit}
                   className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-foreground shadow-sm transition-colors hover:bg-accent-soft hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={
-                    isVideo ? t("editVideoDetails") : t("editImageDetails")
-                  }
+                  aria-label={editDetailsLabel}
                   title={t("edit")}
                 >
                   <EditIcon className="h-5 w-5" />

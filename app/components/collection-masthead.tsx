@@ -3,7 +3,7 @@
 import Link from "next/link";
 import bunnyImageLoader from "../lib/bunny-image-loader";
 import { useI18n } from "../lib/i18n";
-import { gridMediaSrc } from "../lib/media-display";
+import { GRID_THUMB_QUALITY, gridMediaSrc } from "../lib/media-display";
 import type { ArchiveItem } from "../lib/types";
 import { LoadingImage } from "./global-loading";
 import { RatingBadge } from "./rating-badge";
@@ -81,7 +81,7 @@ export function CollectionMasthead({
                   fill
                   loader={bunnyImageLoader}
                   sizes="(max-width: 640px) 85vw, 360px"
-                  quality={70}
+                  quality={GRID_THUMB_QUALITY}
                   loading="lazy"
                   decoding="async"
                   className="object-cover object-center transition-transform duration-500 ease-out group-hover:scale-[1.04]"

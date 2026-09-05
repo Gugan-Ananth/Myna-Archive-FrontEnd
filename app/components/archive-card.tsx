@@ -18,6 +18,8 @@ import {
   isComic,
   isImageGroup,
   itemMediaAssets,
+  GRID_IMAGE_SIZES,
+  GRID_THUMB_QUALITY,
   gridMediaSrc,
   STORY_COVER_TEMPLATE,
   videoPreviewUrl,
@@ -71,8 +73,8 @@ type VideoThumbState = "loading" | "ready" | "processing" | "failed";
 
 /**
  * Pinterest-style pin: media only, at the file’s natural aspect ratio.
- * Images use next/image + Bunny edge resize (WebP). Videos use a native img
- * so we can cache-bust and recover once Bunny Stream finishes the still frame.
+ * Images use next/image’s default optimizer for a small WebP thumb. Videos
+ * use a native img so we can cache-bust while Bunny Stream finishes the still.
  */
 export function ArchiveCard({
   item,
@@ -116,7 +118,7 @@ export function ArchiveCard({
         onPointerDown={() => warmArchiveItem(item)}
         className="group block w-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
-        <article className="overflow-hidden rounded-2xl bg-surface ring-1 ring-border transition-[box-shadow,transform] duration-200 group-hover:shadow-md group-hover:ring-border-strong [content-visibility:auto] [contain-intrinsic-size:auto_280px]">
+        <article className="overflow-hidden rounded-xl bg-surface ring-1 ring-border transition-[box-shadow,transform] duration-200 group-hover:shadow-md group-hover:ring-border-strong [content-visibility:auto] [contain-intrinsic-size:auto_200px]">
           <div
             className="relative w-full overflow-hidden bg-surface-muted"
             style={{ aspectRatio: `${dims.w} / ${dims.h}` }}
@@ -142,7 +144,7 @@ export function ArchiveCard({
               alt=""
               fill
               unoptimized
-              sizes="(max-width: 539px) 100vw, (max-width: 899px) 50vw, (max-width: 1279px) 33vw, (max-width: 1679px) 25vw, 20vw"
+              sizes={GRID_IMAGE_SIZES}
               className="object-cover object-center transition-transform duration-300 ease-out group-hover:scale-[1.03]"
               fallbackLabel={t("previewUnavailable")}
             />
@@ -152,8 +154,8 @@ export function ArchiveCard({
               alt=""
               fill
               loader={bunnyImageLoader}
-              sizes="(max-width: 539px) 100vw, (max-width: 899px) 50vw, (max-width: 1279px) 33vw, (max-width: 1679px) 25vw, 20vw"
-              quality={72}
+              sizes={GRID_IMAGE_SIZES}
+              quality={GRID_THUMB_QUALITY}
               // Next 16: `preload` replaces deprecated `priority`.
               preload={priority}
               fetchPriority={priority ? "high" : "auto"}

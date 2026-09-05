@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useRef, type KeyboardEvent } from "react";
-import { detailAssetSrc, withBunnyResize } from "../lib/media-display";
+import {
+  GRID_THUMB_QUALITY,
+  isStoredPreviewUrl,
+  nextOptimizerSrc,
+  originalMediaUrl,
+} from "../lib/media-display";
 import type { MediaAsset } from "../lib/types";
 import { BrokenImageIcon, SafeImg } from "./broken-image-fallback";
 
@@ -15,7 +20,6 @@ type MediaFilmstripProps = {
 };
 
 const FILMSTRIP_THUMB_WIDTH = 96;
-const FILMSTRIP_THUMB_QUALITY = 58;
 
 /** Compact, low-quality thumbnail navigation for image groups and comic pages. */
 export function MediaFilmstrip({
@@ -133,8 +137,8 @@ export function MediaFilmstrip({
 }
 
 function filmstripThumbSrc(asset: MediaAsset): string {
-  return withBunnyResize(asset.thumbnailUrl || detailAssetSrc(asset), {
-    width: FILMSTRIP_THUMB_WIDTH,
-    quality: FILMSTRIP_THUMB_QUALITY,
-  });
+  const source = isStoredPreviewUrl(asset.thumbnailUrl, asset.mediaUrl)
+    ? originalMediaUrl(asset.thumbnailUrl)
+    : asset.thumbnailUrl || asset.mediaUrl;
+  return nextOptimizerSrc(source, FILMSTRIP_THUMB_WIDTH, GRID_THUMB_QUALITY);
 }

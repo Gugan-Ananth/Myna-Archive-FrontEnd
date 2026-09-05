@@ -32,7 +32,7 @@ export function ArchiveGrid({
   items,
   emptyMessage,
   emptyHint,
-  priorityCount = 6,
+  priorityCount = 10,
   emptyKind,
   emptyHref,
   showRank = false,
@@ -88,12 +88,12 @@ export function ArchiveGrid({
   return (
     <div
       ref={containerRef}
-      className="flex w-full items-start gap-3 sm:gap-3.5 lg:gap-4"
+      className="flex w-full items-start gap-4 sm:gap-5 lg:gap-6"
     >
       {columns.map((column, columnIndex) => (
         <ul
           key={columnIndex}
-          className="flex min-w-0 flex-1 list-none flex-col gap-3 sm:gap-3.5 lg:gap-4"
+          className="flex min-w-0 flex-1 list-none flex-col gap-4 sm:gap-5 lg:gap-6"
         >
           {column.map((item) => (
             <li key={item.id} className="w-full">
@@ -116,12 +116,12 @@ export function ArchiveGrid({
 }
 
 function columnsForWidth(width: number): number {
-  // Fewer columns so each pin reads larger; still fills a wide viewport.
-  if (width >= 1680) return 5;
-  if (width >= 1280) return 4;
-  if (width >= 900) return 3;
-  if (width >= 540) return 2;
-  return 1;
+  // Denser pins so each card stays small; keep in sync with GRID_IMAGE_SIZES.
+  if (width >= 1680) return 6;
+  if (width >= 1280) return 5;
+  if (width >= 900) return 4;
+  if (width >= 540) return 3;
+  return 2;
 }
 
 /** Responsive column count from container width (Pinterest-like density). */

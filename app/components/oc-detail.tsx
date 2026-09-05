@@ -72,6 +72,7 @@ export function OcDetail({ oc }: OcDetailProps) {
             height={height}
             loader={bunnyImageLoader}
             sizes="320px"
+            quality={75}
             className="h-auto w-full object-contain"
             fallbackLabel={t("previewUnavailable")}
           />

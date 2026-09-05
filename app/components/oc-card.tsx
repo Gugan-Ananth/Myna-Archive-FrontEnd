@@ -9,7 +9,7 @@ import {
   blurHashToDataURL,
 } from "../lib/display-metadata";
 import { useI18n } from "../lib/i18n";
-import { ocGridSrc } from "../lib/media-display";
+import { GRID_THUMB_QUALITY, ocGridSrc } from "../lib/media-display";
 import type { OriginalCharacter } from "../lib/types";
 import { warmOriginalCharacter } from "../lib/warm-preview";
 import { LoadingImage } from "./global-loading";
@@ -86,7 +86,7 @@ export function OcCard({
             fill
             loader={bunnyImageLoader}
             sizes="(max-width: 639px) 50vw, (max-width: 1279px) 33vw, 25vw"
-            quality={72}
+            quality={GRID_THUMB_QUALITY}
             preload={priority}
             fetchPriority={priority ? "high" : "auto"}
             decoding="async"

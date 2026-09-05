@@ -4,7 +4,11 @@ import Link from "next/link";
 import bunnyImageLoader from "../lib/bunny-image-loader";
 import { updateArchiveItem } from "../lib/api";
 import { useI18n } from "../lib/i18n";
-import { gridMediaSrc, STORY_COVER_TEMPLATE } from "../lib/media-display";
+import {
+  GRID_THUMB_QUALITY,
+  gridMediaSrc,
+  STORY_COVER_TEMPLATE,
+} from "../lib/media-display";
 import { storyCardBlurb } from "../lib/story-content";
 import type { ArchiveItem } from "../lib/types";
 import { warmArchiveItem } from "../lib/warm-preview";
@@ -52,6 +56,7 @@ export function StoryWorkCard({
             loader={hasCover ? bunnyImageLoader : undefined}
             unoptimized={!hasCover}
             sizes="(max-width: 640px) 136px, 208px"
+            quality={GRID_THUMB_QUALITY}
             className="object-cover"
             fallbackLabel={t("previewUnavailable")}
           />
