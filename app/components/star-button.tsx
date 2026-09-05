@@ -4,10 +4,22 @@ import { useState, type MouseEvent } from "react";
 import { ApiError } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 
+type StarButtonSize = "sm" | "md";
+
 type StarButtonProps = {
   starred?: boolean;
   onToggle: (starred: boolean) => Promise<unknown>;
   className?: string;
+  /** `sm` for card overlays; `md` matches the item-detail toolbar. */
+  size?: StarButtonSize;
+};
+
+const SIZE_CLASS: Record<
+  StarButtonSize,
+  { button: string; icon: string }
+> = {
+  sm: { button: "h-7 w-7", icon: "h-3.5 w-3.5" },
+  md: { button: "h-10 w-10", icon: "h-5 w-5" },
 };
 
 /** Small reusable star action for cards and the item detail view. */
@@ -15,11 +27,13 @@ export function StarButton({
   starred: initialStarred = false,
   onToggle,
   className,
+  size = "sm",
 }: StarButtonProps) {
   const { t } = useI18n();
   const [starred, setStarred] = useState(initialStarred);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const sizeClass = SIZE_CLASS[size];
 
   async function handleClick(event: MouseEvent<HTMLButtonElement>) {
     event.preventDefault();
@@ -52,14 +66,15 @@ export function StarButton({
           aria-pressed={starred}
           title={starred ? t("unstarItem") : t("starItem")}
           className={[
-            "inline-flex h-10 w-10 items-center justify-center rounded-full shadow-sm ring-1 backdrop-blur-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "inline-flex items-center justify-center rounded-full shadow-sm ring-1 backdrop-blur-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            sizeClass.button,
             starred
               ? "bg-star text-star-foreground ring-star-ring hover:bg-star-hover"
               : "bg-star-muted/95 text-star-muted-foreground ring-star-ring hover:bg-star-muted-hover hover:text-star",
             saving ? "cursor-wait opacity-60" : "",
           ].join(" ")}
         >
-          <StarIcon className="h-5 w-5" filled={starred} />
+          <StarIcon className={sizeClass.icon} filled={starred} />
         </button>
         {error ? (
           <span

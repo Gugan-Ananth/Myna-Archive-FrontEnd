@@ -177,7 +177,7 @@ export function ArchiveCard({
 
           {!isVideo && (isImageGroup(item) || isComic(item)) ? (
             <span
-              className="absolute right-2 top-14 z-10 inline-flex items-center gap-1 rounded-full bg-surface/95 px-2 py-1 text-[11px] font-medium text-primary shadow-sm ring-1 ring-border backdrop-blur-sm"
+              className="absolute right-2 top-11 z-10 inline-flex items-center gap-1 rounded-full bg-surface/95 px-2 py-1 text-[11px] font-medium text-primary shadow-sm ring-1 ring-border backdrop-blur-sm"
               aria-hidden
             >
               <StackBadgeIcon className="h-3 w-3" />

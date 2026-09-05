@@ -23,6 +23,7 @@ type HomeProps = {
     q?: string;
     tag?: string | string[];
     view?: string | string[];
+    group?: string;
     created?: string;
     video?: string;
   }>;

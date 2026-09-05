@@ -270,6 +270,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
                 <StarButton
                   starred={draft.starred}
                   onToggle={toggleStar}
+                  size="md"
                 />
               </div>
             </header>
@@ -344,6 +345,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
                 <StarButton
                   starred={draft.starred}
                   onToggle={toggleStar}
+                  size="md"
                 />
               </div>
             </div>
