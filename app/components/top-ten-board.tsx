@@ -16,13 +16,14 @@ import {
   isImageGroup,
   itemMediaAssets,
   ocGridSrc,
+  orientationFromSize,
 } from "../lib/media-display";
 import type { ArchiveItem, OriginalCharacter } from "../lib/types";
 import { warmArchiveItem, warmOriginalCharacter } from "../lib/warm-preview";
 import { LoadingImage } from "./global-loading";
 import { TopTenRank, podiumMetal } from "./top-ten-rank";
 
-type TopTenSize = "featured" | "medium" | "regular";
+export type TopTenSize = "featured" | "medium" | "pair" | "regular";
 
 export type TopTenEntry =
   | { kind: "archive"; item: ArchiveItem }
@@ -34,31 +35,15 @@ type TopTenBoardProps = {
   startRank?: number;
 };
 
-const SLOT_CLASS: Record<TopTenSize, string> = {
-  featured: "flex min-w-0 basis-full justify-center",
-  medium:
-    "flex min-w-0 w-full max-w-[var(--top-ten-card-w,16.5rem)] basis-[calc(50%-0.5rem)] justify-center",
-  regular:
-    "flex min-w-0 w-full max-w-[var(--top-ten-regular-w,11rem)] basis-[calc(50%-0.5rem)] justify-center pt-4 sm:basis-[calc(33.333%-0.75rem)]",
-};
-
 const IMAGE_SIZES: Record<TopTenSize, string> = {
-  featured: "(max-width: 639px) 70vw, 20rem",
-  medium: "(max-width: 639px) 50vw, 16.5rem",
-  regular: "(max-width: 639px) 42vw, 11rem",
+  featured:
+    "(max-width: 639px) 86vw, (max-width: 1023px) 70vw, 40rem",
+  medium: "(max-width: 639px) 46vw, 20rem",
+  pair: "(max-width: 639px) 46vw, 18rem",
+  regular: "(max-width: 639px) 42vw, 12rem",
 };
 
-const WIDTH_CLASS: Record<TopTenSize, string> = {
-  featured: "w-full max-w-[var(--top-ten-featured-w,20rem)]",
-  medium: "w-full max-w-[var(--top-ten-card-w,16.5rem)]",
-  regular: "w-full max-w-[var(--top-ten-regular-w,11rem)]",
-};
-
-const MEDIA_ASPECT: Record<TopTenSize, string> = {
-  featured: "aspect-[9/16]",
-  medium: "aspect-[3/4]",
-  regular: "aspect-[3/4]",
-};
+const PLACEHOLDER = { w: 3, h: 4 };
 
 function useIsClient() {
   return useSyncExternalStore(
@@ -68,7 +53,7 @@ function useIsClient() {
   );
 }
 
-function entryId(entry: TopTenEntry): string {
+export function entryId(entry: TopTenEntry): string {
   return entry.kind === "archive" ? entry.item.id : entry.oc.id;
 }
 
@@ -82,37 +67,87 @@ function entryHref(entry: TopTenEntry): string {
     : `/oc/${entry.oc.id}`;
 }
 
+/** Cover pixel size, with a portrait-leaning fallback until the file is known. */
+export function entryMediaSize(entry: TopTenEntry): { w: number; h: number } {
+  if (entry.kind === "oc") {
+    if (entry.oc.width && entry.oc.height && entry.oc.width > 0 && entry.oc.height > 0) {
+      return { w: entry.oc.width, h: entry.oc.height };
+    }
+    return PLACEHOLDER;
+  }
+  const { item } = entry;
+  if (item.width && item.height && item.width > 0 && item.height > 0) {
+    return { w: item.width, h: item.height };
+  }
+  if (item.mediaType === "video") return { w: 16, h: 9 };
+  if (item.mediaType === "story") {
+    return { w: STORY_COVER_TEMPLATE.width, h: STORY_COVER_TEMPLATE.height };
+  }
+  return PLACEHOLDER;
+}
+
+export function entryIsLandscape(entry: TopTenEntry): boolean {
+  const { w, h } = entryMediaSize(entry);
+  return orientationFromSize(w, h) === "landscape";
+}
+
 function sizeForRank(rank: number): TopTenSize {
   if (rank === 1) return "featured";
   if (rank <= 3) return "medium";
+  if (rank <= 5) return "pair";
   return "regular";
 }
 
-/** Podium ranking: featured #1, metal #2–3, tower of regular cards after. */
+function rankSizeForCard(size: TopTenSize): "featured" | "medium" | "regular" {
+  if (size === "featured") return "featured";
+  if (size === "medium") return "medium";
+  return "regular";
+}
+
+/** Podium ranking: featured #1, metal #2–3, then 4–5 and 6–10 in their own rows. */
 export function TopTenBoard({
   entries,
   startRank = 1,
 }: TopTenBoardProps) {
   if (entries.length === 0) return null;
 
+  const items = entries.map((entry, index) => ({
+    entry,
+    rank: startRank + index,
+  }));
+  const podium = items.filter(({ rank }) => rank === 2 || rank === 3);
+  const pair = items.filter(({ rank }) => rank === 4 || rank === 5);
+  const rest = items.filter(({ rank }) => rank >= 6);
+
   return (
-    <ol
-      role="list"
-      className="flex list-none flex-wrap justify-center gap-x-4 gap-y-8 overflow-visible pt-8 sm:gap-x-5 sm:gap-y-9 sm:pt-10 lg:gap-x-6"
-    >
-      {entries.map((entry, index) => {
-        const rank = startRank + index;
-        const size = sizeForRank(rank);
-        return (
-          <li key={entryId(entry)} className={SLOT_CLASS[size]}>
-            <TopTenCard
-              entry={entry}
-              rank={rank}
-              size={size}
-            />
-          </li>
-        );
-      })}
+    <div className="top-ten-board">
+      {podium.length > 0 ? (
+        <RankRow items={podium} row="medium" />
+      ) : null}
+      {pair.length > 0 ? <RankRow items={pair} row="pair" /> : null}
+      {rest.length > 0 ? <RankRow items={rest} row="regular" /> : null}
+    </div>
+  );
+}
+
+function RankRow({
+  items,
+  row,
+}: {
+  items: { entry: TopTenEntry; rank: number }[];
+  row: "medium" | "pair" | "regular";
+}) {
+  return (
+    <ol role="list" className={`top-ten-row is-${row}`}>
+      {items.map(({ entry, rank }) => (
+        <li key={entryId(entry)} className="top-ten-slot">
+          <TopTenCard
+            entry={entry}
+            rank={rank}
+            size={sizeForRank(rank)}
+          />
+        </li>
+      ))}
     </ol>
   );
 }
@@ -121,36 +156,50 @@ export function TopTenCard({
   entry,
   rank,
   size,
+  linked = true,
 }: {
   entry: TopTenEntry;
   rank: number;
   size: TopTenSize;
+  /** False when the card is a carousel peek (parent handles the click). */
+  linked?: boolean;
 }) {
   const { t } = useI18n();
   const metal = podiumMetal(rank);
   const name = entryName(entry);
   const href = entryHref(entry);
   const featured = size === "featured";
-  const widthClass = WIDTH_CLASS[size];
+  const stored = entryMediaSize(entry);
+  const hasStoredDims =
+    entry.kind === "archive"
+      ? Boolean(entry.item.width && entry.item.height)
+      : Boolean(entry.oc.width && entry.oc.height);
+  const [dims, setDims] = useState(stored);
+  const landscape = orientationFromSize(dims.w, dims.h) === "landscape";
 
-  return (
-    <div className={`flex ${widthClass} flex-col items-center`}>
-      <div
-        className={[
-          "top-ten-frame group w-full",
-          featured ? "hover:-translate-y-1" : "hover:-translate-y-0.5",
-        ].join(" ")}
-        data-podium={metal}
-      >
-        {metal !== "plain" ? (
-          <>
-            <span className="top-ten-frame-aura" aria-hidden />
-            <span className="top-ten-frame-rim" aria-hidden />
-            <PodiumSparkles />
-            <CornerFlourishes />
-          </>
-        ) : null}
-        <div className="top-ten-frame-inner">
+  function applyNaturalSize(width: number, height: number) {
+    if (hasStoredDims || width <= 0 || height <= 0) return;
+    setDims({ w: width, h: height });
+  }
+
+  const frame = (
+    <div
+      className={[
+        "top-ten-frame group w-full",
+        featured ? "hover:-translate-y-1" : "hover:-translate-y-0.5",
+      ].join(" ")}
+      data-podium={metal}
+    >
+      {metal !== "plain" ? (
+        <>
+          <span className="top-ten-frame-aura" aria-hidden />
+          <span className="top-ten-frame-rim" aria-hidden />
+          <PodiumSparkles />
+          <CornerFlourishes />
+        </>
+      ) : null}
+      <div className="top-ten-frame-inner">
+        {linked ? (
           <Link
             href={href}
             prefetch
@@ -164,12 +213,35 @@ export function TopTenCard({
               entry={entry}
               size={size}
               priority={rank <= 3}
+              dims={dims}
+              onNaturalSize={applyNaturalSize}
             />
           </Link>
-        </div>
-        <TopTenRank rank={rank} size={size} />
-        <span className="top-ten-frame-shine" aria-hidden />
+        ) : (
+          <TopTenMedia
+            entry={entry}
+            size={size}
+            priority={rank <= 3}
+            dims={dims}
+            onNaturalSize={applyNaturalSize}
+          />
+        )}
       </div>
+      <TopTenRank rank={rank} size={rankSizeForCard(size)} />
+      <span className="top-ten-frame-shine" aria-hidden />
+    </div>
+  );
+
+  return (
+    <div
+      className={[
+        "top-ten-card",
+        `is-${size}`,
+        landscape ? "is-landscape" : "is-portrait",
+      ].join(" ")}
+      style={{ ["--media-ratio" as string]: `${dims.w} / ${dims.h}` }}
+    >
+      {frame}
       {metal !== "plain" ? (
         <div className="top-ten-step" data-podium={metal} aria-hidden />
       ) : null}
@@ -181,10 +253,14 @@ function TopTenMedia({
   entry,
   size,
   priority,
+  dims,
+  onNaturalSize,
 }: {
   entry: TopTenEntry;
   size: TopTenSize;
   priority: boolean;
+  dims: { w: number; h: number };
+  onNaturalSize: (width: number, height: number) => void;
 }) {
   const { t } = useI18n();
   const isClient = useIsClient();
@@ -206,7 +282,7 @@ function TopTenMedia({
     }
     return blurHashPlaceholderFallback();
   }, [isClient, blurHash]);
-  const quality = size === "featured" ? 55 : GRID_THUMB_QUALITY;
+  const quality = size === "featured" ? 60 : GRID_THUMB_QUALITY;
   const stackCount =
     isArchive && (isImageGroup(entry.item) || isComic(entry.item))
       ? itemMediaAssets(entry.item).length
@@ -214,7 +290,8 @@ function TopTenMedia({
 
   return (
     <div
-      className={`relative w-full overflow-hidden bg-surface-muted ${MEDIA_ASPECT[size]}`}
+      className="top-ten-media relative w-full overflow-hidden bg-surface-muted"
+      style={{ aspectRatio: `${dims.w} / ${dims.h}` }}
     >
       {!loaded && !isVideo ? (
         <div
@@ -232,8 +309,14 @@ function TopTenMedia({
           loading={priority ? "eager" : "lazy"}
           decoding="async"
           fetchPriority={priority ? "high" : "auto"}
-          className="absolute inset-0 h-full w-full object-cover object-center transition-transform duration-300 ease-out group-hover:scale-[1.03]"
-          onLoad={() => setLoaded(true)}
+          className="absolute inset-0 h-full w-full object-contain object-center transition-transform duration-300 ease-out group-hover:scale-[1.03]"
+          onLoad={(event) => {
+            onNaturalSize(
+              event.currentTarget.naturalWidth,
+              event.currentTarget.naturalHeight,
+            );
+            setLoaded(true);
+          }}
           onError={() => setLoaded(true)}
         />
       ) : (
@@ -250,9 +333,13 @@ function TopTenMedia({
           decoding="async"
           placeholder="blur"
           blurDataURL={blurDataUrl}
-          className="object-cover object-center transition-transform duration-300 ease-out group-hover:scale-[1.03]"
+          className="object-contain object-center transition-transform duration-300 ease-out group-hover:scale-[1.03]"
           fallbackLabel={t("previewUnavailable")}
-          onLoad={() => setLoaded(true)}
+          onLoad={(event) => {
+            const img = event.currentTarget;
+            onNaturalSize(img.naturalWidth, img.naturalHeight);
+            setLoaded(true);
+          }}
           onError={() => setLoaded(true)}
         />
       )}

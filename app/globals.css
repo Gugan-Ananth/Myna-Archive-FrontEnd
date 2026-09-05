@@ -990,9 +990,140 @@ html {
 
 .top-ten-stage,
 .top-ten-rest {
-  --top-ten-featured-w: min(20rem, calc(70vw - 2.5rem));
-  --top-ten-card-w: min(16.5rem, calc(50vw - 2.5rem));
-  --top-ten-regular-w: min(11rem, calc(42vw - 2.5rem));
+  --top-ten-featured-max-w: min(22rem, calc(72vw - 5.5rem));
+  --top-ten-featured-max-h: min(34rem, 68vh);
+  --top-ten-featured-land-max-w: min(40rem, calc(86vw - 6.5rem));
+  --top-ten-featured-land-max-h: min(22rem, 52vh);
+  --top-ten-card-max-w: min(18.5rem, calc(44vw - 2rem));
+  --top-ten-card-max-h: min(26rem, var(--top-ten-prev-h, 26rem), 56vh);
+  --top-ten-card-land-max-w: min(26rem, calc(46vw - 2rem));
+  --top-ten-card-land-max-h: min(16rem, var(--top-ten-prev-h, 16rem), 40vh);
+  --top-ten-pair-max-w: min(16.5rem, calc(42vw - 2rem));
+  --top-ten-pair-max-h: min(
+    22rem,
+    calc(var(--top-ten-prev-h, 22rem) * 0.88),
+    48vh
+  );
+  --top-ten-pair-land-max-w: min(22rem, calc(44vw - 2rem));
+  --top-ten-pair-land-max-h: min(
+    14rem,
+    calc(var(--top-ten-prev-h, 14rem) * 0.88),
+    34vh
+  );
+  --top-ten-regular-max-w: min(11.25rem, calc(18vw - 1.25rem));
+  --top-ten-regular-max-h: min(
+    16rem,
+    calc(var(--top-ten-prev-h, 16rem) * 0.62),
+    36vh
+  );
+  --top-ten-regular-land-max-w: min(13rem, calc(18vw - 1.25rem));
+  --top-ten-regular-land-max-h: min(
+    9rem,
+    calc(var(--top-ten-prev-h, 9rem) * 0.62),
+    22vh
+  );
+}
+
+@media (max-width: 639px) {
+  .top-ten-stage,
+  .top-ten-rest {
+    --top-ten-featured-max-w: min(20rem, calc(78vw - 4.5rem));
+    --top-ten-featured-land-max-w: min(22rem, calc(86vw - 4.5rem));
+    --top-ten-card-max-w: min(16rem, calc(46vw - 1.25rem));
+    --top-ten-card-land-max-w: min(18rem, calc(48vw - 1.25rem));
+    --top-ten-pair-max-w: min(15rem, calc(46vw - 1.25rem));
+    --top-ten-pair-land-max-w: min(17rem, calc(48vw - 1.25rem));
+    --top-ten-regular-max-w: min(11rem, calc(42vw - 1.25rem));
+    --top-ten-regular-land-max-w: min(12rem, calc(42vw - 1.25rem));
+  }
+}
+
+.top-ten-card {
+  --card-max-w: var(--top-ten-card-max-w);
+  --card-max-h: var(--top-ten-card-max-h);
+  --media-ratio: 0.75;
+  display: flex;
+  width: min(var(--card-max-w), calc(var(--card-max-h) * var(--media-ratio)));
+  max-width: 100%;
+  flex-direction: column;
+  align-items: center;
+}
+
+.top-ten-card.is-featured {
+  --card-max-w: var(--top-ten-featured-max-w);
+  --card-max-h: var(--top-ten-featured-max-h);
+}
+
+.top-ten-card.is-featured.is-landscape {
+  --card-max-w: var(--top-ten-featured-land-max-w);
+  --card-max-h: var(--top-ten-featured-land-max-h);
+}
+
+.top-ten-card.is-medium {
+  --card-max-w: var(--top-ten-card-max-w);
+  --card-max-h: var(--top-ten-card-max-h);
+}
+
+.top-ten-card.is-medium.is-landscape {
+  --card-max-w: var(--top-ten-card-land-max-w);
+  --card-max-h: var(--top-ten-card-land-max-h);
+}
+
+.top-ten-card.is-pair {
+  --card-max-w: var(--top-ten-pair-max-w);
+  --card-max-h: var(--top-ten-pair-max-h);
+}
+
+.top-ten-card.is-pair.is-landscape {
+  --card-max-w: var(--top-ten-pair-land-max-w);
+  --card-max-h: var(--top-ten-pair-land-max-h);
+}
+
+.top-ten-card.is-regular {
+  --card-max-w: var(--top-ten-regular-max-w);
+  --card-max-h: var(--top-ten-regular-max-h);
+}
+
+.top-ten-card.is-regular.is-landscape {
+  --card-max-w: var(--top-ten-regular-land-max-w);
+  --card-max-h: var(--top-ten-regular-land-max-h);
+}
+
+.top-ten-media {
+  aspect-ratio: var(--media-ratio);
+}
+
+.top-ten-board {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2.25rem;
+  padding-top: 0.25rem;
+}
+
+.top-ten-row {
+  display: flex;
+  width: 100%;
+  list-style: none;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1.15rem 1.35rem;
+  margin: 0;
+  padding: 0;
+}
+
+.top-ten-row.is-medium {
+  gap: 1.35rem 1.75rem;
+}
+
+.top-ten-row.is-regular {
+  gap: 1.1rem 1rem;
+}
+
+.top-ten-slot {
+  display: flex;
+  min-width: 0;
+  justify-content: center;
 }
 
 .top-ten-stage {
@@ -1037,6 +1168,7 @@ html {
   display: flex;
   justify-content: center;
   padding-top: 2.75rem;
+  overflow: visible;
   user-select: none;
   touch-action: pan-y;
 }
@@ -1045,15 +1177,11 @@ html {
   cursor: grabbing;
 }
 
-.top-ten-featured-card {
-  width: var(--top-ten-featured-w);
-}
-
 .top-ten-orbit-arrow {
   --orbit-arrow-gap: clamp(1.85rem, 4.2vw, 2.6rem);
   position: absolute;
   z-index: 12;
-  top: calc(2.75rem + (var(--top-ten-featured-w) * 16 / 9) / 2);
+  top: calc((100% - 1.35rem) / 2);
   display: inline-flex;
   width: 2.75rem;
   height: 2.75rem;
@@ -1076,12 +1204,13 @@ html {
 }
 
 .top-ten-orbit-arrow.is-prev {
-  left: calc(50% - var(--top-ten-featured-w) / 2 - var(--orbit-arrow-gap));
-  translate: -100% -50%;
+  left: calc(50% - var(--planet-w, var(--top-ten-featured-max-w)) / 2);
+  translate: calc(-100% - var(--orbit-arrow-gap)) -50%;
 }
 
 .top-ten-orbit-arrow.is-next {
-  left: calc(50% + var(--top-ten-featured-w) / 2 + var(--orbit-arrow-gap));
+  left: calc(50% + var(--planet-w, var(--top-ten-featured-max-w)) / 2);
+  translate: var(--orbit-arrow-gap) -50%;
 }
 
 .top-ten-orbit-arrow.is-next svg {
@@ -1128,14 +1257,26 @@ html {
 }
 
 .top-ten-orbit {
-  --orbit-radius: min(44vw, 22rem);
-  --planet-w: var(--top-ten-card-w);
+  --orbit-count: 2;
+  --orbit-spin-ms: 1400ms;
+  --planet-w: var(--top-ten-featured-max-w);
+  --orbit-radius: min(42vw, 22rem);
+  --orbit-radius: max(
+    16rem,
+    min(
+      42vw,
+      calc(
+        (var(--planet-w) / 2) / tan(180deg / max(var(--orbit-count), 3)) * 1.35
+      )
+    )
+  );
   position: relative;
   z-index: 1;
-  width: 100%;
-  padding-top: 2.75rem;
-  perspective: 72rem;
-  perspective-origin: 50% 46%;
+  width: max-content;
+  max-width: 100%;
+  margin-inline: auto;
+  perspective: 80rem;
+  perspective-origin: 50% 48%;
   touch-action: pan-y;
   user-select: none;
 }
@@ -1149,19 +1290,26 @@ html {
 }
 
 .top-ten-orbit-sizer {
-  width: var(--planet-w);
-  aspect-ratio: 3 / 4;
-  margin-inline: auto;
+  aspect-ratio: var(--media-ratio);
+  margin-bottom: 1.35rem;
   pointer-events: none;
   visibility: hidden;
 }
 
 .top-ten-orbit-ring {
   position: absolute;
-  inset: 2.75rem 0 0;
-  transform: translateZ(calc(-1 * var(--orbit-radius)));
+  inset: 0 0 1.35rem;
   transform-style: preserve-3d;
   pointer-events: none;
+  transition: transform var(--orbit-spin-ms) cubic-bezier(0.22, 0.72, 0.28, 1);
+}
+
+.top-ten-orbit.is-dragging .top-ten-orbit-ring {
+  transition: none;
+}
+
+.top-ten-orbit.is-spinning .top-ten-orbit-ring {
+  will-change: transform;
 }
 
 .top-ten-orbit-planet {
@@ -1171,26 +1319,41 @@ html {
   width: var(--planet-w);
   margin-left: calc(var(--planet-w) / -2);
   overflow: visible;
+  transform: rotateY(var(--planet-angle, 0deg)) translateZ(var(--orbit-radius));
   transform-style: preserve-3d;
   backface-visibility: hidden;
-  transition:
-    transform 720ms cubic-bezier(0.33, 0.92, 0.22, 1),
-    opacity 720ms ease;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--orbit-spin-ms) ease;
 }
 
-.top-ten-orbit.is-dragging .top-ten-orbit-planet {
-  transition: none;
+.top-ten-orbit.is-spinning .top-ten-orbit-planet:not(.is-front) {
+  opacity: 0.62;
 }
 
-.top-ten-orbit-frame {
-  display: block;
-  --podium-band: 0.55rem;
+.top-ten-orbit-planet.is-front {
+  z-index: 6;
+  pointer-events: auto;
+  opacity: 1;
 }
 
-.top-ten-orbit-planet:not(.is-front) .top-ten-orbit-frame {
+.top-ten-orbit-planet:not(.is-front) {
+  z-index: 1;
+}
+
+.top-ten-orbit-planet.is-front .top-ten-card {
+  width: 100%;
+}
+
+.top-ten-orbit-planet:not(.is-front) .top-ten-card {
+  --card-max-w: min(var(--planet-w), var(--top-ten-featured-max-w));
+  --card-max-h: var(--top-ten-featured-max-h);
+}
+
+.top-ten-orbit-planet:not(.is-front) .top-ten-frame {
   --podium-band: 0.42rem;
   animation: none;
-  filter: saturate(0.88);
+  filter: saturate(0.82);
 }
 
 .top-ten-peek-button {
@@ -1208,7 +1371,13 @@ html {
   outline: none;
 }
 
-.top-ten-orbit-planet:not(.is-front):hover .top-ten-orbit-frame {
+.top-ten-peek-button:focus-visible .top-ten-frame {
+  box-shadow:
+    0 0 0 2px var(--background),
+    0 0 0 4px var(--ring);
+}
+
+.top-ten-orbit-planet:not(.is-front):hover .top-ten-frame {
   filter: brightness(1.08);
 }
 
@@ -1269,6 +1438,7 @@ html {
     opacity: 0.28;
   }
 
+  .top-ten-orbit-ring,
   .top-ten-orbit-planet,
   .top-ten-orbit-arrow,
   .top-ten-orbit-arrow svg,
