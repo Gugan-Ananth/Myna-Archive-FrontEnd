@@ -1,43 +1,44 @@
 /**
- * Next/Image loader that resizes Bunny CDN assets at the edge.
- * Avoids the browser → Next optimizer → origin double hop for grid pins.
- *
- * Bunny Optimizer query params: width, height, quality, aspect_ratio.
- * @see https://docs.bunny.net/docs/stream-image-processing
+ * next/image loader for archive previews.
+ * The Bunny pull zone returns originals (Optimizer is off), so thumbs are
+ * resized and cached by `/api/media/thumb` instead of the CDN or `/_next/image`.
  */
 "use client";
 
 import type { ImageLoaderProps } from "next/image";
+import {
+  GRID_THUMB_QUALITY,
+  GRID_THUMB_WIDTH,
+  isStoredPreviewPath,
+  nextOptimizerSrc,
+} from "./media-display";
 
 const BUNNY_HOST_RE = /(^|\.)b-cdn\.net$/i;
 
 export default function bunnyImageLoader({
   src,
-  width,
   quality,
 }: ImageLoaderProps): string {
   if (!src) return src;
 
   try {
-    const url = new URL(src, typeof window !== "undefined" ? window.location.origin : "http://localhost");
-
-    // Non-Bunny (or relative) assets: pass through unchanged.
+    const url = new URL(
+      src,
+      typeof window !== "undefined" ? window.location.origin : "http://localhost",
+    );
     if (!BUNNY_HOST_RE.test(url.hostname)) {
       return src;
     }
-
-    // Width-based responsive thumbs — let height follow aspect ratio.
-    const w = Math.min(Math.max(width, 64), 1920);
-    url.searchParams.set("width", String(w));
-    url.searchParams.set("quality", String(quality ?? 72));
-    // WebP is the same format `withBunnyResize` uses. Forcing AVIF on small
-    // pins broke some originals (Bunny encoder cap / older Safari).
-    url.searchParams.set("format", "webp");
-    // Drop fixed height/aspect from stored thumbnail URLs so width drives size.
-    url.searchParams.delete("height");
-    url.searchParams.delete("aspect_ratio");
-
-    return url.toString();
+    // Stored `{uuid}-preview.webp` is already the <1 MB grid file.
+    if (isStoredPreviewPath(src)) {
+      return src;
+    }
+    // Legacy originals (Optimizer query was a no-op): resize locally.
+    return nextOptimizerSrc(
+      src,
+      GRID_THUMB_WIDTH,
+      quality ?? GRID_THUMB_QUALITY,
+    );
   } catch {
     return src;
   }

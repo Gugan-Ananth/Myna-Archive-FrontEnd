@@ -13,7 +13,11 @@ import {
 import bunnyImageLoader from "../lib/bunny-image-loader";
 import { attachBrokenMediaHandler } from "../lib/image-recovery";
 import { useI18n } from "../lib/i18n";
-import { gridMediaSrc, STORY_COVER_TEMPLATE } from "../lib/media-display";
+import {
+  GRID_THUMB_QUALITY,
+  gridMediaSrc,
+  STORY_COVER_TEMPLATE,
+} from "../lib/media-display";
 import { enhanceStoryHtml, storyReadMinutes } from "../lib/story-reader";
 import type { ArchiveItem } from "../lib/types";
 import { LoadingImage } from "./global-loading";
@@ -146,6 +150,7 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
               loader={hasCover ? bunnyImageLoader : undefined}
               unoptimized={!hasCover}
               sizes="(max-width: 640px) 116px, 160px"
+              quality={GRID_THUMB_QUALITY}
               className="object-cover"
               fallbackLabel={t("previewUnavailable")}
             />

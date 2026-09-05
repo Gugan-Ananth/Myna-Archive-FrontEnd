@@ -42,47 +42,95 @@ export function originalMediaUrl(url: string): string {
   }
 }
 
-/** Default Bunny Optimizer params for grid pins (~column width). */
-export const GRID_THUMB_WIDTH = 480;
-export const GRID_THUMB_QUALITY = 72;
+/**
+ * Lightweight preview derivatives for cards, filmstrips, and detail first paint.
+ * Prefer the stored `{uuid}-preview.webp` file (under 1 MB). Legacy rows
+ * that still point thumbnailUrl at the original use `/api/media/thumb`.
+ */
+export const GRID_THUMB_WIDTH = 384;
+export const GRID_THUMB_QUALITY = 40;
+
+/**
+ * next/image `sizes` for homepage pins.
+ * Keep in sync with `columnsForWidth` in archive-grid.
+ */
+export const GRID_IMAGE_SIZES =
+  "(max-width: 539px) 50vw, (max-width: 899px) 33vw, (max-width: 1279px) 25vw, (max-width: 1679px) 20vw, 16vw";
 
 /** First-paint detail derivative. Keep this small enough to arrive quickly. */
 export const DETAIL_PREVIEW_WIDTH = 480;
-export const DETAIL_PREVIEW_QUALITY = 68;
+export const DETAIL_PREVIEW_QUALITY = 40;
 
 /** Viewport-sized derivative for the detail stage (not the original file). */
 export const DETAIL_DISPLAY_WIDTH = 1600;
 export const DETAIL_DISPLAY_QUALITY = 80;
 
+/** True when `thumbnailUrl` is a distinct stored preview file, not the original. */
+export function isStoredPreviewUrl(
+  previewUrl: string,
+  originalUrl: string,
+): boolean {
+  if (!previewUrl) return false;
+  const preview = originalMediaUrl(previewUrl);
+  const original = originalMediaUrl(originalUrl);
+  return Boolean(preview) && preview !== original;
+}
+
+export function isStoredPreviewPath(url: string): boolean {
+  if (!url) return false;
+  try {
+    return /-preview\.webp$/i.test(new URL(url).pathname);
+  } catch {
+    return /-preview\.webp$/i.test(url.split("?")[0] ?? url);
+  }
+}
+
 /**
- * Homepage grid source — prefer CDN-optimized thumbnails (Pinterest-style).
- * Small edge-resized bytes beat full originals through any optimizer.
- * Detail first paint uses `previewAssetSrc`; promotion uses `displayMediaSrc`.
+ * Homepage / card source for next/image.
+ * Prefer the stored <1 MB WebP preview; fall back to the original (the
+ * preview loader will then resize via `/api/media/thumb`).
  */
 export function gridMediaSrc(item: ArchiveItem): string {
   if (item.mediaType === "video") {
     return item.thumbnailUrl || item.mediaUrl;
   }
-
-  // Backend already stamps thumbnailUrl with Bunny Optimizer query params.
-  if (item.thumbnailUrl) {
-    return item.thumbnailUrl;
+  if (isStoredPreviewUrl(item.thumbnailUrl, item.mediaUrl)) {
+    return originalMediaUrl(item.thumbnailUrl);
   }
-
-  const original = originalMediaUrl(item.mediaUrl);
-  return withBunnyResize(original, {
-    width: GRID_THUMB_WIDTH,
-    quality: GRID_THUMB_QUALITY,
-  });
+  if (item.thumbnailUrl) return originalMediaUrl(item.thumbnailUrl);
+  return originalMediaUrl(item.mediaUrl);
 }
 
-/** OC board source — CDN thumb, then Bunny-resized original. */
-export function ocGridSrc(oc: Pick<OriginalCharacter, "thumbnailUrl" | "mediaUrl">): string {
-  if (oc.thumbnailUrl) return oc.thumbnailUrl;
-  return withBunnyResize(originalMediaUrl(oc.mediaUrl), {
-    width: GRID_THUMB_WIDTH,
-    quality: GRID_THUMB_QUALITY,
+/** OC board source for next/image. */
+export function ocGridSrc(
+  oc: Pick<OriginalCharacter, "thumbnailUrl" | "mediaUrl">,
+): string {
+  if (isStoredPreviewUrl(oc.thumbnailUrl, oc.mediaUrl)) {
+    return originalMediaUrl(oc.thumbnailUrl);
+  }
+  if (oc.thumbnailUrl) return originalMediaUrl(oc.thumbnailUrl);
+  return originalMediaUrl(oc.mediaUrl);
+}
+
+/**
+ * Native `<img>` URL for a cached lightweight WebP thumb.
+ * Use when the preview is not a next/image component (filmstrip, blur-up).
+ */
+export function nextOptimizerSrc(
+  url: string,
+  width: number,
+  quality: number = GRID_THUMB_QUALITY,
+): string {
+  if (!url) return url;
+  const source = originalMediaUrl(url) || url;
+  const w = Math.min(Math.max(Math.round(width), 16), 640);
+  const q = Math.min(Math.max(Math.round(quality), 1), 100);
+  const params = new URLSearchParams({
+    url: source,
+    w: String(w),
+    q: String(q),
   });
+  return `/api/media/thumb?${params.toString()}`;
 }
 
 /**
@@ -117,36 +165,27 @@ export const GRID_BLUR_DATA_URL =
 
 /**
  * Cached grid thumb for instant detail paint (blur-up under the display size).
+ * Native img — go through Next's optimizer so the first paint is not the original.
  */
 export function previewAssetSrc(asset: MediaAsset): string {
-  if (asset.thumbnailUrl) {
-    return withBunnyResize(asset.thumbnailUrl, {
-      width: DETAIL_PREVIEW_WIDTH,
-      quality: DETAIL_PREVIEW_QUALITY,
-    });
+  if (isStoredPreviewUrl(asset.thumbnailUrl, asset.mediaUrl)) {
+    return originalMediaUrl(asset.thumbnailUrl);
   }
-  return withBunnyResize(originalMediaUrl(asset.mediaUrl), {
-    width: DETAIL_PREVIEW_WIDTH,
-    quality: DETAIL_PREVIEW_QUALITY,
-  });
+  const source = asset.thumbnailUrl || asset.mediaUrl;
+  return nextOptimizerSrc(source, DETAIL_PREVIEW_WIDTH, DETAIL_PREVIEW_QUALITY);
 }
 
 export function previewMediaSrc(item: ArchiveItem): string {
   if (item.mediaType === "video") {
     return item.thumbnailUrl || item.mediaUrl;
   }
-  if (item.thumbnailUrl) {
-    return withBunnyResize(item.thumbnailUrl, {
-      width: DETAIL_PREVIEW_WIDTH,
-      quality: DETAIL_PREVIEW_QUALITY,
-    });
-  }
   const cover = itemMediaAssets(item)[0];
   if (cover) return previewAssetSrc(cover);
-  return withBunnyResize(originalMediaUrl(item.mediaUrl), {
-    width: DETAIL_PREVIEW_WIDTH,
-    quality: DETAIL_PREVIEW_QUALITY,
-  });
+  return nextOptimizerSrc(
+    item.thumbnailUrl || item.mediaUrl,
+    DETAIL_PREVIEW_WIDTH,
+    DETAIL_PREVIEW_QUALITY,
+  );
 }
 
 /**

@@ -4,6 +4,10 @@ Personal image archive — store, display, and search images you love. Companion
 
 ## Language
 
+**Image preview**:
+A stored WebP still under 1 MB (`thumbnailUrl`, `{uuid}-preview.webp`) used on grids. The original upload stays on `mediaUrl` for the detail view.
+_Avoid_: treating Optimizer query-string thumbs as a separate file
+
 **Archive Item**:
 A single archived media entry (image, video, story, or comic) with metadata.
 _Avoid_: post, asset (unless talking about a binary file)
