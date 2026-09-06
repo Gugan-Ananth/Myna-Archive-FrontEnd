@@ -18,8 +18,10 @@ import {
   ocGridSrc,
   orientationFromSize,
 } from "../lib/media-display";
+import { archiveItemCopySrc } from "../lib/copy-image";
 import type { ArchiveItem, OriginalCharacter } from "../lib/types";
 import { warmArchiveItem, warmOriginalCharacter } from "../lib/warm-preview";
+import { ImageCopyMenu, useImageCopyMenu } from "./image-copy-menu";
 import { LoadingImage } from "./global-loading";
 import { TopTenRank, podiumMetal } from "./top-ten-rank";
 
@@ -160,6 +162,9 @@ export function TopTenCard({
   linked?: boolean;
 }) {
   const { t } = useI18n();
+  const { menu, openMenu, closeMenu } = useImageCopyMenu();
+  const copySrc =
+    entry.kind === "archive" ? archiveItemCopySrc(entry.item) : null;
   const metal = podiumMetal(rank);
   const name = entryName(entry);
   const href = entryHref(entry);
@@ -249,11 +254,16 @@ export function TopTenCard({
         landscape ? "is-landscape" : "is-portrait",
       ].join(" ")}
       style={{ ["--media-ratio" as string]: `${dims.w} / ${dims.h}` }}
+      onContextMenu={(event) => {
+        if (!copySrc) return;
+        openMenu(event, copySrc);
+      }}
     >
       {frame}
       {metal !== "plain" ? (
         <div className="top-ten-step" data-podium={metal} aria-hidden />
       ) : null}
+      <ImageCopyMenu menu={menu} onClose={closeMenu} />
     </div>
   );
 }

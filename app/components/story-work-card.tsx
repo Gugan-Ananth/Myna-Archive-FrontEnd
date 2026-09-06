@@ -3,6 +3,7 @@
 import Link from "next/link";
 import bunnyImageLoader from "../lib/bunny-image-loader";
 import { updateArchiveItem } from "../lib/api";
+import { archiveItemCopySrc } from "../lib/copy-image";
 import { useI18n } from "../lib/i18n";
 import {
   GRID_THUMB_QUALITY,
@@ -12,7 +13,9 @@ import {
 import { storyCardBlurb } from "../lib/story-content";
 import type { ArchiveItem } from "../lib/types";
 import { warmArchiveItem } from "../lib/warm-preview";
+import { CopyImageButton } from "./copy-image-button";
 import { LoadingImage } from "./global-loading";
+import { ImageCopyMenu, useImageCopyMenu } from "./image-copy-menu";
 import { RatingBadge } from "./rating-badge";
 import { StarButton } from "./star-button";
 
@@ -30,6 +33,8 @@ export function StoryWorkCard({
   onStarChange,
 }: StoryWorkCardProps) {
   const { t } = useI18n();
+  const { menu, openMenu, closeMenu } = useImageCopyMenu();
+  const copySrc = archiveItemCopySrc(item);
   const cover = item.mediaUrl || item.thumbnailUrl;
   const hasCover = Boolean(cover);
   const src = hasCover ? gridMediaSrc(item) : STORY_COVER_TEMPLATE.src;
@@ -38,7 +43,13 @@ export function StoryWorkCard({
   const author = item.author?.trim();
 
   return (
-    <div className="relative h-full">
+    <div
+      className="group/pin relative h-full"
+      onContextMenu={(event) => {
+        if (!copySrc) return;
+        openMenu(event, copySrc);
+      }}
+    >
       <Link
         href={`/item/${item.id}`}
         prefetch
@@ -91,6 +102,12 @@ export function StoryWorkCard({
         </div>
         </article>
       </Link>
+      {copySrc ? (
+        <CopyImageButton
+          src={copySrc}
+          className="absolute left-2 top-2 z-20 pointer-events-none opacity-0 transition-opacity group-hover/pin:pointer-events-auto group-hover/pin:opacity-100 group-focus-within/pin:pointer-events-auto group-focus-within/pin:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100"
+        />
+      ) : null}
       <StarButton
         starred={item.starred}
         onToggle={async (starred) => {
@@ -99,6 +116,7 @@ export function StoryWorkCard({
         }}
         className="absolute right-2 top-2 z-20"
       />
+      <ImageCopyMenu menu={menu} onClose={closeMenu} />
     </div>
   );
 }

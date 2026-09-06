@@ -10,6 +10,8 @@ import {
 } from "react";
 import { useI18n } from "../lib/i18n";
 import { BrokenImageFallback } from "./broken-image-fallback";
+import { CopyImageButton } from "./copy-image-button";
+import { ImageCopyMenu, useImageCopyMenu } from "./image-copy-menu";
 
 type Mode = "contain" | "fill-width";
 
@@ -89,6 +91,8 @@ export function ImageZoomViewer({
   clickTogglesZoom = true,
 }: ImageZoomViewerProps) {
   const { t } = useI18n();
+  const { menu, openMenu, closeMenu } = useImageCopyMenu();
+  const copySrc = originalSrc || src;
   const [activeSrc, setActiveSrc] = useState(previewSrc || src);
   const [loaded, setLoaded] = useState(() => Boolean(previewSrc));
   const [previewReady, setPreviewReady] = useState(() => !previewSrc);
@@ -542,6 +546,10 @@ export function ImageZoomViewer({
         "relative h-full w-full min-h-0 min-w-0 overflow-hidden bg-neutral-950",
         className,
       ].join(" ")}
+      onContextMenu={(event) => {
+        if (!copySrc || failed) return;
+        openMenu(event, copySrc);
+      }}
     >
       {!loaded && !failed && (
         <div
@@ -691,8 +699,18 @@ export function ImageZoomViewer({
         >
           <PlusIcon className="h-4 w-4" />
         </button>
+        {copySrc ? (
+          <>
+            <span
+              className="mx-0.5 h-4 w-px bg-white/20"
+              aria-hidden
+            />
+            <CopyImageButton src={copySrc} variant="chrome" />
+          </>
+        ) : null}
       </div>
       ) : null}
+      <ImageCopyMenu menu={menu} onClose={closeMenu} />
     </div>
   );
 }

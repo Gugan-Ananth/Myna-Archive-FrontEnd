@@ -10,7 +10,9 @@ import {
   type KeyboardEvent,
   type MouseEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import bunnyImageLoader from "../lib/bunny-image-loader";
+import { resolveCopyImageUrl } from "../lib/copy-image";
 import { attachBrokenMediaHandler } from "../lib/image-recovery";
 import { useI18n } from "../lib/i18n";
 import {
@@ -19,8 +21,17 @@ import {
   STORY_COVER_TEMPLATE,
 } from "../lib/media-display";
 import { enhanceStoryHtml, storyReadMinutes } from "../lib/story-reader";
+import {
+  isStorySoundId,
+  playStorySound,
+  stopStorySound,
+  storySoundById,
+  type StorySoundId,
+} from "../lib/story-sounds";
 import type { ArchiveItem } from "../lib/types";
+import { CopyImageButton } from "./copy-image-button";
 import { LoadingImage } from "./global-loading";
+import { ImageCopyMenu, useImageCopyMenu } from "./image-copy-menu";
 import { RatingBadge } from "./rating-badge";
 import { StoryImageLightbox } from "./story-image-lightbox";
 
@@ -35,9 +46,16 @@ type StoryReaderProps = {
 export function StoryReader({ item, chapters }: StoryReaderProps) {
   const { t } = useI18n();
   const articleRef = useRef<HTMLElement>(null);
+  const hideCopyTimer = useRef<number>(0);
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(
     null,
   );
+  const [copyHover, setCopyHover] = useState<{
+    src: string;
+    top: number;
+    left: number;
+  } | null>(null);
+  const { menu, openMenu, closeMenu } = useImageCopyMenu();
   const closeLightbox = useCallback(() => setLightbox(null), []);
   const ordered = useMemo(
     () =>
@@ -84,7 +102,36 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
     root.querySelectorAll("img.story-inline-photo").forEach((img) => {
       img.setAttribute("aria-label", label);
     });
+    root.querySelectorAll(".story-sound").forEach((el) => {
+      if (!(el instanceof HTMLElement)) return;
+      const sound = storySoundById(el.getAttribute("data-sound"));
+      if (!sound) return;
+      el.setAttribute(
+        "aria-label",
+        t("storySoundPlay", { type: t(sound.labelKey) }),
+      );
+    });
   }, [body, t]);
+
+  useEffect(() => {
+    return () => {
+      window.clearTimeout(hideCopyTimer.current);
+      stopStorySound();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!copyHover) return;
+    function hide() {
+      setCopyHover(null);
+    }
+    window.addEventListener("scroll", hide, true);
+    window.addEventListener("resize", hide);
+    return () => {
+      window.removeEventListener("scroll", hide, true);
+      window.removeEventListener("resize", hide);
+    };
+  }, [copyHover]);
 
   function openStoryPhoto(img: HTMLImageElement) {
     const src = img.currentSrc || img.getAttribute("src") || "";
@@ -96,6 +143,12 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
   }
 
   function onBodyClick(event: MouseEvent<HTMLElement>) {
+    const sound = storySoundFromTarget(event.target);
+    if (sound) {
+      event.preventDefault();
+      playStorySound(sound);
+      return;
+    }
     const img = storyPhotoFromTarget(event.target);
     if (!img) return;
     event.preventDefault();
@@ -104,10 +157,61 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
 
   function onBodyKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.key !== "Enter" && event.key !== " ") return;
+    const sound = storySoundFromTarget(event.target);
+    if (sound) {
+      event.preventDefault();
+      playStorySound(sound);
+      return;
+    }
     const img = storyPhotoFromTarget(event.target);
     if (!img) return;
     event.preventDefault();
     openStoryPhoto(img);
+  }
+
+  function showCopyOnImage(img: HTMLImageElement) {
+    const src = resolveCopyImageUrl(img.currentSrc || img.getAttribute("src") || "");
+    if (!src) return;
+    window.clearTimeout(hideCopyTimer.current);
+    const rect = img.getBoundingClientRect();
+    const next = {
+      src,
+      top: rect.top + 8,
+      left: Math.max(8, Math.min(rect.right - 36, window.innerWidth - 44)),
+    };
+    setCopyHover((current) =>
+      current &&
+      current.src === next.src &&
+      current.top === next.top &&
+      current.left === next.left
+        ? current
+        : next,
+    );
+  }
+
+  function scheduleHideCopy() {
+    window.clearTimeout(hideCopyTimer.current);
+    hideCopyTimer.current = window.setTimeout(() => setCopyHover(null), 180);
+  }
+
+  function onBodyMouseOver(event: MouseEvent<HTMLElement>) {
+    const img = storyPhotoFromTarget(event.target);
+    if (img) showCopyOnImage(img);
+  }
+
+  function onBodyMouseOut(event: MouseEvent<HTMLElement>) {
+    const next = event.relatedTarget;
+    if (next instanceof Element && next.closest("[data-image-copy]")) return;
+    const img = storyPhotoFromTarget(event.target);
+    if (img) scheduleHideCopy();
+  }
+
+  function onBodyContextMenu(event: MouseEvent<HTMLElement>) {
+    const img = storyPhotoFromTarget(event.target);
+    if (!img) return;
+    const src = resolveCopyImageUrl(img.currentSrc || img.getAttribute("src") || "");
+    if (!src) return;
+    openMenu(event, src);
   }
 
   return (
@@ -141,7 +245,17 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
 
       <section className="app-card overflow-hidden rounded-[1.5rem] ring-1 ring-border">
         <div className="flex min-w-0 flex-row">
-          <div className="relative min-h-[9.75rem] w-[7.25rem] shrink-0 self-stretch overflow-hidden bg-surface-muted sm:min-h-[13.5rem] sm:w-[10rem]">
+          <div
+            className="relative min-h-[9.75rem] w-[7.25rem] shrink-0 self-stretch overflow-hidden bg-surface-muted sm:min-h-[13.5rem] sm:w-[10rem]"
+            onContextMenu={(event) => {
+              if (!hasCover) return;
+              const src = resolveCopyImageUrl(
+                item.mediaUrl || item.thumbnailUrl,
+              );
+              if (!src) return;
+              openMenu(event, src);
+            }}
+          >
             <LoadingImage
               src={coverSrc}
               alt={t("storyCoverAlt", { name: item.name })}
@@ -154,6 +268,12 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
               className="object-cover"
               fallbackLabel={t("previewUnavailable")}
             />
+            {hasCover ? (
+              <CopyImageButton
+                src={resolveCopyImageUrl(item.mediaUrl || item.thumbnailUrl)}
+                className="absolute left-2 top-2 z-10"
+              />
+            ) : null}
             <RatingBadge
               rating={item.rating}
               className="absolute right-2 bottom-2 z-10"
@@ -213,8 +333,28 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
         className="story-read w-full"
         onClick={onBodyClick}
         onKeyDown={onBodyKeyDown}
+        onContextMenu={onBodyContextMenu}
+        onMouseOver={onBodyMouseOver}
+        onMouseOut={onBodyMouseOut}
         dangerouslySetInnerHTML={{ __html: body }}
       />
+
+      {copyHover && !lightbox && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              data-image-copy=""
+              className="fixed z-[90]"
+              style={{ top: copyHover.top, left: copyHover.left }}
+              onMouseEnter={() => window.clearTimeout(hideCopyTimer.current)}
+              onMouseLeave={scheduleHideCopy}
+            >
+              <CopyImageButton src={copyHover.src} size="sm" />
+            </div>,
+            document.body,
+          )
+        : null}
+
+      <ImageCopyMenu menu={menu} onClose={closeMenu} />
 
       {lightbox ? (
         <StoryImageLightbox
@@ -267,6 +407,14 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
       ) : null}
     </div>
   );
+}
+
+function storySoundFromTarget(target: EventTarget | null): StorySoundId | null {
+  if (!(target instanceof Element)) return null;
+  const el = target.closest(".story-sound");
+  if (!(el instanceof HTMLElement)) return null;
+  const id = el.getAttribute("data-sound");
+  return isStorySoundId(id) ? id : null;
 }
 
 function storyPhotoFromTarget(target: EventTarget | null): HTMLImageElement | null {
