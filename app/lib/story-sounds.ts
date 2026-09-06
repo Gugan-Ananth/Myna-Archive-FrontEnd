@@ -55,7 +55,7 @@ export const STORY_SOUNDS: readonly StorySound[] = [
     clips: soundClips("handcuff", 4),
   },
   { id: "gag", labelKey: "storySoundGag", clips: soundClips("gag", 47) },
-  { id: "grunt", labelKey: "storySoundGrunt", clips: soundClips("grunt", 10) },
+  { id: "grunt", labelKey: "storySoundGrunt", clips: soundClips("grunt", 7) },
 ];
 
 const SOUND_BY_ID = new Map(STORY_SOUNDS.map((sound) => [sound.id, sound]));
