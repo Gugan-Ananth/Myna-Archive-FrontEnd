@@ -399,6 +399,10 @@ const en = {
   zoomOut: "Zoom out",
   resetZoom: "Reset zoom",
   couldNotLoadImage: "Could not load this image.",
+  copyImage: "Copy image",
+  copyingImage: "Copying…",
+  imageCopied: "Image copied",
+  couldNotCopyImage: "Could not copy this image.",
 
   // Not found
   imageNotFound: "Image not found",
@@ -828,6 +832,10 @@ const es: Record<MessageKey, string> = {
   zoomOut: "Alejar",
   resetZoom: "Restablecer zoom",
   couldNotLoadImage: "No se pudo cargar esta imagen.",
+  copyImage: "Copiar imagen",
+  copyingImage: "Copiando…",
+  imageCopied: "Imagen copiada",
+  couldNotCopyImage: "No se pudo copiar esta imagen.",
 
   imageNotFound: "Imagen no encontrada",
   backToArchive: "Volver al archivo",
@@ -1255,6 +1263,10 @@ const ca: Record<MessageKey, string> = {
   zoomOut: "Allunya",
   resetZoom: "Restableix el zoom",
   couldNotLoadImage: "No s'ha pogut carregar aquesta imatge.",
+  copyImage: "Copia la imatge",
+  copyingImage: "Copiant…",
+  imageCopied: "Imatge copiada",
+  couldNotCopyImage: "No s'ha pogut copiar aquesta imatge.",
 
   imageNotFound: "Imatge no trobada",
   backToArchive: "Torna a l'arxiu",
