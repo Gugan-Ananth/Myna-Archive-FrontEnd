@@ -20,6 +20,10 @@ _Avoid_: OC, cast, actor
 Quoted speech in a story chapter, rendered as a chat bubble. Consecutive lines from the same story character stay on the same side.
 _Avoid_: quote (the stored markup), message (unless describing the chat layout)
 
+**Story sound**:
+A marked span of story text that plays a catalog clip (rope, chain, gag, …) when the reader clicks it. The words stay in place; a light highlight marks that it is playable.
+_Avoid_: interaction, cue, hotspot, sound effect (unless talking about the clip file)
+
 **Original Character**:
 A standalone OC sheet in the OC collection — not a story character.
 _Avoid_: using OC for speakers inside a story

@@ -8,9 +8,11 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   ApiError,
   createArchiveItem,
@@ -49,6 +51,11 @@ import {
 import {
   extractStorySpeakers,
 } from "../lib/story-reader";
+import {
+  STORY_SOUNDS,
+  isStorySoundId,
+  type StorySoundId,
+} from "../lib/story-sounds";
 import {
   MAX_STORY_ASSETS,
   MAX_STORY_BODY_CHARS,
@@ -167,6 +174,14 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   const abortRef = useRef<AbortController | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const editorWrapRef = useRef<HTMLDivElement>(null);
+  const soundMenuWrapRef = useRef<HTMLDivElement>(null);
+  const soundBtnRef = useRef<HTMLButtonElement>(null);
+  const soundPanelRef = useRef<HTMLDivElement>(null);
+  const [soundMenuBox, setSoundMenuBox] = useState<{
+    top: number;
+    left: number;
+    maxHeight: number;
+  } | null>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const savedRange = useRef<Range | null>(null);
   const [title, setTitle] = useState(item?.name ?? "");
@@ -191,6 +206,8 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   const [chapterNumber, setChapterNumber] = useState(1);
   const [seriesRoots, setSeriesRoots] = useState<ArchiveItem[]>([]);
   const [insertOpen, setInsertOpen] = useState(false);
+  const [soundMenuOpen, setSoundMenuOpen] = useState(false);
+  const [activeSound, setActiveSound] = useState<StorySoundId | null>(null);
   const [editorDragOver, setEditorDragOver] = useState(false);
   const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(
     null,
@@ -250,12 +267,64 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
       size: sizeFromSelection(),
       block: normalizeBlock(document.queryCommandValue("formatBlock")),
     });
+    const sound = storySoundElementFromSelection();
+    const soundId = sound?.getAttribute("data-sound") ?? null;
+    setActiveSound(isStorySoundId(soundId) ? soundId : null);
   }, []);
 
   useEffect(() => {
     document.addEventListener("selectionchange", syncToolbar);
     return () => document.removeEventListener("selectionchange", syncToolbar);
   }, [syncToolbar]);
+
+  useLayoutEffect(() => {
+    if (!soundMenuOpen) {
+      setSoundMenuBox(null);
+      return;
+    }
+    function place() {
+      const btn = soundBtnRef.current;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      const width = 272;
+      const left = Math.max(
+        8,
+        Math.min(rect.left, window.innerWidth - width - 8),
+      );
+      const top = rect.bottom + 6;
+      const maxHeight = Math.max(160, window.innerHeight - top - 12);
+      setSoundMenuBox({ top, left, maxHeight });
+    }
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [soundMenuOpen]);
+
+  useEffect(() => {
+    if (!soundMenuOpen) return;
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (soundMenuWrapRef.current?.contains(target)) return;
+      if (soundPanelRef.current?.contains(target)) return;
+      setSoundMenuOpen(false);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setSoundMenuOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [soundMenuOpen]);
 
   useEffect(() => {
     return () => {
@@ -535,6 +604,61 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   function applySize(px: string) {
     applyInlineStyle({ fontSize: `${px}px` });
     setToolbar((prev) => ({ ...prev, size: px }));
+  }
+
+  function applyStorySound(id: StorySoundId) {
+    if (!restoreSelection()) return;
+    const existing = storySoundElementFromSelection();
+    if (existing) {
+      const current = existing.getAttribute("data-sound");
+      if (current === id) {
+        unwrapStorySound(existing);
+      } else {
+        existing.setAttribute("data-sound", id);
+      }
+      rememberSelection();
+      syncToolbar();
+      setSoundMenuOpen(false);
+      return;
+    }
+
+    const sel = window.getSelection();
+    const editor = editorRef.current;
+    if (!sel || sel.rangeCount === 0 || !editor) return;
+    const range = sel.getRangeAt(0);
+    if (!selectionIsInEditor(range) || range.collapsed) {
+      setSoundMenuOpen(false);
+      return;
+    }
+
+    const span = document.createElement("span");
+    span.className = "story-sound";
+    span.setAttribute("data-sound", id);
+    try {
+      range.surroundContents(span);
+    } catch {
+      span.appendChild(range.extractContents());
+      span.querySelectorAll(".story-sound").forEach((nested) => {
+        if (nested instanceof HTMLElement) unwrapStorySound(nested);
+      });
+      range.insertNode(span);
+    }
+    const next = document.createRange();
+    next.selectNodeContents(span);
+    sel.removeAllRanges();
+    sel.addRange(next);
+    savedRange.current = next.cloneRange();
+    setSoundMenuOpen(false);
+    syncToolbar();
+  }
+
+  function removeActiveStorySound() {
+    if (!restoreSelection()) return;
+    const existing = storySoundElementFromSelection();
+    if (existing) unwrapStorySound(existing);
+    rememberSelection();
+    setSoundMenuOpen(false);
+    syncToolbar();
   }
 
   function applyBlock(tag: string) {
@@ -1091,6 +1215,79 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
             <ImageToolIcon className="h-4 w-4" />
             <span className="whitespace-nowrap">{t("storyAddImage")}</span>
           </button>
+          <div ref={soundMenuWrapRef} className="relative shrink-0">
+            <button
+              ref={soundBtnRef}
+              type="button"
+              aria-label={t("storyAddSound")}
+              aria-haspopup="menu"
+              aria-expanded={soundMenuOpen}
+              title={t("storyAddSound")}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                rememberSelection();
+                setSoundMenuOpen((open) => !open);
+              }}
+              className={[
+                "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium transition-colors",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                soundMenuOpen || activeSound
+                  ? "bg-accent-soft text-primary"
+                  : "text-foreground-muted hover:bg-surface-muted hover:text-foreground",
+              ].join(" ")}
+            >
+              <SoundToolIcon className="h-4 w-4" />
+              <span className="whitespace-nowrap">{t("storyAddSound")}</span>
+            </button>
+          </div>
+          {soundMenuOpen && soundMenuBox && typeof document !== "undefined"
+            ? createPortal(
+                <div
+                  ref={soundPanelRef}
+                  role="menu"
+                  aria-label={t("storyAddSound")}
+                  className="fixed z-[90] w-[17rem] overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-[0_12px_40px_-12px_rgba(30,27,46,0.28)]"
+                  style={{
+                    top: soundMenuBox.top,
+                    left: soundMenuBox.left,
+                    maxHeight: soundMenuBox.maxHeight,
+                  }}
+                >
+                  {STORY_SOUNDS.map((sound) => {
+                    const label = t(sound.labelKey);
+                    const active = activeSound === sound.id;
+                    return (
+                      <button
+                        key={sound.id}
+                        type="button"
+                        role="menuitem"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => applyStorySound(sound.id)}
+                        className={[
+                          "flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-sm",
+                          active
+                            ? "bg-accent-soft text-primary"
+                            : "text-foreground hover:bg-surface-muted",
+                        ].join(" ")}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                  {activeSound ? (
+                    <button
+                      type="button"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={removeActiveStorySound}
+                      className="mt-1 w-full rounded-lg px-2 py-1.5 text-left text-sm text-foreground-muted hover:bg-surface-muted hover:text-foreground"
+                    >
+                      {t("storyRemoveSound")}
+                    </button>
+                  ) : null}
+                </div>,
+                document.body,
+              )
+            : null}
         </div>
         <button
           type="submit"
@@ -1557,6 +1754,41 @@ function caretRangeFromPoint(x: number, y: number): Range | null {
   range.setStart(pos.offsetNode, pos.offset);
   range.collapse(true);
   return range;
+}
+
+function storySoundElementFromSelection(): HTMLElement | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const node = sel.getRangeAt(0).commonAncestorContainer;
+  const el = node instanceof HTMLElement ? node : node.parentElement;
+  const sound = el?.closest(".story-sound");
+  return sound instanceof HTMLElement ? sound : null;
+}
+
+function unwrapStorySound(el: HTMLElement) {
+  const parent = el.parentNode;
+  if (!parent) return;
+  while (el.firstChild) parent.insertBefore(el.firstChild, el);
+  parent.removeChild(el);
+}
+
+function SoundToolIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M4 10v4h3l4 3V7L7 10H4z" />
+      <path d="M16 9.5a4 4 0 0 1 0 5" />
+      <path d="M18.5 7a7 7 0 0 1 0 10" />
+    </svg>
+  );
 }
 
 function ImageToolIcon({ className }: { className?: string }) {

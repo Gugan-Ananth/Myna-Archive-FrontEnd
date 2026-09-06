@@ -21,6 +21,13 @@ import {
   STORY_COVER_TEMPLATE,
 } from "../lib/media-display";
 import { enhanceStoryHtml, storyReadMinutes } from "../lib/story-reader";
+import {
+  isStorySoundId,
+  playStorySound,
+  stopStorySound,
+  storySoundById,
+  type StorySoundId,
+} from "../lib/story-sounds";
 import type { ArchiveItem } from "../lib/types";
 import { CopyImageButton } from "./copy-image-button";
 import { LoadingImage } from "./global-loading";
@@ -95,10 +102,22 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
     root.querySelectorAll("img.story-inline-photo").forEach((img) => {
       img.setAttribute("aria-label", label);
     });
+    root.querySelectorAll(".story-sound").forEach((el) => {
+      if (!(el instanceof HTMLElement)) return;
+      const sound = storySoundById(el.getAttribute("data-sound"));
+      if (!sound) return;
+      el.setAttribute(
+        "aria-label",
+        t("storySoundPlay", { type: t(sound.labelKey) }),
+      );
+    });
   }, [body, t]);
 
   useEffect(() => {
-    return () => window.clearTimeout(hideCopyTimer.current);
+    return () => {
+      window.clearTimeout(hideCopyTimer.current);
+      stopStorySound();
+    };
   }, []);
 
   useEffect(() => {
@@ -124,6 +143,12 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
   }
 
   function onBodyClick(event: MouseEvent<HTMLElement>) {
+    const sound = storySoundFromTarget(event.target);
+    if (sound) {
+      event.preventDefault();
+      playStorySound(sound);
+      return;
+    }
     const img = storyPhotoFromTarget(event.target);
     if (!img) return;
     event.preventDefault();
@@ -132,6 +157,12 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
 
   function onBodyKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.key !== "Enter" && event.key !== " ") return;
+    const sound = storySoundFromTarget(event.target);
+    if (sound) {
+      event.preventDefault();
+      playStorySound(sound);
+      return;
+    }
     const img = storyPhotoFromTarget(event.target);
     if (!img) return;
     event.preventDefault();
@@ -376,6 +407,14 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
       ) : null}
     </div>
   );
+}
+
+function storySoundFromTarget(target: EventTarget | null): StorySoundId | null {
+  if (!(target instanceof Element)) return null;
+  const el = target.closest(".story-sound");
+  if (!(el instanceof HTMLElement)) return null;
+  const id = el.getAttribute("data-sound");
+  return isStorySoundId(id) ? id : null;
 }
 
 function storyPhotoFromTarget(target: EventTarget | null): HTMLImageElement | null {

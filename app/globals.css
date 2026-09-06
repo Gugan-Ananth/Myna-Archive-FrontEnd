@@ -1538,7 +1538,7 @@ html {
 }
 
 /* Pasted docs often ship black/white inline colors — follow the theme instead. */
-.story-doc *:not(img) {
+.story-doc *:not(img):not(.story-sound) {
   color: inherit !important;
   -webkit-text-fill-color: inherit !important;
   background-color: transparent !important;
@@ -1621,7 +1621,7 @@ html {
   }
 }
 
-.story-read *:not(img):not(.story-dialogue-bubble):not(.story-dialogue-avatar):not(.story-dialogue-name) {
+.story-read *:not(img):not(.story-dialogue-bubble):not(.story-dialogue-avatar):not(.story-dialogue-name):not(.story-sound) {
   color: inherit !important;
   -webkit-text-fill-color: inherit !important;
 }
@@ -1898,4 +1898,24 @@ img.broken-media {
 .story-read font[face="Playfair"],
 .story-read [style*="Playfair"] {
   font-family: var(--font-playfair), "Playfair", Georgia, serif;
+}
+
+/* Story sound: same words, a light highlight. */
+.story-sound {
+  cursor: pointer;
+  border-radius: 0.45em;
+  padding: 0.04em 0.22em;
+  background-color: color-mix(in srgb, var(--primary) 13%, transparent);
+  box-shadow: 0 0 0 0.12em color-mix(in srgb, var(--primary) 9%, transparent);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.story-read .story-sound:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.story-doc .story-sound {
+  cursor: text;
 }

@@ -3,6 +3,7 @@
  * Stored HTML from the editor is left unchanged.
  */
 
+import { isStorySoundId } from "./story-sounds";
 import type { StoryCharacter } from "./types";
 
 type QuoteDir = "open" | "close" | "either";
@@ -128,7 +129,7 @@ export function enhanceStoryHtml(
     hasDialogue: false,
     characters,
   };
-  return markStoryInlineImages(transformFragment(html, ctx));
+  return markStorySounds(markStoryInlineImages(transformFragment(html, ctx)));
 }
 
 /** Unique speaker names in document order from `Name: "dialogue"` lines. */
@@ -675,6 +676,19 @@ function stripIndentStyles(openTag: string): string {
     })
     .replace(/\s{2,}/g, " ")
     .replace(/\s+>/g, ">");
+}
+
+/** Clickable catalog sounds: keep the words, add a button role. */
+function markStorySounds(html: string): string {
+  return html.replace(/<span\b([^>]*)>/gi, (tag, attrs: string) => {
+    if (!/\bstory-sound\b/i.test(tag)) return tag;
+    const sound = /\bdata-sound\s*=\s*("([^"]*)"|'([^']*)')/i.exec(attrs);
+    const id = (sound?.[2] ?? sound?.[3] ?? "").trim().toLowerCase();
+    if (!isStorySoundId(id)) return tag;
+    let next = addAttr(tag, "tabindex", "0");
+    next = addAttr(next, "role", "button");
+    return next;
+  });
 }
 
 /** Chapter photos: clickable, skip dialogue portraits. */
