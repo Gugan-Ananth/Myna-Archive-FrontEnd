@@ -27,7 +27,10 @@ import {
   withCacheBust,
 } from "../lib/media-display";
 import type { ArchiveItem } from "../lib/types";
-import { archiveItemCopySrc } from "../lib/copy-image";
+import {
+  archiveItemCopySrc,
+  archiveItemMediaSource,
+} from "../lib/copy-image";
 import { warmArchiveItem } from "../lib/warm-preview";
 import { CopyImageButton } from "./copy-image-button";
 import { LoadingImage } from "./global-loading";
@@ -87,6 +90,7 @@ export function ArchiveCard({
   const { t } = useI18n();
   const { menu, openMenu, closeMenu } = useImageCopyMenu();
   const copySrc = archiveItemCopySrc(item);
+  const mediaAction = archiveItemMediaSource(item);
   const isVideo = item.mediaType === "video";
   const isStory = item.mediaType === "story";
   const [loaded, setLoaded] = useState(false);
@@ -113,8 +117,11 @@ export function ArchiveCard({
     <div
       className="group/pin relative w-full"
       onContextMenu={(event) => {
-        if (!copySrc) return;
-        openMenu(event, copySrc);
+        if (!mediaAction) return;
+        openMenu(event, mediaAction.src, {
+          kind: mediaAction.kind,
+          fileName: mediaAction.fileName,
+        });
       }}
     >
       <Link

@@ -31,6 +31,7 @@ export function HomeBackdrop({ view }: HomeBackdropProps) {
             src={sticker.src}
             alt=""
             fill
+            loading="eager"
             sizes="(min-width: 1024px) 40rem, 100vw"
             className="object-contain object-right-bottom"
           />

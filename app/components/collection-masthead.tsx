@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import bunnyImageLoader from "../lib/bunny-image-loader";
+import { archiveItemMediaSource } from "../lib/copy-image";
 import { useI18n } from "../lib/i18n";
 import { GRID_THUMB_QUALITY, gridMediaSrc } from "../lib/media-display";
 import type { ArchiveItem } from "../lib/types";
 import { LoadingImage } from "./global-loading";
+import { ImageCopyMenu, useImageCopyMenu } from "./image-copy-menu";
 import { RatingBadge } from "./rating-badge";
 
 type CollectionMastheadProps = {
@@ -21,11 +23,13 @@ export function CollectionMasthead({
   tagCount,
 }: CollectionMastheadProps) {
   const { t } = useI18n();
+  const { menu, openMenu, closeMenu } = useImageCopyMenu();
   const featured = items[0];
 
   if (!featured) return null;
 
   const featuredSrc = gridMediaSrc(featured);
+  const featuredAction = archiveItemMediaSource(featured);
   const topRating = Number.isFinite(featured.rating)
     ? featured.rating.toFixed(1)
     : "-";
@@ -71,6 +75,13 @@ export function CollectionMasthead({
           <Link
             href={`/item/${featured.id}`}
             aria-label={t("homeOpenFeatured", { name: featured.name })}
+            onContextMenu={(event) => {
+              if (!featuredAction) return;
+              openMenu(event, featuredAction.src, {
+                kind: featuredAction.kind,
+                fileName: featuredAction.fileName,
+              });
+            }}
             className="app-card group relative block w-full max-w-[22rem] rotate-1 rounded-[1.35rem] p-2 shadow-[0_22px_45px_-18px_rgba(30,27,46,0.35)] ring-1 ring-border transition-transform duration-300 hover:-rotate-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-accent-soft"
           >
             <div className="relative aspect-[1.25] overflow-hidden rounded-[0.95rem] bg-surface-muted">
@@ -116,6 +127,7 @@ export function CollectionMasthead({
           </Link>
         </div>
       </div>
+      <ImageCopyMenu menu={menu} onClose={closeMenu} />
     </section>
   );
 }

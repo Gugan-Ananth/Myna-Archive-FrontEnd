@@ -9,12 +9,14 @@ import {
   updateOriginalCharacter,
 } from "../lib/api";
 import bunnyImageLoader from "../lib/bunny-image-loader";
+import { originalCharacterMediaSource } from "../lib/copy-image";
 import { useI18n } from "../lib/i18n";
 import { originalMediaUrl } from "../lib/media-display";
 import type { OriginalCharacter } from "../lib/types";
 import { BackButton } from "./back-button";
 import { ConfirmDialog } from "./confirm-dialog";
 import { LoadingImage } from "./global-loading";
+import { ImageCopyMenu, useImageCopyMenu } from "./image-copy-menu";
 import { StatusCallout } from "./status-callout";
 import { StarButton } from "./star-button";
 
@@ -29,6 +31,8 @@ export function OcDetail({ oc }: OcDetailProps) {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const src = originalMediaUrl(oc.mediaUrl || oc.thumbnailUrl);
+  const mediaAction = originalCharacterMediaSource(oc);
+  const { menu, openMenu, closeMenu } = useImageCopyMenu();
   const width = oc.width && oc.width > 0 ? oc.width : 800;
   const height = oc.height && oc.height > 0 ? oc.height : 1000;
 
@@ -64,7 +68,16 @@ export function OcDetail({ oc }: OcDetailProps) {
         <BackButton href="/?view=oc" />
       </div>
       <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-4 py-16 sm:px-6 lg:flex-row lg:items-start lg:gap-10 lg:py-20">
-        <div className="relative mx-auto w-full max-w-[14rem] overflow-hidden rounded-2xl bg-surface-muted ring-1 ring-border sm:max-w-sm lg:mx-0 lg:w-[18rem] lg:max-w-none lg:shrink-0">
+        <div
+          className="relative mx-auto w-full max-w-[14rem] overflow-hidden rounded-2xl bg-surface-muted ring-1 ring-border sm:max-w-sm lg:mx-0 lg:w-[18rem] lg:max-w-none lg:shrink-0"
+          onContextMenu={(event) => {
+            if (!mediaAction) return;
+            openMenu(event, mediaAction.src, {
+              kind: mediaAction.kind,
+              fileName: mediaAction.fileName,
+            });
+          }}
+        >
           <LoadingImage
             src={src}
             alt=""
@@ -83,6 +96,7 @@ export function OcDetail({ oc }: OcDetailProps) {
             }
             className="absolute right-3 top-3 z-10"
           />
+          <ImageCopyMenu menu={menu} onClose={closeMenu} />
         </div>
         <div className="app-card min-w-0 flex-1 rounded-2xl border border-border p-5 shadow-sm sm:p-6">
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">

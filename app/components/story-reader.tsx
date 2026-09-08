@@ -22,10 +22,10 @@ import {
 } from "../lib/media-display";
 import { enhanceStoryHtml, storyReadMinutes } from "../lib/story-reader";
 import {
-  isStorySoundId,
   playStorySound,
   stopStorySound,
   storySoundById,
+  storySoundIdFrom,
   type StorySoundId,
 } from "../lib/story-sounds";
 import type { ArchiveItem } from "../lib/types";
@@ -211,7 +211,9 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
     if (!img) return;
     const src = resolveCopyImageUrl(img.currentSrc || img.getAttribute("src") || "");
     if (!src) return;
-    openMenu(event, src);
+    openMenu(event, src, {
+      fileName: img.getAttribute("alt")?.trim() || item.name,
+    });
   }
 
   return (
@@ -253,7 +255,7 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
                 item.mediaUrl || item.thumbnailUrl,
               );
               if (!src) return;
-              openMenu(event, src);
+              openMenu(event, src, { fileName: item.name });
             }}
           >
             <LoadingImage
@@ -414,7 +416,7 @@ function storySoundFromTarget(target: EventTarget | null): StorySoundId | null {
   const el = target.closest(".story-sound");
   if (!(el instanceof HTMLElement)) return null;
   const id = el.getAttribute("data-sound");
-  return isStorySoundId(id) ? id : null;
+  return storySoundIdFrom(id);
 }
 
 function storyPhotoFromTarget(target: EventTarget | null): HTMLImageElement | null {
