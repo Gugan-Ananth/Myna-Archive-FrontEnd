@@ -3,7 +3,10 @@
 import Link from "next/link";
 import bunnyImageLoader from "../lib/bunny-image-loader";
 import { updateArchiveItem } from "../lib/api";
-import { archiveItemCopySrc } from "../lib/copy-image";
+import {
+  archiveItemCopySrc,
+  archiveItemMediaSource,
+} from "../lib/copy-image";
 import { useI18n } from "../lib/i18n";
 import {
   GRID_THUMB_QUALITY,
@@ -35,6 +38,7 @@ export function StoryWorkCard({
   const { t } = useI18n();
   const { menu, openMenu, closeMenu } = useImageCopyMenu();
   const copySrc = archiveItemCopySrc(item);
+  const mediaAction = archiveItemMediaSource(item);
   const cover = item.mediaUrl || item.thumbnailUrl;
   const hasCover = Boolean(cover);
   const src = hasCover ? gridMediaSrc(item) : STORY_COVER_TEMPLATE.src;
@@ -46,8 +50,11 @@ export function StoryWorkCard({
     <div
       className="group/pin relative h-full"
       onContextMenu={(event) => {
-        if (!copySrc) return;
-        openMenu(event, copySrc);
+        if (!mediaAction) return;
+        openMenu(event, mediaAction.src, {
+          kind: mediaAction.kind,
+          fileName: mediaAction.fileName,
+        });
       }}
     >
       <Link

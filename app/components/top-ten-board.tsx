@@ -18,7 +18,10 @@ import {
   ocGridSrc,
   orientationFromSize,
 } from "../lib/media-display";
-import { archiveItemCopySrc } from "../lib/copy-image";
+import {
+  archiveItemMediaSource,
+  originalCharacterMediaSource,
+} from "../lib/copy-image";
 import type { ArchiveItem, OriginalCharacter } from "../lib/types";
 import { warmArchiveItem, warmOriginalCharacter } from "../lib/warm-preview";
 import { ImageCopyMenu, useImageCopyMenu } from "./image-copy-menu";
@@ -163,8 +166,10 @@ export function TopTenCard({
 }) {
   const { t } = useI18n();
   const { menu, openMenu, closeMenu } = useImageCopyMenu();
-  const copySrc =
-    entry.kind === "archive" ? archiveItemCopySrc(entry.item) : null;
+  const mediaAction =
+    entry.kind === "archive"
+      ? archiveItemMediaSource(entry.item)
+      : originalCharacterMediaSource(entry.oc);
   const metal = podiumMetal(rank);
   const name = entryName(entry);
   const href = entryHref(entry);
@@ -255,8 +260,11 @@ export function TopTenCard({
       ].join(" ")}
       style={{ ["--media-ratio" as string]: `${dims.w} / ${dims.h}` }}
       onContextMenu={(event) => {
-        if (!copySrc) return;
-        openMenu(event, copySrc);
+        if (!mediaAction) return;
+        openMenu(event, mediaAction.src, {
+          kind: mediaAction.kind,
+          fileName: mediaAction.fileName,
+        });
       }}
     >
       {frame}

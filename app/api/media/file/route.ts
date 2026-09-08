@@ -3,6 +3,8 @@ import { SESSION_COOKIE } from "../../../lib/auth/cookies";
 import {
   IMAGE_MIME_TYPES,
   MAX_IMAGE_BYTES,
+  MAX_VIDEO_BYTES,
+  VIDEO_MIME_TYPES,
 } from "../../../lib/media-constraints";
 import { originalMediaUrl } from "../../../lib/media-display";
 
@@ -11,11 +13,7 @@ export const runtime = "nodejs";
 const BUNNY_HOST_RE = /(^|\.)b-cdn\.net$/i;
 const FETCH_MS = 120_000;
 
-/**
- * Same-origin fetch of an archive image (Bunny pull zone only).
- * Used so the clipboard can read bytes that the CDN would otherwise
- * block with CORS.
- */
+/** Same-origin fetch of an archive media file (Bunny CDN only). */
 export async function GET(request: Request): Promise<Response> {
   const jar = await cookies();
   if (!jar.get(SESSION_COOKIE)?.value?.trim()) {
@@ -25,11 +23,20 @@ export async function GET(request: Request): Promise<Response> {
     );
   }
 
+  const requestUrl = new URL(request.url);
+  const mediaType = requestUrl.searchParams.get("mediaType") === "video"
+    ? "video"
+    : "image";
+  const maxBytes = mediaType === "video" ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+
   let source: string;
   try {
-    source = parseSource(new URL(request.url).searchParams.get("url"));
+    source = parseSource(requestUrl.searchParams.get("url"));
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Invalid image.";
+    const message =
+      error instanceof Error
+        ? error.message
+        : `Invalid ${mediaType}.`;
     return Response.json({ message, statusCode: 400 }, { status: 400 });
   }
 
@@ -38,7 +45,12 @@ export async function GET(request: Request): Promise<Response> {
       cache: "no-store",
       redirect: "follow",
       signal: AbortSignal.timeout(FETCH_MS),
-      headers: { Accept: "image/*,application/octet-stream;q=0.8" },
+      headers: {
+        Accept:
+          mediaType === "video"
+            ? "video/*,application/octet-stream;q=0.8"
+            : "image/*,application/octet-stream;q=0.8",
+      },
     });
 
     if (!upstream.ok) {
@@ -49,45 +61,66 @@ export async function GET(request: Request): Promise<Response> {
       );
     }
 
-    const mimeType = imageMimeType(
+    const mimeType = mediaMimeType(
       upstream.headers.get("content-type"),
       source,
+      mediaType,
     );
     if (!mimeType) {
       await upstream.body?.cancel();
       return Response.json(
-        { message: "That link does not point to a supported image.", statusCode: 422 },
+        {
+          message: `That link does not point to a supported ${mediaType}.`,
+          statusCode: 422,
+        },
         { status: 422 },
       );
     }
 
     const contentLength = Number(upstream.headers.get("content-length"));
-    if (Number.isFinite(contentLength) && contentLength > MAX_IMAGE_BYTES) {
+    if (Number.isFinite(contentLength) && contentLength > maxBytes) {
       await upstream.body?.cancel();
       return Response.json(
-        { message: "Image is too large.", statusCode: 413 },
+        { message: `${mediaType === "video" ? "Video" : "Image"} is too large.`, statusCode: 413 },
         { status: 413 },
       );
     }
 
     if (!upstream.body) {
       return Response.json(
-        { message: "The image response was empty.", statusCode: 422 },
+        {
+          message: `The ${mediaType} response was empty.`,
+          statusCode: 422,
+        },
         { status: 422 },
       );
     }
 
-    return new Response(limitBody(upstream.body, MAX_IMAGE_BYTES), {
+    const headers = new Headers({
+      "Content-Type": mimeType,
+      "Cache-Control": "private, max-age=3600",
+      "X-Content-Type-Options": "nosniff",
+    });
+    if (requestUrl.searchParams.get("download") === "1") {
+      const fileName = downloadFileName(
+        requestUrl.searchParams.get("fileName"),
+        mediaType,
+        source,
+        mimeType,
+      );
+      headers.set(
+        "Content-Disposition",
+        `attachment; filename="${fileName.replace(/[^\x20-\x7e]/g, "-").replace(/[";]/g, "-")}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+      );
+    }
+
+    return new Response(limitBody(upstream.body, maxBytes), {
       status: 200,
-      headers: {
-        "Content-Type": mimeType,
-        "Cache-Control": "private, max-age=3600",
-        "X-Content-Type-Options": "nosniff",
-      },
+      headers,
     });
   } catch {
     return Response.json(
-      { message: "Could not fetch image.", statusCode: 502 },
+      { message: `Could not fetch ${mediaType}.`, statusCode: 502 },
       { status: 502 },
     );
   }
@@ -104,16 +137,27 @@ function parseSource(raw: string | null): string {
   return parsed.toString();
 }
 
-function imageMimeType(contentType: string | null, url: string): string | null {
+function mediaMimeType(
+  contentType: string | null,
+  url: string,
+  mediaType: "image" | "video",
+): string | null {
   const headerMime = contentType?.split(";", 1)[0]?.trim().toLowerCase() ?? "";
-  if ((IMAGE_MIME_TYPES as readonly string[]).includes(headerMime)) {
+  const allowed = mediaType === "video" ? VIDEO_MIME_TYPES : IMAGE_MIME_TYPES;
+  if ((allowed as readonly string[]).includes(headerMime)) {
     return headerMime;
   }
   if (headerMime && headerMime !== "application/octet-stream") return null;
   const extension = new URL(url).pathname.split(".").pop()?.toLowerCase();
+  if (mediaType === "video") {
+    if (extension === "mp4") return "video/mp4";
+    if (extension === "webm") return "video/webm";
+    if (extension === "mov") return "video/quicktime";
+    return null;
+  }
   if (extension === "jpeg") return "image/jpeg";
   return (
-    (IMAGE_MIME_TYPES as readonly string[]).find(
+    (allowed as readonly string[]).find(
       (mime) => extensionForMime(mime) === extension,
     ) ?? null
   );
@@ -129,9 +173,40 @@ function extensionForMime(mimeType: string): string {
       return "webp";
     case "image/gif":
       return "gif";
+    case "video/mp4":
+      return "mp4";
+    case "video/webm":
+      return "webm";
+    case "video/quicktime":
+      return "mov";
     default:
       return "bin";
   }
+}
+
+function downloadFileName(
+  requested: string | null,
+  mediaType: "image" | "video",
+  source: string,
+  mimeType: string,
+): string {
+  const clean = (requested ?? "")
+    .replace(/[\r\n<>:"/\\|?*\u0000-\u001F]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120);
+  if (clean && /\.[a-z0-9]{2,5}$/i.test(clean)) return clean;
+
+  const mimeExtension = extensionForMime(mimeType);
+  let extension = mediaType === "video" ? mimeExtension : "bin";
+  try {
+    const pathname = new URL(source).pathname;
+    const match = pathname.match(/\.([a-z0-9]{2,5})$/i);
+    if (match?.[1]) extension = match[1].toLowerCase();
+  } catch {
+    /* use the response MIME fallback */
+  }
+  return `${clean || "myna-archive"}.${extension}`;
 }
 
 function limitBody(

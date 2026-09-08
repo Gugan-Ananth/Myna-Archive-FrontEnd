@@ -548,7 +548,7 @@ export function ImageZoomViewer({
       ].join(" ")}
       onContextMenu={(event) => {
         if (!copySrc || failed) return;
-        openMenu(event, copySrc);
+        openMenu(event, copySrc, { fileName: alt });
       }}
     >
       {!loaded && !failed && (

@@ -16,6 +16,7 @@ import {
   isGlobalLoadingSuppressed,
   type GlobalLoadingDetail,
 } from "../lib/loading-events";
+import { isStoredPreviewPath } from "../lib/media-display";
 import { BrokenImageFallback } from "./broken-image-fallback";
 
 const LOADING_DELAY_MS = 180;
@@ -221,7 +222,16 @@ export function LoadingImage({
   }
 
   const recoverySrc =
-    typeof src === "string" ? recoveryImageSrc(src, Boolean(loader)) : null;
+    typeof src === "string"
+      ? recoveryImageSrc(
+          src,
+          Boolean(loader) && !isStoredPreviewPath(src),
+        )
+      : null;
+  // Stored WebP previews are already the intended grid derivative. They do
+  // not accept Next's width-based loader contract, so serve them directly.
+  const usesStoredPreview =
+    typeof src === "string" && isStoredPreviewPath(src);
   const activeSrc = phase === "recovery" && recoverySrc ? recoverySrc : src;
   const emptySrc = typeof src === "string" && !src;
 
@@ -248,8 +258,12 @@ export function LoadingImage({
       key={`${srcKey}:${phase}`}
       src={activeSrc}
       alt={alt}
-      loader={phase === "recovery" ? undefined : loader}
-      unoptimized={phase === "recovery" ? true : unoptimized}
+      loader={
+        phase === "recovery" || usesStoredPreview ? undefined : loader
+      }
+      unoptimized={
+        phase === "recovery" || usesStoredPreview ? true : unoptimized
+      }
       className={className}
       onLoad={(event) => {
         onLoad?.(event);

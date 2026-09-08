@@ -53,7 +53,7 @@ import {
 } from "../lib/story-reader";
 import {
   STORY_SOUNDS,
-  isStorySoundId,
+  storySoundIdFrom,
   type StorySoundId,
 } from "../lib/story-sounds";
 import {
@@ -89,6 +89,8 @@ const FONT_OPTIONS = [
 ] as const;
 
 const SIZE_OPTIONS = ["12", "14", "16", "18", "24", "32", "48"] as const;
+
+const STORY_AUTOSAVE_INTERVAL_MS = 30_000;
 
 const BLOCK_OPTIONS = [
   { value: "p", labelKey: "storyStyleNormal" as const },
@@ -163,6 +165,18 @@ function revokePortrait(portrait: StoryCharacterPortrait) {
   if (portrait.kind === "file") URL.revokeObjectURL(portrait.previewUrl);
 }
 
+function storyAssetForImage(
+  image: HTMLImageElement,
+  assets: MediaAsset[],
+): MediaAsset | undefined {
+  const markedPublicId = image.dataset.storyAssetPublicId;
+  if (markedPublicId) {
+    const marked = assets.find((asset) => asset.publicId === markedPublicId);
+    if (marked) return marked;
+  }
+  return findStoryAssetBySrc(image.getAttribute("src") ?? "", assets);
+}
+
 /**
  * Google Docs-style story composer: page + toolbar, with tags and rating
  * in the same metadata pattern as image/video create.
@@ -198,6 +212,10 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   const [toolbar, setToolbar] = useState<ToolbarState>(DEFAULT_TOOLBAR);
   const [saving, setSaving] = useState(false);
   const [saveLabel, setSaveLabel] = useState("");
+  const [autoSaveStatus, setAutoSaveStatus] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [uploadPercent, setUploadPercent] = useState(0);
   const [uploadCurrent, setUploadCurrent] = useState(0);
   const [uploadTotal, setUploadTotal] = useState(0);
@@ -219,6 +237,13 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   const [characters, setCharacters] = useState<StoryCharacterDraft[]>(() =>
     draftsFromCharacters(item?.characters),
   );
+  const [savedItem, setSavedItem] = useState<ArchiveItem | null>(
+    () => item ?? null,
+  );
+  const dirtyRef = useRef(false);
+  const changeVersionRef = useRef(0);
+  const savingRef = useRef(false);
+  const saveStoryRef = useRef<(automatic: boolean) => void>(() => undefined);
   const portraitsByName = useRef<Map<string, StoryCharacterPortrait>>(
     new Map(
       (item?.characters ?? []).map((character) => [
@@ -241,11 +266,18 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
       : null;
 
   const bodyOverLimit = bodyChars > MAX_STORY_BODY_CHARS;
+  const persistedItem = savedItem ?? item;
   const canSubmit =
     Boolean(title.trim() && tags.length > 0 && ratingValid) &&
     !saving &&
     !bodyOverLimit &&
     (linkMode === "new" || Boolean(seriesId));
+
+  function markDirty() {
+    dirtyRef.current = true;
+    changeVersionRef.current += 1;
+    setAutoSaveStatus("idle");
+  }
 
   const syncToolbar = useCallback(() => {
     if (typeof document === "undefined") return;
@@ -269,7 +301,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     });
     const sound = storySoundElementFromSelection();
     const soundId = sound?.getAttribute("data-sound") ?? null;
-    setActiveSound(isStorySoundId(soundId) ? soundId : null);
+    setActiveSound(storySoundIdFrom(soundId));
   }, []);
 
   useEffect(() => {
@@ -278,10 +310,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   }, [syncToolbar]);
 
   useLayoutEffect(() => {
-    if (!soundMenuOpen) {
-      setSoundMenuBox(null);
-      return;
-    }
+    if (!soundMenuOpen) return;
     function place() {
       const btn = soundBtnRef.current;
       if (!btn) return;
@@ -452,6 +481,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
 
   function pickCharacterPfp(name: string, file: File) {
     if (!validateImageFile(file)) return;
+    markDirty();
     const previewUrl = URL.createObjectURL(file);
     const nextPortrait: StoryCharacterPortrait = {
       kind: "file",
@@ -471,6 +501,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   }
 
   function clearCharacterPfp(name: string) {
+    markDirty();
     rememberPortrait(name, { kind: "none" });
     setCharacters((prev) =>
       prev.map((character) => {
@@ -484,6 +515,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   }
 
   function selectSeries(id: string) {
+    markDirty();
     setSeriesId(id);
     const parent = seriesRoots.find((item) => item.id === id);
     if (!parent) return;
@@ -554,6 +586,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     if (!restoreSelection()) return;
     document.execCommand("styleWithCSS", false, "true");
     document.execCommand(command, false, value);
+    markDirty();
     rememberSelection();
     syncToolbar();
   }
@@ -593,6 +626,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     }
 
     savedRange.current = sel.getRangeAt(0).cloneRange();
+    markDirty();
     syncToolbar();
   }
 
@@ -616,6 +650,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
       } else {
         existing.setAttribute("data-sound", id);
       }
+      markDirty();
       rememberSelection();
       syncToolbar();
       setSoundMenuOpen(false);
@@ -648,6 +683,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     sel.removeAllRanges();
     sel.addRange(next);
     savedRange.current = next.cloneRange();
+    markDirty();
     setSoundMenuOpen(false);
     syncToolbar();
   }
@@ -656,6 +692,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     if (!restoreSelection()) return;
     const existing = storySoundElementFromSelection();
     if (existing) unwrapStorySound(existing);
+    markDirty();
     rememberSelection();
     setSoundMenuOpen(false);
     syncToolbar();
@@ -680,6 +717,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
       document.execCommand("formatBlock", false, `<${tag}>`);
     }
     rememberSelection();
+    markDirty();
     setToolbar((prev) => ({ ...prev, block: tag }));
     syncToolbar();
   }
@@ -760,6 +798,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
         `<img src="${safeSrc}" alt="">`,
       );
       rememberSelection();
+      markDirty();
       syncToolbar();
       setInsertOpen(false);
       setSelectedImage(null);
@@ -774,6 +813,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   function removeSelectedImage() {
     if (!selectedImage) return;
     selectedImage.remove();
+    markDirty();
     setSelectedImage(null);
     syncToolbar();
     const editor = editorRef.current;
@@ -807,6 +847,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
 
   function pickCoverFile(file: File) {
     if (!validateImageFile(file)) return;
+    markDirty();
     setCover((prev) => {
       if (prev.kind === "file") URL.revokeObjectURL(prev.previewUrl);
       return {
@@ -823,23 +864,51 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   }
 
   function clearCover() {
+    markDirty();
     setCover((prev) => {
       if (prev.kind === "file") URL.revokeObjectURL(prev.previewUrl);
       return { kind: "none" };
     });
   }
 
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    if (saving) return;
+  function adoptSavedItem(updated: ArchiveItem) {
+    setSavedItem(updated);
+    const { cover: savedCover } = splitStoryCoverAndBody(updated);
+    setCover((previous) => {
+      if (previous.kind === "file") URL.revokeObjectURL(previous.previewUrl);
+      return savedCover
+        ? {
+            kind: "existing",
+            url: savedCover.mediaUrl || savedCover.thumbnailUrl,
+            asset: savedCover,
+          }
+        : { kind: "none" };
+    });
+    if (updated.characters) {
+      setCharacters((previous) => {
+        for (const character of previous) revokePortrait(character.portrait);
+        return draftsFromCharacters(updated.characters);
+      });
+      portraitsByName.current = new Map(
+        updated.characters.map((character) => [
+          character.name.trim().toLowerCase(),
+          portraitFromCharacter(character),
+        ]),
+      );
+    }
+  }
+
+  async function saveStory(automatic: boolean): Promise<void> {
+    if (savingRef.current || (automatic && !dirtyRef.current)) return;
     if (!title.trim()) {
-      setError(t("storyNeedTitle"));
+      if (!automatic) setError(t("storyNeedTitle"));
       return;
     }
     if (tags.length === 0) {
-      setError(t("addAtLeastOneTag"));
+      if (!automatic) setError(t("addAtLeastOneTag"));
       return;
     }
+    if (linkMode === "chapter" && !seriesId) return;
     if (!ratingValid) return;
 
     const editor = editorRef.current;
@@ -847,26 +916,42 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     const bodyCharsNow = html.length;
     setBodyChars(bodyCharsNow);
     if (bodyCharsNow > MAX_STORY_BODY_CHARS) {
-      setError(
-        t("storyBodyTooLong", {
-          count: bodyCharsNow.toLocaleString(locale),
-          max: MAX_STORY_BODY_CHARS.toLocaleString(locale),
-        }),
-      );
+      if (!automatic) {
+        setError(
+          t("storyBodyTooLong", {
+            count: bodyCharsNow.toLocaleString(locale),
+            max: MAX_STORY_BODY_CHARS.toLocaleString(locale),
+          }),
+        );
+      }
       return;
     }
     const images = editor ? [...editor.querySelectorAll("img")] : [];
     if (images.length > MAX_STORY_ASSETS) {
-      setError(t("maxImagesReached", { max: MAX_STORY_ASSETS }));
+      if (!automatic) setError(t("maxImagesReached", { max: MAX_STORY_ASSETS }));
       return;
     }
 
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    const versionAtStart = changeVersionRef.current;
+    const existingAssets = persistedItem ? itemMediaAssets(persistedItem) : [];
+    const resetSaving = () => {
+      savingRef.current = false;
+      setSaving(false);
+      setSaveLabel("");
+      setUploadPercent(0);
+      setUploadCurrent(0);
+      setUploadTotal(0);
+    };
 
+    savingRef.current = true;
     setError(null);
-    setSaving(true);
+    // Automatic saves stay completely in the background: no blocking overlay,
+    // no disabled editor, and no layout/scroll changes while the user types.
+    setSaving(!automatic);
+    setAutoSaveStatus(automatic ? "saving" : "idle");
     setSaveLabel(t("preparingUpload"));
     setUploadPercent(0);
     setUploadCurrent(0);
@@ -874,11 +959,9 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
 
     const releaseLoading = suppressGlobalLoading();
     try {
-      const existingAssets = item ? itemMediaAssets(item) : [];
-      const newBodyCount = images.filter((img) => {
-        const src = img.getAttribute("src") ?? "";
-        return !findStoryAssetBySrc(src, existingAssets);
-      }).length;
+      const newBodyCount = images.filter(
+        (image) => !storyAssetForImage(image, existingAssets),
+      ).length;
       const newCharacterCount = characters.filter(
         (character) => character.portrait.kind === "file",
       ).length;
@@ -945,7 +1028,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
       } else if (cover.kind === "file") {
         coverAsset = await uploadFile(cover.file, t("uploadingCover"));
         if (!coverAsset) {
-          setSaving(false);
+          resetSaving();
           return;
         }
       }
@@ -955,16 +1038,18 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
         if (controller.signal.aborted) {
           throw new DOMException("Aborted", "AbortError");
         }
-        const src = images[i]?.getAttribute("src") ?? "";
-        const existing = findStoryAssetBySrc(src, existingAssets);
+        const image = images[i];
+        if (!image) continue;
+        const existing = storyAssetForImage(image, existingAssets);
         if (existing) {
+          image.dataset.storyAssetPublicId = existing.publicId;
           bodyAssets.push(mediaToAssetInput(existing));
           continue;
         }
-        const file = await srcToImageFile(src, i);
+        const file = await srcToImageFile(image.getAttribute("src") ?? "", i);
         if (!file) {
           setError(t("unsupportedFileType"));
-          setSaving(false);
+          resetSaving();
           return;
         }
         const uploaded = await uploadFile(
@@ -977,9 +1062,10 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
             : t("uploadingMedia"),
         );
         if (!uploaded) {
-          setSaving(false);
+          resetSaving();
           return;
         }
+        image.dataset.storyAssetPublicId = uploaded.publicId;
         bodyAssets.push(uploaded);
       }
 
@@ -991,7 +1077,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
             t("uploadingCharacterPfp", { name: character.name }),
           );
           if (!uploaded) {
-            setSaving(false);
+            resetSaving();
             return;
           }
           characterPayload.push({
@@ -1032,54 +1118,57 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
         ...(coverAsset ? [coverAsset] : []),
         ...bodyAssets,
       ];
+      const savedId = persistedItem?.id;
+      const updated = savedId
+        ? await updateArchiveItem(savedId, {
+            name: title.trim(),
+            tags,
+            rating,
+            bodyHtml,
+            author: author.trim(),
+            summary: summary.trim(),
+            assets,
+            characters: characterPayload,
+          })
+        : await createArchiveItem(
+            {
+              mediaType: "story",
+              name: title.trim(),
+              tags,
+              rating,
+              bodyHtml,
+              author: author.trim() || undefined,
+              summary: summary.trim() || undefined,
+              ...(linkMode === "chapter" && seriesId
+                ? { seriesId, chapterNumber }
+                : { chapterNumber: 1 }),
+              ...(assets.length > 0 ? { assets } : {}),
+              ...(characterPayload.length > 0
+                ? { characters: characterPayload }
+                : {}),
+            },
+            { signal: controller.signal },
+          );
 
-      if (item) {
-        await updateArchiveItem(item.id, {
-          name: title.trim(),
-          tags,
-          rating,
-          bodyHtml,
-          author: author.trim(),
-          summary: summary.trim(),
-          assets,
-          characters: characterPayload,
-        });
-        abortRef.current = null;
-        router.push(`/item/${item.id}`);
-        router.refresh();
-        return;
+      const saveWasCurrent = changeVersionRef.current === versionAtStart;
+      if (automatic && !saveWasCurrent) {
+        // Keep newer local edits visible. The next interval will persist them.
+        setSavedItem(updated);
+      } else {
+        adoptSavedItem(updated);
       }
-
-      await createArchiveItem(
-        {
-          mediaType: "story",
-          name: title.trim(),
-          tags,
-          rating,
-          bodyHtml,
-          author: author.trim() || undefined,
-          summary: summary.trim() || undefined,
-          ...(linkMode === "chapter" && seriesId
-            ? { seriesId, chapterNumber }
-            : { chapterNumber: 1 }),
-          ...(assets.length > 0 ? { assets } : {}),
-          ...(characterPayload.length > 0
-            ? { characters: characterPayload }
-            : {}),
-        },
-        { signal: controller.signal },
-      );
-
       abortRef.current = null;
-      router.push("/?view=stories&created=1");
-      router.refresh();
+      if (saveWasCurrent) dirtyRef.current = false;
+      resetSaving();
+      setAutoSaveStatus(automatic && saveWasCurrent ? "saved" : "idle");
+      if (!automatic) {
+        router.push(`/item/${updated.id}`);
+        router.refresh();
+      }
     } catch (err) {
       if (isUploadAborted(err) || controller.signal.aborted) {
-        setSaving(false);
-        setSaveLabel("");
-        setUploadPercent(0);
-        setUploadCurrent(0);
-        setUploadTotal(0);
+        resetSaving();
+        if (automatic) setAutoSaveStatus("idle");
         return;
       }
       const overLimit =
@@ -1100,15 +1189,30 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
               ? err.message
               : t("somethingWentWrong"),
       );
-      setSaving(false);
-      setSaveLabel("");
-      setUploadPercent(0);
-      setUploadCurrent(0);
-      setUploadTotal(0);
+      resetSaving();
+      if (automatic) setAutoSaveStatus("error");
     } finally {
       releaseLoading();
     }
   }
+
+  function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    void saveStory(false);
+  }
+
+  saveStoryRef.current = (automatic) => {
+    void saveStory(automatic);
+  };
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (dirtyRef.current && !savingRef.current) {
+        saveStoryRef.current(true);
+      }
+    }, STORY_AUTOSAVE_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, []);
 
   return (
     <form
@@ -1289,6 +1393,41 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
               )
             : null}
         </div>
+        {autoSaveStatus !== "idle" ? (
+          <span
+            className={[
+              "hidden max-w-[9rem] truncate text-xs sm:inline",
+              autoSaveStatus === "error"
+                ? "text-danger"
+                : "text-foreground-subtle",
+            ].join(" ")}
+            aria-live="polite"
+          >
+            {autoSaveStatus === "saving"
+              ? t("storyAutoSaving")
+              : autoSaveStatus === "saved"
+                ? t("storyAutoSaved")
+                : t("storyAutoSaveError")}
+          </span>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => setDetailsOpen((open) => !open)}
+          aria-label={detailsOpen ? t("hideDetails") : t("showDetails")}
+          aria-expanded={detailsOpen}
+          title={detailsOpen ? t("hideDetails") : t("showDetails")}
+          className={[
+            "inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            detailsOpen
+              ? "border-primary bg-accent-soft text-primary"
+              : "border-border bg-surface text-foreground-muted hover:bg-accent-soft hover:text-primary",
+          ].join(" ")}
+        >
+          <StoryPanelIcon open={detailsOpen} className="h-4 w-4" />
+          <span className="hidden sm:inline">
+            {detailsOpen ? t("hideDetails") : t("showDetails")}
+          </span>
+        </button>
         <button
           type="submit"
           disabled={!canSubmit}
@@ -1353,6 +1492,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                 setSelectedImage(null);
               }}
               onInput={() => {
+                markDirty();
                 rememberSelection();
                 syncToolbar();
                 const editor = editorRef.current;
@@ -1419,8 +1559,16 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
           </div>
         </div>
 
-        <aside className="app-card flex w-full min-w-0 shrink-0 flex-col border-t border-border lg:h-full lg:w-[min(22rem,36%)] lg:border-l lg:border-t-0">
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto p-4 sm:p-5">
+        <aside
+          className={[
+            "app-card flex min-w-0 max-w-full shrink-0 flex-col overflow-hidden border-border transition-[width,max-height,opacity] duration-300 ease-out",
+            detailsOpen
+              ? "pointer-events-auto max-h-[60vh] w-full border-t opacity-100 lg:max-h-none lg:h-full lg:w-[min(22rem,36%)] lg:border-l"
+              : "pointer-events-none max-h-0 w-full border-t-0 opacity-0 lg:max-h-none lg:w-0",
+          ].join(" ")}
+          aria-hidden={!detailsOpen}
+        >
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto p-4 sm:p-5 lg:min-w-[min(22rem,100%)]">
             <div>
               <p className="mb-1 text-sm font-medium uppercase tracking-wide text-foreground-muted">
                 {t("storyCover")}
@@ -1492,6 +1640,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                     checked={linkMode === "new"}
                     disabled={saving}
                     onChange={() => {
+                      markDirty();
                       setLinkMode("new");
                       setSeriesId("");
                       setChapterNumber(1);
@@ -1506,7 +1655,10 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                     name="story-link-mode"
                     checked={linkMode === "chapter"}
                     disabled={saving || seriesRoots.length === 0}
-                    onChange={() => setLinkMode("chapter")}
+                    onChange={() => {
+                      markDirty();
+                      setLinkMode("chapter");
+                    }}
                     className="accent-primary"
                   />
                   {t("storyAddChapter")}
@@ -1542,11 +1694,12 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                       max={999}
                       value={chapterNumber}
                       disabled={saving}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        markDirty();
                         setChapterNumber(
                           Math.max(1, Number(e.target.value) || 1),
-                        )
-                      }
+                        );
+                      }}
                       className="rounded-xl border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
                     />
                   </label>
@@ -1567,6 +1720,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                 value={title}
                 disabled={saving}
                 onChange={(e) => {
+                  markDirty();
                   setTitle(e.target.value);
                   if (error) setError(null);
                 }}
@@ -1586,7 +1740,10 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                 value={author}
                 disabled={saving}
                 maxLength={300}
-                onChange={(e) => setAuthor(e.target.value)}
+                onChange={(e) => {
+                  markDirty();
+                  setAuthor(e.target.value);
+                }}
                 placeholder={t("storyAuthorPlaceholder")}
                 className="rounded-xl border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
               />
@@ -1610,7 +1767,10 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                 disabled={saving}
                 maxLength={600}
                 rows={3}
-                onChange={(e) => setSummary(e.target.value)}
+                onChange={(e) => {
+                  markDirty();
+                  setSummary(e.target.value);
+                }}
                 placeholder={t("storySummaryPlaceholder")}
                 className="relative z-10 w-full min-w-0 resize-y rounded-xl border border-border bg-background px-3 py-2 text-base leading-relaxed outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
               />
@@ -1627,7 +1787,10 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
               </p>
               <CategoryTagPicker
                 value={tags}
-                onChange={setTags}
+                onChange={(nextTags) => {
+                  markDirty();
+                  setTags(nextTags);
+                }}
                 disabled={saving}
               />
             </div>
@@ -1637,7 +1800,10 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
               </p>
               <RatingInput
                 value={rating}
-                onChange={setRating}
+                onChange={(nextRating) => {
+                  markDirty();
+                  setRating(nextRating);
+                }}
                 onValidityChange={setRatingValid}
                 readOnly={saving}
               />
@@ -1806,6 +1972,31 @@ function ImageToolIcon({ className }: { className?: string }) {
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <circle cx="8.5" cy="10" r="1.4" fill="currentColor" stroke="none" />
       <path d="m21 15-4.8-4.6-8.7 8" />
+    </svg>
+  );
+}
+
+function StoryPanelIcon({
+  open,
+  className,
+}: {
+  open: boolean;
+  className?: string;
+}) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2.5" />
+      <path d="M14 4v16" />
+      <path d={open ? "m11.5 10-2 2 2 2" : "m9.5 10 2 2-2 2"} />
     </svg>
   );
 }

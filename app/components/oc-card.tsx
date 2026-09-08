@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { updateOriginalCharacter } from "../lib/api";
 import bunnyImageLoader from "../lib/bunny-image-loader";
+import { originalCharacterMediaSource } from "../lib/copy-image";
 import {
   blurHashPlaceholderFallback,
   blurHashToDataURL,
@@ -13,6 +14,7 @@ import { GRID_THUMB_QUALITY, ocGridSrc } from "../lib/media-display";
 import type { OriginalCharacter } from "../lib/types";
 import { warmOriginalCharacter } from "../lib/warm-preview";
 import { LoadingImage } from "./global-loading";
+import { ImageCopyMenu, useImageCopyMenu } from "./image-copy-menu";
 import { StarButton } from "./star-button";
 
 type OcCardProps = {
@@ -48,6 +50,8 @@ export function OcCard({
 }: OcCardProps) {
   const { t } = useI18n();
   const src = ocGridSrc(oc);
+  const mediaAction = originalCharacterMediaSource(oc);
+  const { menu, openMenu, closeMenu } = useImageCopyMenu();
   const dims = cardDims(oc);
   const isClient = useIsClient();
   const [loaded, setLoaded] = useState(false);
@@ -60,7 +64,16 @@ export function OcCard({
   }, [isClient, oc.blurHash]);
 
   return (
-    <div className="relative h-full">
+    <div
+      className="relative h-full"
+      onContextMenu={(event) => {
+        if (!mediaAction) return;
+        openMenu(event, mediaAction.src, {
+          kind: mediaAction.kind,
+          fileName: mediaAction.fileName,
+        });
+      }}
+    >
       <Link
         href={`/oc/${oc.id}`}
         prefetch
@@ -123,6 +136,7 @@ export function OcCard({
         }}
         className="absolute right-2 top-2 z-20"
       />
+      <ImageCopyMenu menu={menu} onClose={closeMenu} />
     </div>
   );
 }
