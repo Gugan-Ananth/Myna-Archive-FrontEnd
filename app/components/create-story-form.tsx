@@ -212,9 +212,6 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   const [toolbar, setToolbar] = useState<ToolbarState>(DEFAULT_TOOLBAR);
   const [saving, setSaving] = useState(false);
   const [saveLabel, setSaveLabel] = useState("");
-  const [autoSaveStatus, setAutoSaveStatus] = useState<
-    "idle" | "saving" | "saved" | "error"
-  >("idle");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [uploadPercent, setUploadPercent] = useState(0);
   const [uploadCurrent, setUploadCurrent] = useState(0);
@@ -237,9 +234,8 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   const [characters, setCharacters] = useState<StoryCharacterDraft[]>(() =>
     draftsFromCharacters(item?.characters),
   );
-  const [savedItem, setSavedItem] = useState<ArchiveItem | null>(
-    () => item ?? null,
-  );
+  const savedItemRef = useRef<ArchiveItem | null>(item ?? null);
+  const hydratedItemIdRef = useRef<string | null>(null);
   const dirtyRef = useRef(false);
   const changeVersionRef = useRef(0);
   const savingRef = useRef(false);
@@ -266,7 +262,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
       : null;
 
   const bodyOverLimit = bodyChars > MAX_STORY_BODY_CHARS;
-  const persistedItem = savedItem ?? item;
+  const persistedItem = savedItemRef.current ?? item;
   const canSubmit =
     Boolean(title.trim() && tags.length > 0 && ratingValid) &&
     !saving &&
@@ -276,7 +272,6 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   function markDirty() {
     dirtyRef.current = true;
     changeVersionRef.current += 1;
-    setAutoSaveStatus("idle");
   }
 
   const syncToolbar = useCallback(() => {
@@ -364,6 +359,14 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   useEffect(() => {
     const editor = editorRef.current;
     if (!item || !editor) return;
+    // A server refresh can deliver a stale copy of this same story while the
+    // user is typing. Never replace the live content for an already hydrated
+    // item; doing so resets both the caret and the editor's scroll position.
+    if (hydratedItemIdRef.current === item.id) return;
+    hydratedItemIdRef.current = item.id;
+    savedItemRef.current = item;
+    dirtyRef.current = false;
+    changeVersionRef.current = 0;
     editor.innerHTML = item.bodyHtml ?? "";
     setBodyEmpty(isEditorEmpty(editor));
     setBodyChars(storyBodyCharCount(editor.innerHTML));
@@ -381,7 +384,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     const editor = editorRef.current;
     if (!editor) return;
     return attachBrokenMediaHandler(editor);
-  }, [item]);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -872,30 +875,9 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   }
 
   function adoptSavedItem(updated: ArchiveItem) {
-    setSavedItem(updated);
-    const { cover: savedCover } = splitStoryCoverAndBody(updated);
-    setCover((previous) => {
-      if (previous.kind === "file") URL.revokeObjectURL(previous.previewUrl);
-      return savedCover
-        ? {
-            kind: "existing",
-            url: savedCover.mediaUrl || savedCover.thumbnailUrl,
-            asset: savedCover,
-          }
-        : { kind: "none" };
-    });
-    if (updated.characters) {
-      setCharacters((previous) => {
-        for (const character of previous) revokePortrait(character.portrait);
-        return draftsFromCharacters(updated.characters);
-      });
-      portraitsByName.current = new Map(
-        updated.characters.map((character) => [
-          character.name.trim().toLowerCase(),
-          portraitFromCharacter(character),
-        ]),
-      );
-    }
+    // Keep the latest server snapshot outside React state. Updating editor
+    // state here could disturb the caret or scroll position during autosave.
+    savedItemRef.current = updated;
   }
 
   async function saveStory(automatic: boolean): Promise<void> {
@@ -914,7 +896,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     const editor = editorRef.current;
     const html = storyPayloadHtml(editor?.innerHTML ?? "");
     const bodyCharsNow = html.length;
-    setBodyChars(bodyCharsNow);
+    if (!automatic) setBodyChars(bodyCharsNow);
     if (bodyCharsNow > MAX_STORY_BODY_CHARS) {
       if (!automatic) {
         setError(
@@ -939,23 +921,26 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     const existingAssets = persistedItem ? itemMediaAssets(persistedItem) : [];
     const resetSaving = () => {
       savingRef.current = false;
-      setSaving(false);
-      setSaveLabel("");
-      setUploadPercent(0);
-      setUploadCurrent(0);
-      setUploadTotal(0);
+      if (!automatic) {
+        setSaving(false);
+        setSaveLabel("");
+        setUploadPercent(0);
+        setUploadCurrent(0);
+        setUploadTotal(0);
+      }
     };
 
     savingRef.current = true;
-    setError(null);
+    if (!automatic) setError(null);
     // Automatic saves stay completely in the background: no blocking overlay,
     // no disabled editor, and no layout/scroll changes while the user types.
-    setSaving(!automatic);
-    setAutoSaveStatus(automatic ? "saving" : "idle");
-    setSaveLabel(t("preparingUpload"));
-    setUploadPercent(0);
-    setUploadCurrent(0);
-    setUploadTotal(0);
+    if (!automatic) setSaving(true);
+    if (!automatic) {
+      setSaveLabel(t("preparingUpload"));
+      setUploadPercent(0);
+      setUploadCurrent(0);
+      setUploadTotal(0);
+    }
 
     const releaseLoading = suppressGlobalLoading();
     try {
@@ -968,28 +953,34 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
       const totalUploads =
         (cover.kind === "file" ? 1 : 0) + newBodyCount + newCharacterCount;
       let completed = 0;
-      setUploadTotal(totalUploads);
-      if (totalUploads === 0) setUploadPercent(100);
+      if (!automatic) {
+        setUploadTotal(totalUploads);
+        if (totalUploads === 0) setUploadPercent(100);
+      }
 
       async function uploadFile(
         file: File,
         label: string,
       ): Promise<CreateMediaAssetInput | null> {
         if (file.size > MAX_IMAGE_BYTES) {
-          setError(
-            t("fileTooLarge", {
-              size: formatBytes(file.size),
-              type: t("image").toLowerCase(),
-              limit: formatBytes(MAX_IMAGE_BYTES),
-            }),
-          );
+          if (!automatic) {
+            setError(
+              t("fileTooLarge", {
+                size: formatBytes(file.size),
+                type: t("image").toLowerCase(),
+                limit: formatBytes(MAX_IMAGE_BYTES),
+              }),
+            );
+          }
           return null;
         }
         const index = completed;
-        setUploadCurrent(index + 1);
-        setUploadTotal(totalUploads);
-        setSaveLabel(label);
-        setUploadPercent(batchUploadPercent(index, totalUploads, 0));
+        if (!automatic) {
+          setUploadCurrent(index + 1);
+          setUploadTotal(totalUploads);
+          setSaveLabel(label);
+          setUploadPercent(batchUploadPercent(index, totalUploads, 0));
+        }
         const mimeType = normalizeMime(file.type, file.name);
         const signature = await createUploadSignature(
           {
@@ -1002,10 +993,13 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
         );
         const uploaded = await uploadToBunny(file, signature, {
           signal: controller.signal,
-          onProgress: (p) =>
-            setUploadPercent(
-              batchUploadPercent(index, totalUploads, p.percent),
-            ),
+          onProgress: (p) => {
+            if (!automatic) {
+              setUploadPercent(
+                batchUploadPercent(index, totalUploads, p.percent),
+              );
+            }
+          },
         });
         completed += 1;
         const meta = await captureImageDisplayMetadata(file);
@@ -1048,7 +1042,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
         }
         const file = await srcToImageFile(image.getAttribute("src") ?? "", i);
         if (!file) {
-          setError(t("unsupportedFileType"));
+          if (!automatic) setError(t("unsupportedFileType"));
           resetSaving();
           return;
         }
@@ -1111,8 +1105,10 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
         characterPayload.push({ name: character.name });
       }
 
-      setSaveLabel(t("savingToArchive"));
-      setUploadPercent(100);
+      if (!automatic) {
+        setSaveLabel(t("savingToArchive"));
+        setUploadPercent(100);
+      }
       const bodyHtml = html;
       const assets = [
         ...(coverAsset ? [coverAsset] : []),
@@ -1151,16 +1147,10 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
           );
 
       const saveWasCurrent = changeVersionRef.current === versionAtStart;
-      if (automatic && !saveWasCurrent) {
-        // Keep newer local edits visible. The next interval will persist them.
-        setSavedItem(updated);
-      } else {
-        adoptSavedItem(updated);
-      }
+      adoptSavedItem(updated);
       abortRef.current = null;
       if (saveWasCurrent) dirtyRef.current = false;
       resetSaving();
-      setAutoSaveStatus(automatic && saveWasCurrent ? "saved" : "idle");
       if (!automatic) {
         router.push(`/item/${updated.id}`);
         router.refresh();
@@ -1168,29 +1158,29 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     } catch (err) {
       if (isUploadAborted(err) || controller.signal.aborted) {
         resetSaving();
-        if (automatic) setAutoSaveStatus("idle");
         return;
       }
       const overLimit =
         err instanceof ApiError &&
         (err.status === 413 ||
           /too large|shorter than or equal to/i.test(err.message));
-      setError(
-        overLimit
-          ? t("storyBodyTooLong", {
-              count: bodyCharsNow.toLocaleString(locale),
-              max: MAX_STORY_BODY_CHARS.toLocaleString(locale),
-            })
-          : err instanceof ApiError
-            ? err.details.length > 1
-              ? err.details.join(" · ")
-              : err.message
-            : err instanceof Error
-              ? err.message
-              : t("somethingWentWrong"),
-      );
+      if (!automatic) {
+        setError(
+          overLimit
+            ? t("storyBodyTooLong", {
+                count: bodyCharsNow.toLocaleString(locale),
+                max: MAX_STORY_BODY_CHARS.toLocaleString(locale),
+              })
+            : err instanceof ApiError
+              ? err.details.length > 1
+                ? err.details.join(" · ")
+                : err.message
+              : err instanceof Error
+                ? err.message
+                : t("somethingWentWrong"),
+        );
+      }
       resetSaving();
-      if (automatic) setAutoSaveStatus("error");
     } finally {
       releaseLoading();
     }
@@ -1393,23 +1383,6 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
               )
             : null}
         </div>
-        {autoSaveStatus !== "idle" ? (
-          <span
-            className={[
-              "hidden max-w-[9rem] truncate text-xs sm:inline",
-              autoSaveStatus === "error"
-                ? "text-danger"
-                : "text-foreground-subtle",
-            ].join(" ")}
-            aria-live="polite"
-          >
-            {autoSaveStatus === "saving"
-              ? t("storyAutoSaving")
-              : autoSaveStatus === "saved"
-                ? t("storyAutoSaved")
-                : t("storyAutoSaveError")}
-          </span>
-        ) : null}
         <button
           type="button"
           onClick={() => setDetailsOpen((open) => !open)}
