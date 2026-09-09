@@ -384,9 +384,6 @@ const en = {
   videoSavingHint:
     "Saving now. Playback and the grid thumbnail appear once encoding finishes.",
   saving: "Saving…",
-  storyAutoSaving: "Autosaving…",
-  storyAutoSaved: "Saved automatically",
-  storyAutoSaveError: "Autosave failed — try Save",
   saveToArchive: "Save to archive",
   cancelUpload: "Cancel upload",
   uploadCancelled: "Upload cancelled.",
@@ -860,9 +857,6 @@ const es: Record<MessageKey, string> = {
   videoSavingHint:
     "Guardando. La reproducción y la miniatura de la cuadrícula aparecerán cuando termine la codificación.",
   saving: "Guardando…",
-  storyAutoSaving: "Guardando automáticamente…",
-  storyAutoSaved: "Guardado automáticamente",
-  storyAutoSaveError: "No se pudo guardar automáticamente — prueba Guardar",
   saveToArchive: "Guardar en el archivo",
   cancelUpload: "Cancelar subida",
   uploadCancelled: "Subida cancelada.",
@@ -1331,9 +1325,6 @@ const ca: Record<MessageKey, string> = {
   videoSavingHint:
     "Desant. La reproducció i la miniatura de la graella apareixeran quan acabi la codificació.",
   saving: "Desant…",
-  storyAutoSaving: "Desant automàticament…",
-  storyAutoSaved: "Desat automàticament",
-  storyAutoSaveError: "No s'ha pogut desar automàticament — prova Desar",
   saveToArchive: "Desa a l'arxiu",
   cancelUpload: "Cancel·la la pujada",
   uploadCancelled: "Pujada cancel·lada.",
