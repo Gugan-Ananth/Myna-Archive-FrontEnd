@@ -80,6 +80,7 @@ export const STATUS_STICKER: Record<StatusMood, Sticker> = {
 export const HOME_BACKDROP: Record<CollectionView, Sticker> = {
   "top-10": STICKERS.boyTied,
   photos: STICKERS.kaguyaRibbon,
+  captions: STICKERS.girlHandcuff,
   "cute-things": STICKERS.tiedGirlChain,
   collections: STICKERS.puppetString,
   comics: STICKERS.chinGrip,
@@ -98,10 +99,11 @@ export const STORY_READER_BACKDROP = {
 export const CHOOSER_SCENE = {
   media: STICKERS.tiedGirl,
   photo: STICKERS.kaguyaRibbon,
+  caption: STICKERS.girlHandcuff,
   collection: STICKERS.puppetString,
   video: STICKERS.armsAboveTied,
   comic: STICKERS.bullyTrio,
-  story: STICKERS.girlHandcuff,
+  story: STICKERS.tiedMage,
   oc: STICKERS.ropeSuggestion,
 } as const satisfies Record<string, Sticker>;
 

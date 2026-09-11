@@ -18,6 +18,7 @@ export const TOP_TEN_PAGE_SIZE = 10;
 /** Dashboard categories shown in the Top 10 board. */
 export const TOP_TEN_GROUPS = [
   { id: "photos", labelKey: "navPhotos", view: "photos" },
+  { id: "captions", labelKey: "navCaptions", view: "captions" },
   { id: "cute-things", labelKey: "navCuteThings", view: "cute-things" },
   { id: "collections", labelKey: "navCollections", view: "collections" },
   { id: "comics", labelKey: "navComics", view: "comics" },
@@ -75,6 +76,7 @@ export async function loadStarredCount(
 
 export type TopTenData = {
   photos: ArchiveItem[];
+  captions: ArchiveItem[];
   "cute-things": ArchiveItem[];
   collections: ArchiveItem[];
   comics: ArchiveItem[];
@@ -86,6 +88,7 @@ export type TopTenData = {
 export function emptyTopTenData(): TopTenData {
   return {
     photos: [],
+    captions: [],
     "cute-things": [],
     collections: [],
     comics: [],
@@ -111,9 +114,10 @@ export async function loadTopTen(
     pageSize: TOP_TEN_PAGE_SIZE,
   });
 
-  const [photos, cuteThings, collections, comics, videos, stories, oc] =
+  const [photos, captions, cuteThings, collections, comics, videos, stories, oc] =
     await Promise.all([
       listArchiveItems(archiveParams("photos"), options),
+      listArchiveItems(archiveParams("captions"), options),
       listArchiveItems(archiveParams("cute-things"), options),
       listArchiveItems(archiveParams("collections"), options),
       listArchiveItems(archiveParams("comics"), options),
@@ -132,6 +136,7 @@ export async function loadTopTen(
 
   return {
     photos: photos.data,
+    captions: captions.data,
     "cute-things": cuteThings.data,
     collections: collections.data,
     comics: comics.data,

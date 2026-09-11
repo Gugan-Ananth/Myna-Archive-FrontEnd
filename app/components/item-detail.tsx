@@ -39,7 +39,7 @@ type DeleteConfirmation = {
 /**
  * Fullscreen media view: image or video covers the stage; controls overlay.
  * The overlay pencil opens the right-hand panel directly in the edit flow
- * for photos, videos, and comics. Stories still toggle a read-only
+ * for photos, videos, and comics. Stories and captions toggle a read-only
  * details panel (their editor lives on a dedicated page).
  * Metadata edits and delete hit the Nest API.
  */
@@ -73,10 +73,17 @@ export function ItemDetail({ item }: ItemDetailProps) {
   const isVideo = draft.mediaType === "video";
   const isStory = draft.mediaType === "story";
   const isComic = draft.mediaType === "comic";
+  const isCaption = draft.mediaType === "caption";
   const isGroup =
-    !isVideo && !isStory && !isComic && itemMediaAssets(draft).length > 1;
+    !isVideo &&
+    !isStory &&
+    !isComic &&
+    !isCaption &&
+    itemMediaAssets(draft).length > 1;
   const homeHref = isComic
     ? "/?view=comics"
+    : isCaption
+      ? "/?view=captions"
     : draft.section === "cute-things"
       ? "/?view=cute-things"
     : isGroup
@@ -86,6 +93,8 @@ export function ItemDetail({ item }: ItemDetailProps) {
     ? t("navStories")
     : isComic
       ? t("navComics")
+      : isCaption
+        ? t("navCaptions")
       : isVideo
         ? t("navVideos")
         : draft.section === "cute-things"
@@ -94,8 +103,8 @@ export function ItemDetail({ item }: ItemDetailProps) {
             ? t("navCollections")
             : t("navPhotos");
   const busy = saving || deleting;
-  /** Photos, videos, and comics edit metadata in the side panel; stories do not. */
-  const canInlineEdit = !isStory;
+  /** Photos, videos, and comics edit metadata in the side panel; stories and captions use a dedicated editor. */
+  const canInlineEdit = !isStory && !isCaption;
   const editDetailsLabel = isComic
     ? t("editComic")
     : isVideo
@@ -299,7 +308,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
               />
             ) : (
               <ImageGroupCarousel
-                assets={mediaAssets}
+                assets={isCaption ? mediaAssets.slice(0, 1) : mediaAssets}
                 title={draft.name}
                 className="absolute inset-0 h-full w-full"
                 onIndexChange={handleGroupIndexChange}
@@ -336,12 +345,31 @@ export function ItemDetail({ item }: ItemDetailProps) {
                     </span>
                   </span>
                 )}
-                <EditPanelButton
-                  open={panelOpen}
-                  editLabel={editDetailsLabel}
-                  closeLabel={t("hideDetails")}
-                  onToggle={toggleEditPanel}
-                />
+                {isCaption ? (
+                  <>
+                    <DetailsToggle
+                      open={panelOpen}
+                      hideLabel={t("hideDetails")}
+                      showLabel={t("showDetails")}
+                      onToggle={() => setPanelOpen((open) => !open)}
+                    />
+                    <Link
+                      href={`/item/${saved.id}/edit`}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-star-muted/95 text-primary shadow-sm ring-1 ring-star-ring backdrop-blur-md transition-colors hover:bg-star-muted-hover hover:text-star focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={t("editCaption")}
+                      title={t("editCaption")}
+                    >
+                      <EditIcon className="h-5 w-5" strokeWidth={1.75} />
+                    </Link>
+                  </>
+                ) : (
+                  <EditPanelButton
+                    open={panelOpen}
+                    editLabel={editDetailsLabel}
+                    closeLabel={t("hideDetails")}
+                    onToggle={toggleEditPanel}
+                  />
+                )}
                 <StarButton
                   starred={draft.starred}
                   onToggle={toggleStar}
@@ -401,11 +429,11 @@ export function ItemDetail({ item }: ItemDetailProps) {
             </div>
 
             {!editing &&
-              (isStory ? (
+              (isStory || isCaption ? (
                 <Link
                   href={`/item/${saved.id}/edit`}
                   className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-foreground shadow-sm transition-colors hover:bg-accent-soft hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={t("editStory")}
+                  aria-label={isCaption ? t("editCaption") : t("editStory")}
                   title={t("edit")}
                 >
                   <EditIcon className="h-5 w-5" />
@@ -469,6 +497,25 @@ export function ItemDetail({ item }: ItemDetailProps) {
               </div>
             )}
           </section>
+
+          {isCaption ? (
+            <section className="min-w-0 rounded-2xl border border-border/70 bg-background/35 p-4 sm:p-5">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-foreground-muted">
+                  {t("captionStory")}
+                </p>
+                <Link
+                  href={`/item/${saved.id}/edit`}
+                  className="text-sm font-medium text-primary hover:underline"
+                >
+                  {t("editCaption")}
+                </Link>
+              </div>
+              <p className="min-w-0 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground-muted">
+                {draft.bodyHtml?.trim() || t("noDescription")}
+              </p>
+            </section>
+          ) : null}
 
           {editing && !isStory ? (
             <label className="flex min-h-0 min-w-0 flex-col rounded-2xl border border-border/70 bg-background/35 p-4 sm:p-5 lg:min-h-0 lg:flex-1">

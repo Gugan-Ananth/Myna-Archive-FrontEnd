@@ -43,6 +43,7 @@ export { createUploadSignature } from "./media";
 export type {
   ArchiveSection,
   ArchiveItem,
+  CaptionSpec,
   BunnyUploadResult,
   CreateArchiveItemInput,
   CreateMediaAssetInput,

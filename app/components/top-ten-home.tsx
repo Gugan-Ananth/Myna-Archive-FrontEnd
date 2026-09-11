@@ -34,6 +34,7 @@ type TopTenHomeProps = {
 
 const CATEGORY_KEY: Record<TopTenGroupId, MessageKey> = {
   photos: "topTenCategoryImages",
+  captions: "topTenCategoryCaptions",
   "cute-things": "topTenCategoryCuteThings",
   collections: "topTenCategoryCollections",
   comics: "topTenCategoryComics",
@@ -202,6 +203,7 @@ export function TopTenHome({
 
 const emptyData: TopTenData = {
   photos: [],
+  captions: [],
   "cute-things": [],
   collections: [],
   comics: [],

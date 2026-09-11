@@ -20,6 +20,7 @@ import {
 
 const CATEGORY_KEY: Record<TopTenSourceView, MessageKey> = {
   photos: "topTenCategoryImages",
+  captions: "topTenCategoryCaptions",
   "cute-things": "topTenCategoryCuteThings",
   collections: "topTenCategoryCollections",
   comics: "topTenCategoryComics",

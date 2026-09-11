@@ -69,6 +69,7 @@ function emptyTitleKey(
   view: CollectionView,
 ):
   | "archiveEmptyPhotos"
+  | "archiveEmptyCaptions"
   | "archiveEmptyCuteThings"
   | "archiveEmptyCollections"
   | "archiveEmptyComics"
@@ -76,6 +77,7 @@ function emptyTitleKey(
   | "archiveEmptyStories" {
   if (view === "videos") return "archiveEmptyVideos";
   if (view === "comics") return "archiveEmptyComics";
+  if (view === "captions") return "archiveEmptyCaptions";
   if (view === "stories") return "archiveEmptyStories";
   if (view === "cute-things") return "archiveEmptyCuteThings";
   if (view === "collections") return "archiveEmptyCollections";
@@ -86,6 +88,7 @@ function emptyHintKey(
   view: CollectionView,
 ):
   | "archiveEmptyPhotosHint"
+  | "archiveEmptyCaptionsHint"
   | "archiveEmptyCuteThingsHint"
   | "archiveEmptyCollectionsHint"
   | "archiveEmptyComicsHint"
@@ -93,6 +96,7 @@ function emptyHintKey(
   | "archiveEmptyStoriesHint" {
   if (view === "videos") return "archiveEmptyVideosHint";
   if (view === "comics") return "archiveEmptyComicsHint";
+  if (view === "captions") return "archiveEmptyCaptionsHint";
   if (view === "stories") return "archiveEmptyStoriesHint";
   if (view === "cute-things") return "archiveEmptyCuteThingsHint";
   if (view === "collections") return "archiveEmptyCollectionsHint";
