@@ -40,12 +40,21 @@ export function estimateLineCount(
     }
     let current = 0;
     for (const word of para.split(/\s+/)) {
-      const extra = current > 0 ? 1 : 0;
-      if (current + extra + word.length > maxChars && current > 0) {
-        lines += 1;
-        current = word.length;
-      } else {
-        current += extra + word.length;
+      if (word.length === 0) continue;
+      let remaining = word.length;
+      while (remaining > 0) {
+        const extra = current > 0 ? 1 : 0;
+        const room = maxChars - current - extra;
+        if (remaining <= room) {
+          current += extra + remaining;
+          remaining = 0;
+        } else if (current > 0) {
+          lines += 1;
+          current = 0;
+        } else {
+          lines += 1;
+          remaining -= maxChars;
+        }
       }
     }
     lines += 1;

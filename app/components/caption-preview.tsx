@@ -69,7 +69,7 @@ export function CaptionPreview({
           </div>
         )}
         <div
-          className="absolute overflow-hidden whitespace-pre-wrap"
+          className="absolute overflow-hidden whitespace-pre-wrap wrap-anywhere [word-break:break-word]"
           style={{
             left: pct(geometry.text.x, geometry.width),
             top: pct(geometry.text.y, geometry.height),

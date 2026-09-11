@@ -235,6 +235,18 @@
     color: var(--foreground);
     font-family: var(--font-playfair), ui-serif, Georgia, serif;
   }
+
+  /* Unspaced words wrap inside fields instead of overflowing the card. */
+  textarea,
+  input {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  textarea {
+    word-break: break-word;
+  }
 }
 
 /*
@@ -1530,6 +1542,7 @@ html {
   font-size: 16px;
   line-height: 1.75;
   min-height: 22rem;
+  overflow-wrap: anywhere;
   word-break: break-word;
 }
 

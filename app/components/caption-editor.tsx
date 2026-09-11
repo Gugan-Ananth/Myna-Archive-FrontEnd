@@ -620,7 +620,7 @@ export function CaptionEditor({ item }: CaptionEditorProps) {
                   rows={6}
                   maxLength={MAX_CAPTION_STORY_CHARS}
                   placeholder={t("captionStoryPlaceholder")}
-                  className="min-h-[8rem] w-full resize-y rounded-2xl border border-border bg-background px-3 py-2 text-sm leading-relaxed text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
+                  className="min-h-[8rem] w-full min-w-0 resize-y rounded-2xl border border-border bg-background px-3 py-2 text-sm leading-relaxed wrap-anywhere text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
                   style={{ fontFamily: captionFontFamily(spec.fontFamily) }}
                 />
                 <span className="text-xs text-foreground-subtle">
@@ -734,7 +734,7 @@ export function CaptionEditor({ item }: CaptionEditorProps) {
                   value={name}
                   disabled={busy}
                   onChange={(event) => setName(event.target.value)}
-                  className="rounded-xl border border-border bg-background px-3 py-2 text-lg font-medium outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
+                  className="w-full min-w-0 rounded-xl border border-border bg-background px-3 py-2 text-lg font-medium outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
                   placeholder={t("nameThis", { media: t("navCaptions").toLowerCase() })}
                 />
               </label>
@@ -774,7 +774,7 @@ export function CaptionEditor({ item }: CaptionEditorProps) {
                   disabled={busy}
                   onChange={(event) => setDescription(event.target.value)}
                   rows={3}
-                  className="rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
+                  className="w-full min-w-0 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-ring/25 disabled:opacity-60"
                   placeholder={t("optionalNotes", {
                     media: t("navCaptions").toLowerCase(),
                   })}

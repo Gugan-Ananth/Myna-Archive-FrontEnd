@@ -29,6 +29,7 @@ function StoryText({
         fontSize,
         lineHeight: 1.5,
         whiteSpace: "pre-wrap",
+        wordBreak: "break-word",
       }}
     >
       {story}
