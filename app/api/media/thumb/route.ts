@@ -2,7 +2,6 @@ import { createHash } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
 import { cookies } from "next/headers";
-import sharp from "sharp";
 import { SESSION_COOKIE } from "../../../lib/auth/cookies";
 import { MAX_IMAGE_BYTES } from "../../../lib/media-constraints";
 import { originalMediaUrl } from "../../../lib/media-display";
@@ -98,6 +97,7 @@ async function getThumb(query: ThumbQuery): Promise<Buffer> {
   }
 
   const original = await getOriginal(query.source);
+  const sharp = (await import("sharp")).default;
   const body = await sharp(original, { failOn: "none" })
     .rotate()
     .resize({

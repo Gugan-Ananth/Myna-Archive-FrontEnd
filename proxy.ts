@@ -7,7 +7,7 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isLogin = pathname === "/login";
   const isLogout = pathname === "/api/auth/logout";
-  const isBackend = pathname.startsWith("/api/backend");
+  const isApi = pathname.startsWith("/api/");
   const rawToken = request.cookies.get(SESSION_COOKIE)?.value?.trim() ?? "";
   // Static env access so Next inlines this for the proxy edge bundle.
   const secret = process.env.AUTH_TOKEN_SECRET?.trim() ?? "";
@@ -20,7 +20,7 @@ export async function proxy(request: NextRequest) {
   if (!valid) {
     const response = isLogin
       ? NextResponse.next()
-      : isBackend
+      : isApi
         ? NextResponse.json(
             { message: "Sign in required.", statusCode: 401 },
             { status: 401 },

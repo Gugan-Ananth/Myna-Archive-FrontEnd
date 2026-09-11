@@ -1,9 +1,15 @@
-import satori from "satori";
-import sharp from "sharp";
 import { captionSatoriFonts } from "./fonts";
 import { fitCaptionLayout } from "./geometry";
 import { CaptionLayout } from "./templates";
 import { parseCaptionSpec, type CaptionSpec } from "./types";
+
+async function loadSharp() {
+  return (await import("sharp")).default;
+}
+
+async function loadSatori() {
+  return (await import("satori")).default;
+}
 
 export type GenerateCaptionInput = {
   image: Buffer;
@@ -22,6 +28,7 @@ async function prepareImage(
   width: number,
   height: number,
 ): Promise<string> {
+  const sharp = await loadSharp();
   const resized = await sharp(input)
     .rotate()
     .resize(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)), {
@@ -38,6 +45,8 @@ export async function generateCaptionImage(
 ): Promise<GenerateCaptionResult> {
   const spec = parseCaptionSpec(input.spec);
   const story = input.story.replace(/\r\n/g, "\n").trim();
+  const sharp = await loadSharp();
+  const satori = await loadSatori();
   const meta = await sharp(input.image).rotate().metadata();
   const geometry = fitCaptionLayout(spec, story, {
     width: meta.width ?? spec.width,

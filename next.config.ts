@@ -2,6 +2,20 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["sharp", "satori"],
+  // sharp 0.35+ native libvips files are often dropped from the Vercel
+  // serverless trace (Turbopack). Pin the linux binaries into the two
+  // routes that import sharp, plus caption fonts read from disk at runtime.
+  outputFileTracingIncludes: {
+    "/api/caption/render": [
+      "./app/lib/caption/fonts/**/*",
+      "./node_modules/@img/sharp-linux-x64/**/*",
+      "./node_modules/@img/sharp-libvips-linux-x64/**/*",
+    ],
+    "/api/media/thumb": [
+      "./node_modules/@img/sharp-linux-x64/**/*",
+      "./node_modules/@img/sharp-libvips-linux-x64/**/*",
+    ],
+  },
   images: {
     // Grid pins use the default optimizer (Bunny Optimizer is not enabled on
     // the pull zone). Keep modern formats for those resized thumbs.
