@@ -446,7 +446,7 @@ const en = {
     "Delete “{name}”? This removes the item and its media permanently.",
   deleteChapter: "Delete chapter",
   deleteChapterConfirm:
-    "Delete chapter {n} of “{name}”? Other chapters stay in the story.",
+    "Delete chapter {n} of “{name}”? The rest of the story stays, and later chapters are numbered down.",
   deleteLastChapterConfirm:
     "Delete “{name}”? This is the only chapter, so the story will be removed.",
   couldNotDelete: "Could not delete item.",
@@ -953,7 +953,7 @@ const es: Record<MessageKey, string> = {
     "¿Eliminar “{name}”? Se borrará el elemento y su media de forma permanente.",
   deleteChapter: "Eliminar capítulo",
   deleteChapterConfirm:
-    "¿Eliminar el capítulo {n} de “{name}”? Los demás capítulos se quedan en la historia.",
+    "¿Eliminar el capítulo {n} de “{name}”? El resto de la historia se queda, y los capítulos siguientes se numeran hacia abajo.",
   deleteLastChapterConfirm:
     "¿Eliminar “{name}”? Es el único capítulo, así que se borrará la historia.",
   couldNotDelete: "No se pudo eliminar el elemento.",
@@ -1456,7 +1456,7 @@ const ca: Record<MessageKey, string> = {
     "Vols eliminar “{name}”? Esborra l'element i el seu media de forma permanent.",
   deleteChapter: "Elimina el capítol",
   deleteChapterConfirm:
-    "Vols eliminar el capítol {n} de “{name}”? Els altres capítols es queden a la història.",
+    "Vols eliminar el capítol {n} de “{name}”? La resta de la història es queda, i els capítols posteriors es numeren cap avall.",
   deleteLastChapterConfirm:
     "Vols eliminar “{name}”? És l'únic capítol, així que s'esborrarà la història.",
   couldNotDelete: "No s'ha pogut eliminar l'element.",

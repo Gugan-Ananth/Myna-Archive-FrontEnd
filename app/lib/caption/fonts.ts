@@ -1,5 +1,4 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { CAPTION_SATORI_FONT, type CaptionFont } from "./types";
 
 type FontFile =
@@ -21,13 +20,22 @@ const FILE_FOR_FAMILY: Record<CaptionFont, FontFile> = {
   "Courier New": "cousine-400.woff",
 };
 
+const FONT_URL: Record<FontFile, URL> = {
+  "inter-400.woff": new URL("./fonts/inter-400.woff", import.meta.url),
+  "inter-700.woff": new URL("./fonts/inter-700.woff", import.meta.url),
+  "source-serif-400.woff": new URL("./fonts/source-serif-400.woff", import.meta.url),
+  "playfair-400.woff": new URL("./fonts/playfair-400.woff", import.meta.url),
+  "tinos-400.woff": new URL("./fonts/tinos-400.woff", import.meta.url),
+  "arimo-400.woff": new URL("./fonts/arimo-400.woff", import.meta.url),
+  "cousine-400.woff": new URL("./fonts/cousine-400.woff", import.meta.url),
+};
+
 const cache = new Map<FontFile, Buffer>();
 
 async function loadFontFile(file: FontFile): Promise<Buffer> {
   const hit = cache.get(file);
   if (hit) return hit;
-  const dir = join(process.cwd(), "app/lib/caption/fonts");
-  const data = await readFile(join(dir, file));
+  const data = await readFile(FONT_URL[file]);
   cache.set(file, data);
   return data;
 }
