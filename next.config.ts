@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["sharp", "satori"],
   images: {
     // Grid pins use the default optimizer (Bunny Optimizer is not enabled on
     // the pull zone). Keep modern formats for those resized thumbs.

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { CaptionEditor } from "../../../components/caption-editor";
 import { CreateComicForm } from "../../../components/create-comic-form";
 import { CreateStoryForm } from "../../../components/create-story-form";
 import { ApiError, getArchiveItem } from "../../../lib/api";
@@ -40,6 +41,9 @@ export default async function EditItemPage({ params }: EditItemPageProps) {
   }
   if (item.mediaType === "comic") {
     return <CreateComicForm item={item} />;
+  }
+  if (item.mediaType === "caption") {
+    return <CaptionEditor item={item} />;
   }
 
   notFound();

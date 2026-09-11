@@ -1,5 +1,7 @@
+import type { CaptionSpec } from "./caption/types";
+
 /** Media kind stored in the archive. */
-export type MediaType = "image" | "video" | "story" | "comic";
+export type MediaType = "image" | "video" | "story" | "comic" | "caption";
 
 export const ARCHIVE_SECTIONS = ["images", "cute-things"] as const;
 export type ArchiveSection = (typeof ARCHIVE_SECTIONS)[number];
@@ -15,17 +17,19 @@ export type MediaAsset = {
   blurHash: string | null;
 };
 
-/** A single archived media item (image, image group, video, story, or comic). */
+/** A single archived media item (image, image group, video, story, comic, or caption). */
 export type ArchiveItem = {
   id: string;
   name: string;
   description: string;
-  /** Written story HTML; empty/omitted for image/video. */
+  /** Written story HTML, or plain caption story text. Empty for image/video/comic. */
   bodyHtml?: string;
   /** Optional author name for written stories. */
   author?: string;
   /** Optional short blurb for story homepage cards. */
   summary?: string;
+  /** Layout options and source photo pointer for a Bondage caption. */
+  captionSpec?: CaptionSpec | null;
   /**
    * Tags as encoded `category:tag` pairs (e.g. `bondage:hogtie`).
    * Legacy freeform strings without `:` are still accepted (Uncategorized).
@@ -33,7 +37,7 @@ export type ArchiveItem = {
   tags: string[];
   /** Decimal score 0.0–10.0; higher ranks first on the home grid. */
   rating: number;
-  /** Whether this item is an image, a video, a written story, or a comic. */
+  /** Whether this item is an image, a video, a written story, a comic, or a caption. */
   mediaType: MediaType;
   /** Whether this item is starred within its dashboard category. */
   starred?: boolean;
@@ -59,7 +63,7 @@ export type ArchiveItem = {
   /** Compact BlurHash for cover LQIP; null when unknown. */
   blurHash: string | null;
   /**
-   * Ordered media assets. Length 1 for single image/video;
+   * Ordered media assets. Length 1 for single image/video/caption;
    * 2–25 for an image group; 1–80 for a comic (cover is always index 0).
    */
   mediaAssets: MediaAsset[];
@@ -108,6 +112,12 @@ export const MAX_STORY_CHARACTERS = 40;
 
 /** Max story `bodyHtml` characters. Must match backend `MAX_STORY_BODY_CHARS`. */
 export const MAX_STORY_BODY_CHARS = 200_000;
+
+export type { CaptionSpec, CaptionTemplate } from "./caption/types";
+export {
+  MAX_CAPTION_STORY_CHARS,
+  CAPTION_ASSET_COUNT,
+} from "./caption/types";
 
 /** An original character (OC) sheet — portrait plus profile fields. */
 export type OriginalCharacter = {

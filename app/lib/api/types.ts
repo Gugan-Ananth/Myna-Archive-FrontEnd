@@ -2,6 +2,7 @@ import type {
   ArchiveItem,
   MediaAsset,
   ArchiveSection,
+  CaptionSpec,
   MediaType,
   OriginalCharacter,
   StoryCharacter,
@@ -15,6 +16,7 @@ export type {
   ArchiveItem,
   MediaAsset,
   ArchiveSection,
+  CaptionSpec,
   MediaType,
   OriginalCharacter,
   StoryCharacter,
@@ -146,6 +148,8 @@ export type CreateArchiveItemInput = {
   author?: string;
   /** Optional short story blurb for homepage cards. */
   summary?: string;
+  /** Layout options. Required when `mediaType` is `caption`. */
+  captionSpec?: CaptionSpec;
   seriesId?: string;
   chapterNumber?: number;
   /** Named speakers for this chapter. Portraits are not mixed into `assets`. */
@@ -170,6 +174,7 @@ export type UpdateArchiveItemInput = {
   bodyHtml?: string;
   author?: string;
   summary?: string;
+  captionSpec?: CaptionSpec;
   /** Replace story cover + body images (cover is the extra leading asset). */
   assets?: CreateMediaAssetInput[];
   /** Replace this chapter's named speakers. Omit to leave unchanged. */

@@ -9,8 +9,12 @@ A stored WebP still under 1 MB (`thumbnailUrl`, `{uuid}-preview.webp`) used on g
 _Avoid_: treating Optimizer query-string thumbs as a separate file
 
 **Archive Item**:
-A single archived media entry (image, video, story, or comic) with metadata.
+A single archived media entry (image, video, story, comic, or caption) with metadata.
 _Avoid_: post, asset (unless talking about a binary file)
+
+**Bondage caption**:
+An Archive Item that composites a source image with a written story using a layout template. Grids and the detail view show the generated still. The story, template, and original photo pointer live in the database so Edit caption can reopen the compositor and replace the still.
+_Avoid_: meme, overlay (unless naming the overlay template), treating the PNG as the only source of truth, storing the original photo as a second gallery asset
 
 **Story character**:
 A named speaker in a written story chapter, with an optional portrait shown beside dialogue in the reader. Detected from `Name: "dialogue"` in the chapter body. Stored on the Archive Item, not as an Original Character.

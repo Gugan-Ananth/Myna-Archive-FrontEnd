@@ -19,6 +19,7 @@ export function filterArchiveItems(
     const haystack = [
       item.name,
       item.description,
+      item.bodyHtml ?? "",
       ...item.tags,
     ]
       .join(" ")

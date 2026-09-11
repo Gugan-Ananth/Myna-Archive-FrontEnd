@@ -29,6 +29,7 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   { id: "top-10", labelKey: "navTopTen", iconSrc: "/icons/crown.png" },
   { id: "photos", labelKey: "navPhotos", iconSrc: "/icons/image.png" },
+  { id: "captions", labelKey: "navCaptions", iconSrc: "/icons/caption.svg" },
   {
     id: "cute-things",
     labelKey: "navCuteThings",

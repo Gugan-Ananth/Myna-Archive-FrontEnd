@@ -20,6 +20,7 @@ export function AppIcon({
       alt=""
       width={size}
       height={size}
+      unoptimized={src.endsWith(".svg")}
       aria-hidden
       className={[
         "shrink-0 object-contain",

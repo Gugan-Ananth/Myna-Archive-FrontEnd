@@ -5,6 +5,7 @@ import type { MediaType } from "./types";
 export const COLLECTION_VIEWS = [
   "top-10",
   "photos",
+  "captions",
   "cute-things",
   "collections",
   "comics",
@@ -43,6 +44,7 @@ export function listParamsForView(view: CollectionView): {
   if (view === "top-10") return { mediaType: "image" };
   if (view === "videos") return { mediaType: "video" };
   if (view === "comics") return { mediaType: "comic" };
+  if (view === "captions") return { mediaType: "caption" };
   if (view === "stories") return { mediaType: "story", storyRoot: true };
   if (view === "collections") return { mediaType: "image", imageGroup: true };
   if (view === "cute-things") {
@@ -98,6 +100,7 @@ export function createHrefForView(view: CollectionView): string {
   if (view === "cute-things") return "/create/cute-things";
   if (view === "videos") return "/create/video";
   if (view === "comics") return "/create/comic";
+  if (view === "captions") return "/create/caption";
   if (view === "stories") return "/create/story";
   if (view === "oc") return "/create/oc";
   return "/create/photo";
@@ -108,6 +111,7 @@ export function filePickerForView(
   view: CollectionView,
 ): { accept: string; multiple: boolean } | null {
   if (view === "photos") return { accept: IMAGE_ACCEPT, multiple: false };
+  if (view === "captions") return { accept: IMAGE_ACCEPT, multiple: false };
   if (view === "cute-things") return { accept: IMAGE_ACCEPT, multiple: false };
   if (view === "collections") return { accept: IMAGE_ACCEPT, multiple: true };
   if (view === "comics") return { accept: IMAGE_ACCEPT, multiple: true };

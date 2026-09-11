@@ -30,6 +30,8 @@ export function AppHeader() {
       ? t("searchVideos")
       : view === "comics"
         ? t("searchComics")
+        : view === "captions"
+          ? t("searchCaptions")
         : view === "stories"
           ? t("searchStories")
           : view === "oc"

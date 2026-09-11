@@ -797,6 +797,20 @@ export function CreateForm({ intent }: CreateFormProps = {}) {
               />
             </div>
 
+            <Link href="/create/caption" className={CHOOSER_CARD_CLASS}>
+              <SceneFigure
+                sticker={CHOOSER_SCENE.caption}
+                size="chooser"
+                float
+              />
+              <span className="text-base font-medium text-foreground">
+                {t("addACaption")}
+              </span>
+              <span className="text-sm text-foreground-subtle">
+                {t("addACaptionHint")}
+              </span>
+            </Link>
+
             <Link href="/create/comic" className={CHOOSER_CARD_CLASS}>
               <SceneFigure
                 sticker={CHOOSER_SCENE.comic}
