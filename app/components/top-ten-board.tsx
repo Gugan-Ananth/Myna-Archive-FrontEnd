@@ -22,6 +22,7 @@ import {
   archiveItemMediaSource,
   originalCharacterMediaSource,
 } from "../lib/copy-image";
+import { storyWorkHref } from "../lib/story-series";
 import type { ArchiveItem, OriginalCharacter } from "../lib/types";
 import { warmArchiveItem, warmOriginalCharacter } from "../lib/warm-preview";
 import { ImageCopyMenu, useImageCopyMenu } from "./image-copy-menu";
@@ -67,9 +68,9 @@ function entryName(entry: TopTenEntry): string {
 }
 
 function entryHref(entry: TopTenEntry): string {
-  return entry.kind === "archive"
-    ? `/item/${entry.item.id}`
-    : `/oc/${entry.oc.id}`;
+  if (entry.kind === "oc") return `/oc/${entry.oc.id}`;
+  if (entry.item.mediaType === "story") return storyWorkHref(entry.item);
+  return `/item/${entry.item.id}`;
 }
 
 /** Cover pixel size, with a portrait-leaning fallback until the file is known. */

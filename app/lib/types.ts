@@ -49,6 +49,11 @@ export type ArchiveItem = {
   chapterNumber?: number;
   /** How many chapters the series has (on story roots). */
   chapterCount?: number;
+  /**
+   * Mean of every chapter rating in the series. Present on story roots when
+   * the API knows the series; later chapters keep their own `rating`.
+   */
+  seriesRating?: number;
   /** Cover thumbnail for the home grid (first media asset). */
   thumbnailUrl: string;
   /**

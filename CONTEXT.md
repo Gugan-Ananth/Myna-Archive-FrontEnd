@@ -16,6 +16,10 @@ _Avoid_: post, asset (unless talking about a binary file)
 An Archive Item that composites a source image with a written story using a layout template. Grids and the detail view show the generated still. The story, template, and original photo pointer live in the database so Edit caption can reopen the compositor and replace the still.
 _Avoid_: meme, overlay (unless naming the overlay template), treating the PNG as the only source of truth, storing the original photo as a second gallery asset
 
+**Story series**:
+A written story with one or more chapters. The series root (chapter 1) is the work shown on the Stories board. Later chapters hang off `seriesId`. The board card uses the root cover and the mean of every chapter rating. Opening a multi-chapter series lists the chapters before the reader.
+_Avoid_: book, volume (unless naming a field)
+
 **Story character**:
 A named speaker in a written story chapter, with an optional portrait shown beside dialogue in the reader. Detected from `Name: "dialogue"` in the chapter body. Stored on the Archive Item, not as an Original Character.
 _Avoid_: OC, cast, actor

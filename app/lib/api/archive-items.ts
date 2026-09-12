@@ -136,15 +136,63 @@ export async function getArchiveItem(
   return fetchItem();
 }
 
+function chaptersCacheKey(id: string): string {
+  return buildQueryCacheKey("chapters", { id });
+}
+
 /** All chapters in the series that contains this story (root or continuation). */
 export async function listStoryChapters(
   id: string,
+  options?: FetchCacheOptions,
 ): Promise<ArchiveItem[]> {
-  const result = await apiFetch<{ data: ArchiveItem[] }>(
-    `/archive-items/${encodeURIComponent(id)}/chapters`,
-    { cache: "no-store" },
-  );
-  return result.data ?? [];
+  const fetchChapters = async (): Promise<ArchiveItem[]> => {
+    const result = await apiFetch<{ data: ArchiveItem[] }>(
+      `/archive-items/${encodeURIComponent(id)}/chapters`,
+      {
+        cache:
+          options?.cache ??
+          (isBrowser() ? "no-store" : undefined),
+        next:
+          options?.next ??
+          (isBrowser()
+            ? undefined
+            : {
+                revalidate: SERVER_LIST_REVALIDATE,
+                tags: [ARCHIVE_ITEMS_TAG],
+              }),
+        accessToken: options?.accessToken,
+      },
+    );
+    const data = result.data ?? [];
+    seedChaptersCache(id, data);
+    return data;
+  };
+
+  if (isBrowser()) {
+    return cachedQuery(chaptersCacheKey(id), fetchChapters, {
+      ttlMs: LIST_TTL_MS,
+      staleMs: LIST_STALE_MS,
+      revalidateInBackground: true,
+    });
+  }
+
+  return fetchChapters();
+}
+
+function seedChaptersCache(requestedId: string, data: ArchiveItem[]): void {
+  if (!isBrowser() || data.length === 0) {
+    seedItemCacheFromList(data);
+    return;
+  }
+  const rootId = data[0]?.seriesId || data[0]?.id || requestedId;
+  const payload = data;
+  const options = { ttlMs: LIST_TTL_MS, staleMs: LIST_STALE_MS };
+  setQueryCache(chaptersCacheKey(requestedId), payload, options);
+  setQueryCache(chaptersCacheKey(rootId), payload, options);
+  for (const chapter of data) {
+    setQueryCache(chaptersCacheKey(chapter.id), payload, options);
+  }
+  seedItemCacheFromList(data);
 }
 
 export async function createArchiveItem(
@@ -251,6 +299,7 @@ export async function invalidateArchiveCaches(): Promise<void> {
     invalidateQueryCache("tags");
     invalidateQueryCache("taxonomy");
     invalidateQueryCache("item");
+    invalidateQueryCache("chapters");
   }
 
   try {
