@@ -22,6 +22,10 @@ import {
 } from "../lib/media-display";
 import { enhanceStoryHtml, storyReadMinutes } from "../lib/story-reader";
 import {
+  orderedStoryChapters,
+  storyChaptersHref,
+} from "../lib/story-series";
+import {
   playStorySound,
   stopStorySound,
   storySoundById,
@@ -58,10 +62,7 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
   const { menu, openMenu, closeMenu } = useImageCopyMenu();
   const closeLightbox = useCallback(() => setLightbox(null), []);
   const ordered = useMemo(
-    () =>
-      [...chapters].sort(
-        (a, b) => (a.chapterNumber ?? 1) - (b.chapterNumber ?? 1),
-      ),
+    () => orderedStoryChapters(chapters),
     [chapters],
   );
   const chapterNumber = item.chapterNumber ?? 1;
@@ -216,32 +217,27 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
     });
   }
 
+  const chaptersHref = storyChaptersHref(ordered[0] ?? item);
+
   return (
     <div className="mx-auto w-full max-w-3xl px-3 pb-16 pt-1 sm:px-4">
       {hasSeries ? (
         <nav
           aria-label={t("storyChapters")}
-          className="mb-5 flex flex-wrap gap-1.5"
+          className="mb-5 flex items-center justify-between gap-3"
         >
-          {ordered.map((chapter) => {
-            const active = chapter.id === item.id;
-            const n = chapter.chapterNumber ?? 1;
-            return (
-              <Link
-                key={chapter.id}
-                href={`/item/${chapter.id}`}
-                className={[
-                  "inline-flex h-9 items-center rounded-full px-3.5 text-sm font-medium transition-colors",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  active
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-surface text-foreground-muted ring-1 ring-border hover:bg-accent-soft hover:text-primary",
-                ].join(" ")}
-              >
-                {t("storyChapterLabel", { n })}
-              </Link>
-            );
-          })}
+          <Link
+            href={chaptersHref}
+            className="inline-flex h-9 items-center rounded-full bg-surface px-3.5 text-sm font-medium text-foreground-muted ring-1 ring-border transition-colors hover:bg-accent-soft hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {t("storyAllChapters")}
+          </Link>
+          <p className="text-[11px] font-semibold tracking-[0.14em] text-foreground-subtle uppercase">
+            {t("storyChapterOf", {
+              n: chapterNumber,
+              total: chapterCount,
+            })}
+          </p>
         </nav>
       ) : null}
 
@@ -384,9 +380,22 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
                   n: previous.chapterNumber ?? 1,
                 })}
               </span>
+              <span className="mt-0.5 truncate text-xs text-foreground-muted">
+                {previous.name}
+              </span>
             </Link>
           ) : (
-            <span />
+            <Link
+              href={chaptersHref}
+              className="group inline-flex min-w-0 max-w-[48%] flex-col rounded-2xl border border-border bg-surface px-4 py-3 text-left transition-colors hover:border-primary/40 hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span className="text-[11px] font-semibold tracking-[0.14em] text-foreground-subtle uppercase">
+                {t("storyBackToChapters")}
+              </span>
+              <span className="mt-1 text-sm font-semibold text-foreground group-hover:text-primary">
+                {t("storyAllChapters")}
+              </span>
+            </Link>
           )}
           {next ? (
             <Link
@@ -401,9 +410,22 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
                   n: next.chapterNumber ?? 1,
                 })}
               </span>
+              <span className="mt-0.5 truncate text-xs text-foreground-muted">
+                {next.name}
+              </span>
             </Link>
           ) : (
-            <span />
+            <Link
+              href={chaptersHref}
+              className="group inline-flex min-w-0 max-w-[48%] flex-col rounded-2xl border border-border bg-surface px-4 py-3 text-right transition-colors hover:border-primary/40 hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span className="text-[11px] font-semibold tracking-[0.14em] text-foreground-subtle uppercase">
+                {t("storyBackToChapters")}
+              </span>
+              <span className="mt-1 text-sm font-semibold text-foreground group-hover:text-primary">
+                {t("storyAllChapters")}
+              </span>
+            </Link>
           )}
         </nav>
       ) : null}

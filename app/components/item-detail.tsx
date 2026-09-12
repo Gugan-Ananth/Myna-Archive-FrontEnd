@@ -12,6 +12,10 @@ import {
 import { useI18n } from "../lib/i18n";
 import { itemMediaAssets } from "../lib/media-display";
 import { storyCardBlurb } from "../lib/story-content";
+import {
+  isMultiChapterStory,
+  storyChaptersHref,
+} from "../lib/story-series";
 import { formatTagLabel } from "../lib/taxonomy";
 import type { ArchiveItem } from "../lib/types";
 import { BackButton } from "./back-button";
@@ -80,15 +84,22 @@ export function ItemDetail({ item }: ItemDetailProps) {
     !isComic &&
     !isCaption &&
     itemMediaAssets(draft).length > 1;
-  const homeHref = isComic
-    ? "/?view=comics"
-    : isCaption
-      ? "/?view=captions"
+  const hasSeries =
+    isStory &&
+    (isMultiChapterStory(draft) ||
+      isMultiChapterStory({ chapterCount: chapters.length }));
+  const homeHref = isStory
+    ? "/?view=stories"
+    : isComic
+      ? "/?view=comics"
+      : isCaption
+        ? "/?view=captions"
     : draft.section === "cute-things"
       ? "/?view=cute-things"
     : isGroup
       ? "/?view=collections"
       : "/";
+  const storyBackHref = hasSeries ? storyChaptersHref(draft) : homeHref;
   const detailKindLabel = isStory
     ? t("navStories")
     : isComic
@@ -237,7 +248,9 @@ export function ItemDetail({ item }: ItemDetailProps) {
         const next = [...otherChapters].sort(
           (a, b) => (a.chapterNumber ?? 1) - (b.chapterNumber ?? 1),
         )[0];
-        router.push(`/item/${next?.id ?? ""}`);
+        router.push(
+          next ? storyChaptersHref(next) : "/?view=stories",
+        );
       } else {
         router.push(isStory ? "/?view=stories" : homeHref);
       }
@@ -268,7 +281,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
         {isStory ? (
           <>
             <header className="relative z-30 flex w-full shrink-0 items-center justify-between gap-3 px-3 py-3 sm:px-4">
-              <BackButton href={homeHref} />
+              <BackButton href={storyBackHref} />
               <div className="flex items-center gap-2">
                 <DetailsToggle
                   open={panelOpen}

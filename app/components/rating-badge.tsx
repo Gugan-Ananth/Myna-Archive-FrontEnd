@@ -5,6 +5,7 @@ import { useI18n } from "../lib/i18n";
 type RatingBadgeProps = {
   rating: number;
   className?: string;
+  ariaLabel?: string;
 };
 
 export function formatRating(value: number): string {
@@ -16,7 +17,7 @@ export function formatRating(value: number): string {
  * Compact score chip for media overlays.
  * Quiet rounded rectangle — not a second circular control beside the star.
  */
-export function RatingBadge({ rating, className }: RatingBadgeProps) {
+export function RatingBadge({ rating, className, ariaLabel }: RatingBadgeProps) {
   const { t } = useI18n();
   if (!Number.isFinite(rating)) return null;
   const display = formatRating(rating);
@@ -29,7 +30,7 @@ export function RatingBadge({ rating, className }: RatingBadgeProps) {
         "shadow-sm ring-1 ring-border backdrop-blur-sm",
         className ?? "",
       ].join(" ")}
-      aria-label={t("ratingAria", { value: display })}
+      aria-label={ariaLabel ?? t("ratingAria", { value: display })}
     >
       {display}
     </span>

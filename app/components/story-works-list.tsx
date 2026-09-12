@@ -1,8 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { listStoryChapters } from "../lib/api";
 import { isStorySeriesRoot } from "../lib/collection-view";
 import { useI18n } from "../lib/i18n";
+import {
+  averageChapterRating,
+  isMultiChapterStory,
+} from "../lib/story-series";
 import type { ArchiveItem } from "../lib/types";
 import { EmptyBoard } from "./empty-board";
 import { StoryWorkCard } from "./story-work-card";
@@ -31,6 +36,30 @@ export function StoryWorksList({
 }: StoryWorksListProps) {
   const { t } = useI18n();
   const works = useMemo(() => items.filter(isStorySeriesRoot), [items]);
+  const [seriesById, setSeriesById] = useState<Record<string, ArchiveItem[]>>(
+    {},
+  );
+
+  useEffect(() => {
+    const series = works.filter(isMultiChapterStory);
+    if (series.length === 0) return;
+    let cancelled = false;
+    void Promise.all(
+      series.map(async (item) => {
+        try {
+          const chapters = await listStoryChapters(item.id);
+          return [item.id, chapters] as const;
+        } catch {
+          return [item.id, [item]] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (!cancelled) setSeriesById(Object.fromEntries(entries));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [works]);
 
   if (works.length === 0) {
     if (emptyMessage === " ") return null;
@@ -53,17 +82,31 @@ export function StoryWorksList({
 
   return (
     <ul className="grid list-none grid-cols-1 gap-6 lg:grid-cols-2 2xl:gap-7">
-      {works.map((item, index) => (
-        <li key={item.id} className="min-w-0">
-          <div className="relative">
-            {showRank ? <TopTenRank rank={index + 1} /> : null}
-            <StoryWorkCard
-              item={item}
-              onStarChange={onStarChange}
-            />
-          </div>
-        </li>
-      ))}
+      {works.map((item, index) => {
+        const chapters = seriesById[item.id];
+        return (
+          <li key={item.id} className="min-w-0">
+            <div className="relative">
+              {showRank ? <TopTenRank rank={index + 1} /> : null}
+              <StoryWorkCard
+                item={item}
+                chapters={chapters}
+                rating={
+                  chapters && chapters.length > 0
+                    ? averageChapterRating(chapters)
+                    : undefined
+                }
+                onStarChange={onStarChange}
+                onHover={(work) => {
+                  if (isMultiChapterStory(work)) {
+                    void listStoryChapters(work.id);
+                  }
+                }}
+              />
+            </div>
+          </li>
+        );
+      })}
     </ul>
   );
 }
