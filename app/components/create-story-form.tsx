@@ -926,6 +926,12 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     // Keep the latest server snapshot outside React state. Updating editor
     // state here could disturb the caret or scroll position during autosave.
     savedItemRef.current = updated;
+    const { cover: savedCover } = splitStoryCoverAndBody(updated);
+    setCover((prev) => {
+      if (prev.kind !== "existing") return prev;
+      if (savedCover?.publicId === prev.asset.publicId) return prev;
+      return coverDraftFromAsset(savedCover);
+    });
   }
 
   async function saveStory(automatic: boolean): Promise<void> {
