@@ -8,10 +8,11 @@ import {
   archiveItemMediaSource,
 } from "../lib/copy-image";
 import { useI18n } from "../lib/i18n";
-import { storyCardBlurb } from "../lib/story-content";
+import { storyCardBlurb, storySeriesBlurb } from "../lib/story-content";
 import {
   isMultiChapterStory,
   storySeriesCoverItem,
+  storySeriesName,
   storyWorkHref,
   storyWorkRating,
 } from "../lib/story-series";
@@ -122,7 +123,9 @@ function WorkCard({
 }) {
   const { t } = useI18n();
   const { aspect, landscape, onNaturalSize } = useStoryCoverFrame(coverItem);
-  const blurb = variant === "single" ? storyCardBlurb(item) : "";
+  const blurb =
+    variant === "series" ? storySeriesBlurb(item) : storyCardBlurb(item);
+  const title = variant === "series" ? storySeriesName(item) : item.name;
   const author = item.author?.trim() || coverItem.author?.trim();
   const count = chapterCount ?? 1;
 
@@ -171,7 +174,7 @@ function WorkCard({
           )}
         </p>
         <h2 className="mt-1 line-clamp-2 text-base font-semibold leading-snug tracking-tight text-foreground group-hover:text-primary sm:text-lg">
-          {item.name}
+          {title}
         </h2>
         {blurb ? (
           <p className="mt-2 line-clamp-5 text-sm leading-relaxed text-foreground-muted">

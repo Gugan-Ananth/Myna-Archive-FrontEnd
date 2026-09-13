@@ -17,8 +17,8 @@ An Archive Item that composites a source image with a written story using a layo
 _Avoid_: meme, overlay (unless naming the overlay template), treating the PNG as the only source of truth, storing the original photo as a second gallery asset
 
 **Story series**:
-A written story with one or more chapters. The series root (chapter 1) is the work shown on the Stories board. Later chapters hang off `seriesId`. The board card uses the first chapter's cover (or the story cover template when that chapter has no image) and the mean of every chapter rating. It names the series and chapter count; it does not list chapter titles. Opening a multi-chapter series lists the chapters before the reader. Each chapter card and the chapter reader use that chapter's own cover, or the story cover template when the chapter has no image.
-_Avoid_: book, volume (unless naming a field)
+A written story with one or more chapters. The series root (chapter 1) is the work shown on the Stories board. Later chapters hang off `seriesId`. A series has its own title (`seriesName`), cover (`seriesCover`), and description (`seriesDescription`) on the root — not the first chapter's copy. The board card uses that series cover (or the first chapter's cover, or the story cover template) and the mean of every chapter rating. It names the series and chapter count; it does not list chapter titles. Opening a multi-chapter series lists the chapters before the reader. Each chapter card and the chapter reader use that chapter's own cover, or the story cover template when the chapter has no image. Series details are edited on a dedicated series screen. Linking a new chapter to a standalone story (a chapter that is not yet a series) asks for series title, cover, and description.
+_Avoid_: book, volume (unless naming a field); treating chapter 1 title/cover/summary as the series identity once a dedicated series title exists
 
 **Story character**:
 A named speaker in a written story chapter, with an optional portrait shown beside dialogue in the reader. Detected from `Name: "dialogue"` in the chapter body. Stored on the Archive Item, not as an Original Character.

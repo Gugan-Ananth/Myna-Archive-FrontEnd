@@ -1,4 +1,4 @@
-import type { ArchiveItem } from "./types";
+import type { ArchiveItem, MediaAsset } from "./types";
 
 /** Series root id: the work itself, or the parent when this row is a later chapter. */
 export function storySeriesRootId(item: {
@@ -35,11 +35,47 @@ export function orderedStoryChapters(chapters: ArchiveItem[]): ArchiveItem[] {
   );
 }
 
-/** Series board/hero cover comes from the first chapter, else the root. */
+/** Dedicated series title, else the root chapter's name (legacy fallback). */
+export function storySeriesName(item: ArchiveItem): string {
+  return item.seriesName?.trim() || item.name;
+}
+
+/** True when the root already has a dedicated series title. */
+export function hasStorySeriesIdentity(item: {
+  seriesName?: string | null;
+}): boolean {
+  return Boolean(item.seriesName?.trim());
+}
+
+export function storySeriesEditHref(item: {
+  id: string;
+  seriesId?: string | null;
+}): string {
+  return `/item/${storySeriesRootId(item)}/series/edit`;
+}
+
+function withSeriesCover(root: ArchiveItem, cover: MediaAsset): ArchiveItem {
+  return {
+    ...root,
+    bodyHtml: "",
+    mediaUrl: cover.mediaUrl,
+    thumbnailUrl: cover.thumbnailUrl,
+    width: cover.width,
+    height: cover.height,
+    blurHash: cover.blurHash,
+    mediaAssets: [cover],
+  };
+}
+
+/**
+ * Series board/hero cover: dedicated series cover, else the first chapter,
+ * else the root.
+ */
 export function storySeriesCoverItem(
   root: ArchiveItem,
   chapters?: ArchiveItem[],
 ): ArchiveItem {
+  if (root.seriesCover) return withSeriesCover(root, root.seriesCover);
   if (!chapters || chapters.length === 0) return root;
   return orderedStoryChapters(chapters)[0] ?? root;
 }

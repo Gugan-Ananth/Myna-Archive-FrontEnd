@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { StoryChapters } from "../../../components/story-chapters";
 import { ApiError, getArchiveItem, listStoryChapters } from "../../../lib/api";
 import { sessionAuth } from "../../../lib/auth/session";
+import { storySeriesName } from "../../../lib/story-series";
 import type { ArchiveItem } from "../../../lib/types";
 
 type ChaptersPageProps = {
@@ -15,7 +16,7 @@ export async function generateMetadata({
   const { id } = await params;
   try {
     const item = await getArchiveItem(id, await sessionAuth());
-    return { title: item.name };
+    return { title: storySeriesName(item) };
   } catch {
     return { title: "Not found" };
   }

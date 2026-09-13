@@ -34,7 +34,6 @@ import { useI18n } from "../lib/i18n";
 import {
   detectMediaType,
   formatBytes,
-  IMAGE_ACCEPT,
   MAX_IMAGE_BYTES,
   normalizeMime,
 } from "../lib/media-constraints";
@@ -48,6 +47,10 @@ import {
   storyBodyCharCount,
   storyPayloadHtml,
 } from "../lib/story-content";
+import {
+  hasStorySeriesIdentity,
+  storySeriesName,
+} from "../lib/story-series";
 import {
   extractStorySpeakers,
 } from "../lib/story-reader";
@@ -64,19 +67,21 @@ import {
   type MediaAsset,
   type StoryCharacter,
 } from "../lib/types";
-import { CHOOSER_SCENE } from "../lib/stickers";
 import { BackButton } from "./back-button";
-import { SafeImg } from "./broken-image-fallback";
 import { CategoryTagPicker } from "./category-tag-picker";
-import { MediaLinkInput } from "./media-link-input";
 import { RatingInput } from "./rating-input";
-import { SceneFigure } from "./scene-figure";
 import {
   StoryCharacterRoster,
   type StoryCharacterDraft,
   type StoryCharacterPortrait,
 } from "./story-character-roster";
 import { StatusCallout } from "./status-callout";
+import {
+  coverDraftFromAsset,
+  revokeCoverDraft,
+  StoryCoverField,
+  type CoverDraft,
+} from "./story-cover-field";
 import { StoryImageInsertDialog } from "./story-image-insert-dialog";
 import { UploadProgressOverlay } from "./upload-progress";
 
@@ -117,11 +122,6 @@ const DEFAULT_TOOLBAR: ToolbarState = {
   block: "p",
 };
 
-type CoverDraft =
-  | { kind: "none" }
-  | { kind: "existing"; url: string; asset: MediaAsset }
-  | { kind: "file"; file: File; previewUrl: string };
-
 type CreateStoryFormProps = {
   item?: ArchiveItem;
 };
@@ -129,12 +129,7 @@ type CreateStoryFormProps = {
 function initialCover(item?: ArchiveItem): CoverDraft {
   if (!item) return { kind: "none" };
   const { cover } = splitStoryCoverAndBody(item);
-  if (!cover) return { kind: "none" };
-  return {
-    kind: "existing",
-    url: cover.mediaUrl || cover.thumbnailUrl,
-    asset: cover,
-  };
+  return coverDraftFromAsset(cover);
 }
 
 function portraitFromCharacter(character: StoryCharacter): StoryCharacterPortrait {
@@ -196,7 +191,6 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     left: number;
     maxHeight: number;
   } | null>(null);
-  const coverInputRef = useRef<HTMLInputElement>(null);
   const savedRange = useRef<Range | null>(null);
   const [title, setTitle] = useState(item?.name ?? "");
   const [author, setAuthor] = useState(item?.author ?? "");
@@ -220,6 +214,9 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   const [seriesId, setSeriesId] = useState("");
   const [chapterNumber, setChapterNumber] = useState(1);
   const [seriesRoots, setSeriesRoots] = useState<ArchiveItem[]>([]);
+  const [seriesName, setSeriesName] = useState("");
+  const [seriesDescription, setSeriesDescription] = useState("");
+  const [seriesCover, setSeriesCover] = useState<CoverDraft>({ kind: "none" });
   const [insertOpen, setInsertOpen] = useState(false);
   const [soundMenuOpen, setSoundMenuOpen] = useState(false);
   const [activeSound, setActiveSound] = useState<StorySoundId | null>(null);
@@ -263,11 +260,17 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
 
   const bodyOverLimit = bodyChars > MAX_STORY_BODY_CHARS;
   const persistedItem = savedItemRef.current ?? item;
+  const selectedSeries = seriesRoots.find((root) => root.id === seriesId);
+  const needsSeriesSetup =
+    linkMode === "chapter" &&
+    selectedSeries != null &&
+    !hasStorySeriesIdentity(selectedSeries);
   const canSubmit =
     Boolean(title.trim() && tags.length > 0 && ratingValid) &&
     !saving &&
     !bodyOverLimit &&
-    (linkMode === "new" || Boolean(seriesId));
+    (linkMode === "new" || Boolean(seriesId)) &&
+    (!needsSeriesSetup || Boolean(seriesName.trim()));
 
   function markDirty() {
     dirtyRef.current = true;
@@ -388,9 +391,15 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
 
   useEffect(() => {
     return () => {
-      if (cover.kind === "file") URL.revokeObjectURL(cover.previewUrl);
+      revokeCoverDraft(cover);
     };
   }, [cover]);
+
+  useEffect(() => {
+    return () => {
+      revokeCoverDraft(seriesCover);
+    };
+  }, [seriesCover]);
 
   useEffect(() => {
     if (!selectedImage) return;
@@ -517,16 +526,39 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     );
   }
 
+  function resetSeriesDraft() {
+    setSeriesName("");
+    setSeriesDescription("");
+    setSeriesCover((prev) => {
+      revokeCoverDraft(prev);
+      return { kind: "none" };
+    });
+  }
+
   function selectSeries(id: string) {
     markDirty();
     setSeriesId(id);
     const parent = seriesRoots.find((item) => item.id === id);
-    if (!parent) return;
-    setTitle(parent.name);
+    if (!parent) {
+      resetSeriesDraft();
+      return;
+    }
     setAuthor(parent.author ?? "");
     setTags(parent.tags);
     if (Number.isFinite(parent.rating)) setRating(parent.rating);
     setChapterNumber((parent.chapterCount ?? 1) + 1);
+    if (!hasStorySeriesIdentity(parent)) {
+      setSeriesName(parent.seriesName?.trim() || parent.name);
+      setSeriesDescription(
+        parent.seriesDescription?.trim() || parent.summary?.trim() || "",
+      );
+      setSeriesCover((prev) => {
+        revokeCoverDraft(prev);
+        return { kind: "none" };
+      });
+    } else {
+      resetSeriesDraft();
+    }
     const inherited = draftsFromCharacters(parent.characters);
     for (const character of inherited) {
       rememberPortrait(character.name, character.portrait);
@@ -852,7 +884,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     if (!validateImageFile(file)) return;
     markDirty();
     setCover((prev) => {
-      if (prev.kind === "file") URL.revokeObjectURL(prev.previewUrl);
+      revokeCoverDraft(prev);
       return {
         kind: "file",
         file,
@@ -861,15 +893,31 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     });
   }
 
-  function onPickCover(files: FileList | null) {
-    const file = files?.[0];
-    if (file) pickCoverFile(file);
-  }
-
   function clearCover() {
     markDirty();
     setCover((prev) => {
-      if (prev.kind === "file") URL.revokeObjectURL(prev.previewUrl);
+      revokeCoverDraft(prev);
+      return { kind: "none" };
+    });
+  }
+
+  function pickSeriesCoverFile(file: File) {
+    if (!validateImageFile(file)) return;
+    markDirty();
+    setSeriesCover((prev) => {
+      revokeCoverDraft(prev);
+      return {
+        kind: "file",
+        file,
+        previewUrl: URL.createObjectURL(file),
+      };
+    });
+  }
+
+  function clearSeriesCover() {
+    markDirty();
+    setSeriesCover((prev) => {
+      revokeCoverDraft(prev);
       return { kind: "none" };
     });
   }
@@ -891,6 +939,10 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
       return;
     }
     if (linkMode === "chapter" && !seriesId) return;
+    if (needsSeriesSetup && !seriesName.trim()) {
+      if (!automatic) setError(t("storyNeedSeriesTitle"));
+      return;
+    }
     if (!ratingValid) return;
 
     const editor = editorRef.current;
@@ -951,7 +1003,10 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
         (character) => character.portrait.kind === "file",
       ).length;
       const totalUploads =
-        (cover.kind === "file" ? 1 : 0) + newBodyCount + newCharacterCount;
+        (cover.kind === "file" ? 1 : 0) +
+        (needsSeriesSetup && seriesCover.kind === "file" ? 1 : 0) +
+        newBodyCount +
+        newCharacterCount;
       let completed = 0;
       if (!automatic) {
         setUploadTotal(totalUploads);
@@ -1022,6 +1077,20 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
       } else if (cover.kind === "file") {
         coverAsset = await uploadFile(cover.file, t("uploadingCover"));
         if (!coverAsset) {
+          resetSaving();
+          return;
+        }
+      }
+
+      let seriesCoverAsset: CreateMediaAssetInput | null = null;
+      if (needsSeriesSetup && seriesCover.kind === "existing") {
+        seriesCoverAsset = mediaToAssetInput(seriesCover.asset);
+      } else if (needsSeriesSetup && seriesCover.kind === "file") {
+        seriesCoverAsset = await uploadFile(
+          seriesCover.file,
+          t("uploadingSeriesCover"),
+        );
+        if (!seriesCoverAsset) {
           resetSaving();
           return;
         }
@@ -1136,7 +1205,23 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
               author: author.trim() || undefined,
               summary: summary.trim() || undefined,
               ...(linkMode === "chapter" && seriesId
-                ? { seriesId, chapterNumber }
+                ? {
+                    seriesId,
+                    chapterNumber,
+                    ...(needsSeriesSetup
+                      ? {
+                          seriesName: seriesName.trim(),
+                          ...(seriesDescription.trim()
+                            ? {
+                                seriesDescription: seriesDescription.trim(),
+                              }
+                            : {}),
+                          ...(seriesCoverAsset
+                            ? { seriesCover: seriesCoverAsset }
+                            : {}),
+                        }
+                      : {}),
+                  }
                 : { chapterNumber: 1 }),
               ...(assets.length > 0 ? { assets } : {}),
               ...(characterPayload.length > 0
@@ -1419,17 +1504,6 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
         </button>
       </header>
 
-      <input
-        ref={coverInputRef}
-        type="file"
-        accept={IMAGE_ACCEPT}
-        className="sr-only"
-        onChange={(e) => {
-          onPickCover(e.target.files);
-          e.target.value = "";
-        }}
-      />
-
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
         <div className="min-h-[28rem] min-w-0 flex-1 px-3 py-6 sm:px-6 lg:min-h-0 lg:overflow-y-auto lg:px-10">
           <div className="app-card relative mx-auto w-full max-w-[816px] rounded-sm px-5 py-8 shadow-[0_12px_40px_-18px_rgba(30,27,46,0.35)] ring-1 ring-border sm:px-14 sm:py-14 dark:shadow-[0_12px_40px_-16px_rgba(0,0,0,0.55)]">
@@ -1542,64 +1616,15 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
           aria-hidden={!detailsOpen}
         >
           <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto p-4 sm:p-5 lg:min-w-[min(22rem,100%)]">
-            <div>
-              <p className="mb-1 text-sm font-medium uppercase tracking-wide text-foreground-muted">
-                {t("storyCover")}
-              </p>
-              <p className="mb-1.5 text-sm text-foreground-subtle">
-                {t("storyCoverOptional")}
-              </p>
-              {cover.kind === "none" ? (
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => coverInputRef.current?.click()}
-                  className="app-card app-card-interactive flex w-full flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border-strong px-3 py-4 text-base text-foreground-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
-                >
-                  <SceneFigure
-                    sticker={CHOOSER_SCENE.story}
-                    className="h-20 w-auto"
-                    sizes="80px"
-                  />
-                  {t("storyAddCover")}
-                </button>
-              ) : (
-                <div className="overflow-hidden rounded-xl ring-1 ring-border">
-                  <SafeImg
-                    src={
-                      cover.kind === "file" ? cover.previewUrl : cover.url
-                    }
-                    alt=""
-                    className="max-h-44 w-full object-cover"
-                  />
-                  <div className="flex gap-2 border-t border-border p-1.5">
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() => coverInputRef.current?.click()}
-                      className="inline-flex h-8 flex-1 items-center justify-center rounded-full border border-border px-3 text-sm font-medium text-foreground hover:bg-accent-soft hover:text-primary disabled:opacity-50"
-                    >
-                      {t("storyChangeCover")}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={clearCover}
-                      className="inline-flex h-8 flex-1 items-center justify-center rounded-full border border-border px-3 text-sm font-medium text-foreground-muted hover:border-danger/40 hover:text-danger disabled:opacity-50"
-                    >
-                      {t("storyRemoveCover")}
-                    </button>
-                  </div>
-                </div>
-              )}
-              <MediaLinkInput
-                mediaType="image"
-                label={`${t("uploadFromLink")} · ${t("storyCover")}`}
-                onFile={pickCoverFile}
-                disabled={saving}
-                className="mt-2"
-              />
-            </div>
+            <StoryCoverField
+              cover={cover}
+              disabled={saving}
+              label={t("storyCover")}
+              hint={t("storyCoverOptional")}
+              addLabel={t("storyAddCover")}
+              onPickFile={pickCoverFile}
+              onClear={clearCover}
+            />
             {!isEditing ? (
             <fieldset className="space-y-1.5">
               <legend className="text-sm font-medium uppercase tracking-wide text-foreground-muted">
@@ -1617,6 +1642,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                       setLinkMode("new");
                       setSeriesId("");
                       setChapterNumber(1);
+                      resetSeriesDraft();
                     }}
                     className="accent-primary"
                   />
@@ -1652,11 +1678,68 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                       <option value="">{t("storySelectStory")}</option>
                       {seriesRoots.map((root) => (
                         <option key={root.id} value={root.id}>
-                          {root.name}
+                          {storySeriesName(root)}
                         </option>
                       ))}
                     </select>
                   </label>
+                  {needsSeriesSetup ? (
+                    <div className="space-y-3 rounded-xl border border-border bg-surface-muted/40 p-3">
+                      <p className="text-sm leading-relaxed text-foreground-muted">
+                        {t("storySeriesSetupHint")}
+                      </p>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-sm font-medium uppercase tracking-wide text-foreground-muted">
+                          {t("storySeriesTitle")}{" "}
+                          <span className="normal-case text-foreground-subtle">
+                            {t("required")}
+                          </span>
+                        </span>
+                        <input
+                          required
+                          value={seriesName}
+                          disabled={saving}
+                          maxLength={300}
+                          onChange={(e) => {
+                            markDirty();
+                            setSeriesName(e.target.value);
+                            if (error) setError(null);
+                          }}
+                          placeholder={t("storySeriesTitlePlaceholder")}
+                          className="rounded-xl border border-border bg-background px-3 py-2 text-base outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+                        />
+                      </label>
+                      <StoryCoverField
+                        cover={seriesCover}
+                        disabled={saving}
+                        label={t("storySeriesCover")}
+                        hint={t("storySeriesCoverOptional")}
+                        addLabel={t("storyAddCover")}
+                        onPickFile={pickSeriesCoverFile}
+                        onClear={clearSeriesCover}
+                      />
+                      <label className="flex min-w-0 flex-col gap-1">
+                        <span className="text-sm font-medium uppercase tracking-wide text-foreground-muted">
+                          {t("storySeriesDescription")}{" "}
+                          <span className="normal-case text-foreground-subtle">
+                            {t("storySeriesDescriptionOptional")}
+                          </span>
+                        </span>
+                        <textarea
+                          value={seriesDescription}
+                          disabled={saving}
+                          maxLength={5000}
+                          rows={4}
+                          onChange={(e) => {
+                            markDirty();
+                            setSeriesDescription(e.target.value);
+                          }}
+                          placeholder={t("storySeriesDescriptionPlaceholder")}
+                          className="w-full min-w-0 resize-y rounded-xl border border-border bg-background px-3 py-2 text-base leading-relaxed outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+                        />
+                      </label>
+                    </div>
+                  ) : null}
                   <label className="flex flex-col gap-1">
                     <span className="text-sm text-foreground-muted">
                       {t("storyChapterNumber")}
@@ -1682,7 +1765,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
             ) : null}
             <label className="flex flex-col gap-1">
               <span className="text-sm font-medium uppercase tracking-wide text-foreground-muted">
-                {t("storyTitle")}{" "}
+                {linkMode === "chapter" ? t("storyChapterTitle") : t("storyTitle")}{" "}
                 <span className="normal-case text-foreground-subtle">
                   {t("required")}
                 </span>
@@ -1697,7 +1780,11 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                   setTitle(e.target.value);
                   if (error) setError(null);
                 }}
-                placeholder={t("storyTitlePlaceholder")}
+                placeholder={
+                  linkMode === "chapter"
+                    ? t("storyChapterTitlePlaceholder")
+                    : t("storyTitlePlaceholder")
+                }
                 className="rounded-xl border border-border bg-background px-3 py-2 text-lg font-medium outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
               />
             </label>

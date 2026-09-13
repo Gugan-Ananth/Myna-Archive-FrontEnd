@@ -152,6 +152,15 @@ export type CreateArchiveItemInput = {
   captionSpec?: CaptionSpec;
   seriesId?: string;
   chapterNumber?: number;
+  /**
+   * Series title stored on the parent when this chapter converts a
+   * standalone story into a series. Ignored when the parent already has one.
+   */
+  seriesName?: string;
+  /** Series synopsis applied to the parent on first conversion. */
+  seriesDescription?: string;
+  /** Series cover applied to the parent on first conversion. */
+  seriesCover?: CreateMediaAssetInput;
   /** Named speakers for this chapter. Portraits are not mixed into `assets`. */
   characters?: StoryCharacterInput[];
   /**
@@ -175,6 +184,15 @@ export type UpdateArchiveItemInput = {
   author?: string;
   summary?: string;
   captionSpec?: CaptionSpec;
+  /** Series title. Only accepted on the series root. */
+  seriesName?: string;
+  /** Series synopsis. Only accepted on the series root. */
+  seriesDescription?: string;
+  /**
+   * Replace the dedicated series cover. `null` clears it (the first
+   * chapter cover is then used on the board). Omit to leave as-is.
+   */
+  seriesCover?: CreateMediaAssetInput | null;
   /** Replace story cover + body images (cover is the extra leading asset). */
   assets?: CreateMediaAssetInput[];
   /** Replace this chapter's named speakers. Omit to leave unchanged. */
