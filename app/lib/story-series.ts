@@ -110,3 +110,19 @@ export function storyWorkRating(
   }
   return item.rating;
 }
+
+/**
+ * Stories board / Top 10: highest work rating first (series mean when
+ * known), then the name shown on the card.
+ */
+export function compareStoryWorksByRating(
+  a: ArchiveItem,
+  b: ArchiveItem,
+  chaptersById: Record<string, Array<{ rating: number }>> = {},
+): number {
+  const ratingDelta =
+    storyWorkRating(b, chaptersById[b.id]) -
+    storyWorkRating(a, chaptersById[a.id]);
+  if (ratingDelta !== 0) return ratingDelta;
+  return storySeriesName(a).localeCompare(storySeriesName(b));
+}
