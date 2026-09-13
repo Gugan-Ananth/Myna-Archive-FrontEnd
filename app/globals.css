@@ -273,6 +273,69 @@ html {
   background-image: var(--card-canvas);
 }
 
+/*
+  Story cover rows: image is a left section inside the card. Width follows
+  the still (slim 9:16, wide 16:9) so the full cover fits.
+*/
+.story-cover-row {
+  display: flex;
+  flex-direction: row;
+}
+
+.story-cover-well {
+  position: relative;
+  flex-shrink: 0;
+  align-self: stretch;
+  overflow: hidden;
+  background-color: var(--surface-muted);
+  width: clamp(
+    var(--well-min, 7rem),
+    calc(var(--row-h, 13.5rem) * var(--cover-aspect, 0.75)),
+    var(--well-max, 70%)
+  );
+}
+
+.story-work-card {
+  height: 13.5rem;
+  --row-h: 13.5rem;
+  --well-min: 7rem;
+  --well-max: 70%;
+}
+
+.story-chapter-card {
+  height: 8.75rem;
+  --row-h: 8.75rem;
+  --well-min: 5.5rem;
+  --well-max: 52%;
+}
+
+.story-title-card {
+  height: 15rem;
+  --row-h: 15rem;
+  --well-min: 8rem;
+  --well-max: 70%;
+}
+
+@media (min-width: 640px) {
+  .story-work-card {
+    height: 16.5rem;
+    --row-h: 16.5rem;
+    --well-min: 8.5rem;
+  }
+
+  .story-chapter-card {
+    height: 10.5rem;
+    --row-h: 10.5rem;
+    --well-min: 6.5rem;
+  }
+
+  .story-title-card {
+    height: 18rem;
+    --row-h: 18rem;
+    --well-min: 10rem;
+  }
+}
+
 .app-card-interactive:hover,
 .app-card-interactive:focus-visible {
   background-image:

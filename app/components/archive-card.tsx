@@ -26,6 +26,7 @@ import {
   videoThumbnailCandidates,
   withCacheBust,
 } from "../lib/media-display";
+import { storyCoverDisplay } from "../lib/story-content";
 import type { ArchiveItem } from "../lib/types";
 import {
   archiveItemCopySrc,
@@ -105,8 +106,9 @@ export function ArchiveCard({
     }
     return blurHashPlaceholderFallback();
   }, [isClient, item.blurHash]);
-  const imageSrc = gridMediaSrc(item);
-  const storyCover = isStory && Boolean(imageSrc);
+  const storyDisplay = isStory ? storyCoverDisplay(item) : null;
+  const imageSrc = storyDisplay?.src ?? gridMediaSrc(item);
+  const storyCover = Boolean(storyDisplay?.hasCover);
 
   function applyNaturalSize(width: number, height: number) {
     if (hasStoredDims || width <= 0 || height <= 0) return;

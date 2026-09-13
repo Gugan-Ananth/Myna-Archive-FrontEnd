@@ -1,4 +1,5 @@
 import { itemMediaAssets, originalMediaUrl, thumbProxySource } from "./media-display";
+import { storyCoverAsset } from "./story-content";
 import type { ArchiveItem, OriginalCharacter } from "./types";
 
 const BUNNY_HOST_RE = /(^|\.)b-cdn\.net$/i;
@@ -19,6 +20,17 @@ export function archiveItemMediaSource(
     return item.mediaUrl
       ? { src: item.mediaUrl, kind: "video", fileName: item.name }
       : null;
+  }
+
+  if (item.mediaType === "story") {
+    const cover = storyCoverAsset(item);
+    const url = cover?.mediaUrl || cover?.thumbnailUrl;
+    if (!url) return null;
+    return {
+      src: resolveCopyImageUrl(url),
+      kind: "image",
+      fileName: item.name,
+    };
   }
 
   const image = itemMediaAssets(item).find(

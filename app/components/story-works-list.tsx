@@ -24,7 +24,8 @@ type StoryWorksListProps = {
 
 /**
  * Home Stories view: large editorial cards. Chapters of a series
- * are not listed separately.
+ * are not listed separately — the series card names the work and
+ * chapter count, then opening it lists the chapters.
  */
 export function StoryWorksList({
   items,
@@ -81,12 +82,12 @@ export function StoryWorksList({
   }
 
   return (
-    <ul className="grid list-none grid-cols-1 gap-6 lg:grid-cols-2 2xl:gap-7">
+    <ul className="grid list-none grid-cols-1 items-stretch gap-x-5 gap-y-2 sm:gap-x-6 sm:gap-y-2 lg:grid-cols-2 2xl:grid-cols-3">
       {works.map((item, index) => {
         const chapters = seriesById[item.id];
         return (
           <li key={item.id} className="min-w-0">
-            <div className="relative">
+            <div className="relative h-full">
               {showRank ? <TopTenRank rank={index + 1} /> : null}
               <StoryWorkCard
                 item={item}

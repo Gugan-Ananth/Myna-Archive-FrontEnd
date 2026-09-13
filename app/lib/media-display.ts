@@ -90,15 +90,23 @@ export function isStoredPreviewPath(url: string): boolean {
  * Prefer the stored <1 MB WebP preview; fall back to the original (the
  * preview loader will then resize via `/api/media/thumb`).
  */
+/** Card source for a single media asset (story cover, filmstrip still). */
+export function gridAssetSrc(asset: {
+  mediaUrl: string;
+  thumbnailUrl: string;
+}): string {
+  if (isStoredPreviewUrl(asset.thumbnailUrl, asset.mediaUrl)) {
+    return originalMediaUrl(asset.thumbnailUrl);
+  }
+  if (asset.thumbnailUrl) return originalMediaUrl(asset.thumbnailUrl);
+  return originalMediaUrl(asset.mediaUrl);
+}
+
 export function gridMediaSrc(item: ArchiveItem): string {
   if (item.mediaType === "video") {
     return item.thumbnailUrl || item.mediaUrl;
   }
-  if (isStoredPreviewUrl(item.thumbnailUrl, item.mediaUrl)) {
-    return originalMediaUrl(item.thumbnailUrl);
-  }
-  if (item.thumbnailUrl) return originalMediaUrl(item.thumbnailUrl);
-  return originalMediaUrl(item.mediaUrl);
+  return gridAssetSrc(item);
 }
 
 /** OC board source for next/image. */
