@@ -11,6 +11,7 @@ import {
   type CollectionView,
   type TopTenSourceView,
 } from "./collection-view";
+import { compareStoryWorksByRating } from "./story-series";
 import type { ArchiveItem, OriginalCharacter } from "./types";
 
 export const TOP_TEN_PAGE_SIZE = 10;
@@ -100,7 +101,8 @@ export function emptyTopTenData(): TopTenData {
 
 /**
  * Load the ten starred entries for every dashboard category. Archive list
- * results are already ordered by rating DESC, then name ASC by the API.
+ * results are ordered by rating DESC, then name ASC. Stories use the series
+ * mean (`seriesRating`) rather than the root chapter's rating.
  */
 export async function loadTopTen(
   query = "",
@@ -141,7 +143,7 @@ export async function loadTopTen(
     collections: collections.data,
     comics: comics.data,
     videos: videos.data,
-    stories: stories.data,
+    stories: [...stories.data].sort(compareStoryWorksByRating),
     oc: oc.data,
   };
 }

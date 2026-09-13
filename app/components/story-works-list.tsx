@@ -6,6 +6,7 @@ import { isStorySeriesRoot } from "../lib/collection-view";
 import { useI18n } from "../lib/i18n";
 import {
   averageChapterRating,
+  compareStoryWorksByRating,
   isMultiChapterStory,
 } from "../lib/story-series";
 import type { ArchiveItem } from "../lib/types";
@@ -39,6 +40,10 @@ export function StoryWorksList({
   const works = useMemo(() => items.filter(isStorySeriesRoot), [items]);
   const [seriesById, setSeriesById] = useState<Record<string, ArchiveItem[]>>(
     {},
+  );
+  const orderedWorks = useMemo(
+    () => [...works].sort((a, b) => compareStoryWorksByRating(a, b, seriesById)),
+    [works, seriesById],
   );
 
   useEffect(() => {
@@ -83,7 +88,7 @@ export function StoryWorksList({
 
   return (
     <ul className="grid list-none grid-cols-1 items-stretch gap-x-5 gap-y-2 sm:gap-x-6 sm:gap-y-2 lg:grid-cols-2 2xl:grid-cols-3">
-      {works.map((item, index) => {
+      {orderedWorks.map((item, index) => {
         const chapters = seriesById[item.id];
         return (
           <li key={item.id} className="min-w-0">

@@ -52,6 +52,7 @@ export type ArchiveItem = {
   /**
    * Mean of every chapter rating in the series. Present on story roots when
    * the API knows the series; later chapters keep their own `rating`.
+   * The Stories board orders works by this mean, highest first.
    */
   seriesRating?: number;
   /**

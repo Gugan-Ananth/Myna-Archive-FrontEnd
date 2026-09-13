@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import { useI18n } from "../lib/i18n";
 import { IMAGE_ACCEPT } from "../lib/media-constraints";
+import { STORY_COVER_TEMPLATE } from "../lib/media-display";
 import { CHOOSER_SCENE } from "../lib/stickers";
 import type { MediaAsset } from "../lib/types";
 import { SafeImg } from "./broken-image-fallback";
@@ -89,6 +90,17 @@ export function StoryCoverField({
             src={cover.kind === "file" ? cover.previewUrl : cover.url}
             alt=""
             className="max-h-44 w-full object-cover"
+            fallback={
+              cover.kind === "existing" ? (
+                // Native img: local story cover template is not on the CDN.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={STORY_COVER_TEMPLATE.src}
+                  alt=""
+                  className="max-h-44 w-full object-cover"
+                />
+              ) : undefined
+            }
           />
           <div className="flex gap-2 border-t border-border p-1.5">
             <button
