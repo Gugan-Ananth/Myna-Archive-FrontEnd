@@ -22,6 +22,7 @@ import {
   archiveItemMediaSource,
   originalCharacterMediaSource,
 } from "../lib/copy-image";
+import { storyCoverDisplay } from "../lib/story-content";
 import { storyWorkHref } from "../lib/story-series";
 import type { ArchiveItem, OriginalCharacter } from "../lib/types";
 import { warmArchiveItem, warmOriginalCharacter } from "../lib/warm-preview";
@@ -296,10 +297,11 @@ function TopTenMedia({
   const isArchive = entry.kind === "archive";
   const isVideo = isArchive && entry.item.mediaType === "video";
   const isStory = isArchive && entry.item.mediaType === "story";
+  const storyDisplay = isStory ? storyCoverDisplay(entry.item) : null;
   const imageSrc = isArchive
-    ? gridMediaSrc(entry.item)
+    ? (storyDisplay?.src ?? gridMediaSrc(entry.item))
     : ocGridSrc(entry.oc);
-  const storyCover = Boolean(isStory && imageSrc);
+  const storyCover = Boolean(storyDisplay?.hasCover);
   const src =
     isStory && !storyCover ? STORY_COVER_TEMPLATE.src : imageSrc;
   const blurHash = isArchive ? entry.item.blurHash : entry.oc.blurHash;

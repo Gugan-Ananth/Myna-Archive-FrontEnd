@@ -1,28 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import bunnyImageLoader from "../lib/bunny-image-loader";
-import { listStoryChapters, updateArchiveItem } from "../lib/api";
-import { resolveCopyImageUrl } from "../lib/copy-image";
-import { useI18n } from "../lib/i18n";
 import {
-  GRID_THUMB_QUALITY,
-  gridMediaSrc,
-  STORY_COVER_TEMPLATE,
-} from "../lib/media-display";
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
+import { listStoryChapters, updateArchiveItem } from "../lib/api";
+import { archiveItemCopySrc } from "../lib/copy-image";
+import { useI18n } from "../lib/i18n";
 import { storyCardBlurb } from "../lib/story-content";
 import { storyReadMinutes } from "../lib/story-reader";
 import {
   orderedStoryChapters,
+  storySeriesCoverItem,
   storyWorkRating,
 } from "../lib/story-series";
 import type { ArchiveItem } from "../lib/types";
 import { warmArchiveItem } from "../lib/warm-preview";
 import { BackButton } from "./back-button";
 import { CopyImageButton } from "./copy-image-button";
-import { LoadingImage } from "./global-loading";
 import { ImageCopyMenu, useImageCopyMenu } from "./image-copy-menu";
+import { StoryCoverStill, useStoryCoverFrame } from "./story-cover-still";
 import { RatingBadge, formatRating } from "./rating-badge";
 import { StarButton } from "./star-button";
 import { StoryBackdrop } from "./story-backdrop";
@@ -61,17 +62,11 @@ export function StoryChapters({ item, chapters }: StoryChaptersProps) {
   const ordered = useMemo(() => orderedStoryChapters(series), [series]);
   const first = ordered[0] ?? saved;
   const workRating = storyWorkRating(saved, ordered);
-  const coverItem = saved.mediaUrl || saved.thumbnailUrl ? saved : first;
-  const hasCover = Boolean(coverItem.mediaUrl || coverItem.thumbnailUrl);
-  const coverSrc = hasCover
-    ? gridMediaSrc(coverItem)
-    : STORY_COVER_TEMPLATE.src;
+  const coverItem = storySeriesCoverItem(saved, ordered);
   const author = saved.author?.trim() || first.author?.trim();
   const blurb = storyCardBlurb(saved) || storyCardBlurb(first);
   const chapterCount = Math.max(ordered.length, saved.chapterCount ?? 1);
-  const coverCopySrc = resolveCopyImageUrl(
-    coverItem.mediaUrl || coverItem.thumbnailUrl,
-  );
+  const coverCopySrc = archiveItemCopySrc(coverItem);
 
   async function toggleStar(starred: boolean): Promise<void> {
     const updated = await updateArchiveItem(saved.id, { starred });
@@ -92,88 +87,24 @@ export function StoryChapters({ item, chapters }: StoryChaptersProps) {
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-3xl px-3 pb-16 pt-1 sm:px-4">
-            <section
-              className="app-card overflow-hidden rounded-[1.5rem] ring-1 ring-border"
-              onContextMenu={(event) => {
-                if (!hasCover || !coverCopySrc) return;
-                openMenu(event, coverCopySrc, { fileName: saved.name });
-              }}
-            >
-              <div className="flex min-w-0 flex-row">
-                <div className="relative min-h-[11rem] w-[8rem] shrink-0 self-stretch overflow-hidden bg-surface-muted sm:min-h-[15rem] sm:w-[11.5rem]">
-                  <span className="absolute inset-y-0 left-0 z-10 w-1.5 bg-primary/85" />
-                  <LoadingImage
-                    src={coverSrc}
-                    alt={t("storyCoverAlt", { name: saved.name })}
-                    fill
-                    priority
-                    loader={hasCover ? bunnyImageLoader : undefined}
-                    unoptimized={!hasCover}
-                    sizes="(max-width: 640px) 128px, 184px"
-                    quality={GRID_THUMB_QUALITY}
-                    className="object-cover"
-                    fallbackLabel={t("previewUnavailable")}
-                  />
-                  {coverCopySrc ? (
-                    <CopyImageButton
-                      src={coverCopySrc}
-                      className="absolute left-3 top-2 z-10"
-                    />
-                  ) : null}
-                  <RatingBadge
-                    rating={workRating}
-                    className="absolute right-2 bottom-2 z-10"
-                    ariaLabel={t("storyAverageRatingAria", {
-                      value: formatRating(workRating),
-                    })}
-                  />
-                </div>
-                <div className="flex min-w-0 flex-1 flex-col px-4 py-4 sm:px-6 sm:py-6">
-                  <p className="text-[11px] font-semibold tracking-[0.16em] text-primary uppercase">
-                    {t("storySeries")}
-                  </p>
-                  <h1 className="mt-1.5 text-xl font-semibold leading-snug tracking-tight text-foreground sm:text-3xl">
-                    {saved.name}
-                  </h1>
-                  {author ? (
-                    <p className="mt-1.5 text-sm text-foreground-muted">
-                      {t("storyWrittenByLabel")}{" "}
-                      <strong className="font-semibold text-primary">
-                        {author}
-                      </strong>
-                    </p>
-                  ) : null}
-                  {blurb ? (
-                    <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-foreground-muted">
-                      {blurb}
-                    </p>
-                  ) : null}
-                  <p className="mt-auto pt-4 text-xs font-medium tracking-wide text-foreground-subtle uppercase">
-                    {t("chaptersAvailable", { count: chapterCount })}
-                  </p>
-                  <Link
-                    href={`/item/${first.id}`}
-                    prefetch
-                    onPointerEnter={() => warmArchiveItem(first)}
-                    className="mt-4 inline-flex h-11 w-fit items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    {t("storyStartReading")}
-                  </Link>
-                </div>
-              </div>
-            </section>
-
+            <SeriesTitleCard
+              item={saved}
+              coverItem={coverItem}
+              author={author}
+              blurb={blurb}
+              chapterCount={chapterCount}
+              workRating={workRating}
+              first={first}
+              coverCopySrc={coverCopySrc}
+              onOpenMenu={openMenu}
+            />
             <h2 className="mt-8 mb-3 text-[11px] font-semibold tracking-[0.16em] text-primary uppercase">
               {t("storyChapters")}
             </h2>
-            <ul className="grid list-none gap-3">
+            <ul className="grid list-none gap-5">
               {ordered.map((chapter) => (
                 <li key={chapter.id}>
-                  <ChapterCard
-                    chapter={chapter}
-                    fallbackSrc={hasCover ? coverSrc : STORY_COVER_TEMPLATE.src}
-                    fallbackHasCover={hasCover}
-                  />
+                  <ChapterCard chapter={chapter} />
                 </li>
               ))}
             </ul>
@@ -185,22 +116,110 @@ export function StoryChapters({ item, chapters }: StoryChaptersProps) {
   );
 }
 
-function ChapterCard({
-  chapter,
-  fallbackSrc,
-  fallbackHasCover,
+function SeriesTitleCard({
+  item,
+  coverItem,
+  author,
+  blurb,
+  chapterCount,
+  workRating,
+  first,
+  coverCopySrc,
+  onOpenMenu,
 }: {
-  chapter: ArchiveItem;
-  fallbackSrc: string;
-  fallbackHasCover: boolean;
+  item: ArchiveItem;
+  coverItem: ArchiveItem;
+  author?: string;
+  blurb: string;
+  chapterCount: number;
+  workRating: number;
+  first: ArchiveItem;
+  coverCopySrc: string | null;
+  onOpenMenu: (
+    event: ReactMouseEvent,
+    src: string,
+    opts?: { fileName?: string },
+  ) => void;
 }) {
   const { t } = useI18n();
+  const { aspect, landscape, onNaturalSize } = useStoryCoverFrame(coverItem);
+
+  return (
+    <section
+      className="story-cover-row story-title-card app-card overflow-hidden rounded-[1.5rem] ring-1 ring-border"
+      style={{ "--cover-aspect": aspect } as CSSProperties}
+      onContextMenu={(event) => {
+        if (!coverCopySrc) return;
+        onOpenMenu(event, coverCopySrc, { fileName: item.name });
+      }}
+    >
+      <div className="story-cover-well">
+        <StoryCoverStill
+          item={coverItem}
+          alt={t("storyCoverAlt", { name: item.name })}
+          priority
+          sizes={
+            landscape
+              ? "(max-width: 640px) 70vw, 50vw"
+              : "(max-width: 640px) 128px, 200px"
+          }
+          fit="contain"
+          onNaturalSize={onNaturalSize}
+        />
+        {coverCopySrc ? (
+          <CopyImageButton
+            src={coverCopySrc}
+            className="absolute left-3 top-2 z-10"
+          />
+        ) : null}
+        <RatingBadge
+          rating={workRating}
+          className="absolute right-2 bottom-2 z-10"
+          ariaLabel={t("storyAverageRatingAria", {
+            value: formatRating(workRating),
+          })}
+        />
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden px-4 py-4 sm:px-6 sm:py-6">
+        <p className="text-[11px] font-semibold tracking-[0.16em] text-primary uppercase">
+          {t("storySeries")}
+        </p>
+        <h1 className="mt-1.5 line-clamp-2 text-xl font-semibold leading-snug tracking-tight text-foreground sm:text-3xl">
+          {item.name}
+        </h1>
+        {author ? (
+          <p className="mt-1.5 text-sm text-foreground-muted">
+            {t("storyWrittenByLabel")}{" "}
+            <strong className="font-semibold text-primary">{author}</strong>
+          </p>
+        ) : null}
+        {blurb ? (
+          <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-foreground-muted">
+            {blurb}
+          </p>
+        ) : null}
+        <p className="mt-auto pt-3 text-xs font-medium tracking-wide text-foreground-subtle uppercase">
+          {t("chaptersAvailable", { count: chapterCount })}
+        </p>
+        <Link
+          href={`/item/${first.id}`}
+          prefetch
+          onPointerEnter={() => warmArchiveItem(first)}
+          className="mt-3 inline-flex h-11 w-fit items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {t("storyStartReading")}
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function ChapterCard({ chapter }: { chapter: ArchiveItem }) {
+  const { t } = useI18n();
   const n = chapter.chapterNumber ?? 1;
-  const ownCover = Boolean(chapter.mediaUrl || chapter.thumbnailUrl);
-  const hasCover = ownCover || fallbackHasCover;
-  const src = ownCover ? gridMediaSrc(chapter) : fallbackSrc;
   const blurb = storyCardBlurb(chapter, 180);
   const minutes = storyReadMinutes(chapter.bodyHtml ?? "");
+  const { aspect, landscape, onNaturalSize } = useStoryCoverFrame(chapter);
 
   return (
     <Link
@@ -208,30 +227,30 @@ function ChapterCard({
       prefetch
       onPointerEnter={() => warmArchiveItem(chapter)}
       onFocus={() => warmArchiveItem(chapter)}
-      className="group app-card flex min-w-0 flex-row overflow-hidden rounded-2xl ring-1 ring-border outline-none transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-border-strong focus-visible:ring-2 focus-visible:ring-ring"
+      className="story-cover-row story-chapter-card group app-card min-w-0 overflow-hidden rounded-2xl ring-1 ring-border outline-none transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-md hover:ring-border-strong focus-visible:ring-2 focus-visible:ring-ring"
+      style={{ "--cover-aspect": aspect } as CSSProperties}
     >
-      <div className="relative w-[5.5rem] shrink-0 self-stretch overflow-hidden bg-surface-muted sm:w-[7rem]">
-        <LoadingImage
-          src={src}
-          alt=""
-          fill
-          loader={hasCover ? bunnyImageLoader : undefined}
-          unoptimized={!hasCover}
-          sizes="(max-width: 640px) 88px, 112px"
-          quality={GRID_THUMB_QUALITY}
-          className="object-cover"
-          fallbackLabel={t("previewUnavailable")}
+      <div className="story-cover-well">
+        <StoryCoverStill
+          item={chapter}
+          sizes={
+            landscape
+              ? "(max-width: 640px) 55vw, 280px"
+              : "(max-width: 640px) 88px, 120px"
+          }
+          fit="contain"
+          onNaturalSize={onNaturalSize}
         />
         <RatingBadge
           rating={chapter.rating}
           className="absolute right-1.5 bottom-1.5 z-10"
         />
       </div>
-      <div className="flex min-w-0 flex-1 flex-col px-4 py-3.5 sm:px-5 sm:py-4">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden px-4 py-3.5 sm:px-5 sm:py-4">
         <p className="text-[11px] font-semibold tracking-[0.14em] text-primary uppercase">
           {t("storyChapterLabel", { n })}
         </p>
-        <h3 className="mt-1 text-base font-semibold leading-snug text-foreground group-hover:text-primary sm:text-lg">
+        <h3 className="mt-1 line-clamp-2 text-base font-semibold leading-snug text-foreground group-hover:text-primary sm:text-lg">
           {chapter.name}
         </h3>
         {blurb ? (

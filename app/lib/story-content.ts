@@ -1,4 +1,8 @@
-import { originalMediaUrl } from "./media-display";
+import {
+  gridAssetSrc,
+  originalMediaUrl,
+  STORY_COVER_TEMPLATE,
+} from "./media-display";
 import type { ArchiveItem, MediaAsset } from "./types";
 
 /** HTML posted to the API: drop zero-width marks and inline image payloads. */
@@ -53,7 +57,7 @@ export function storyCardBlurb(item: ArchiveItem, max = 360): string {
 
 /**
  * Optional cover is an extra leading media asset that is not in the body HTML.
- * Legacy stories use the first inline image as the grid cover.
+ * When asset count matches the body image count, there is no dedicated cover.
  */
 export function splitStoryCoverAndBody(item: ArchiveItem): {
   cover: MediaAsset | null;
@@ -66,6 +70,65 @@ export function splitStoryCoverAndBody(item: ArchiveItem): {
     return { cover: assets[0] ?? null, body: assets.slice(1) };
   }
   return { cover: null, body: assets };
+}
+
+/**
+ * Dedicated cover for a chapter — not an inline body image, and not another
+ * chapter's art. Null when the chapter has no cover of its own.
+ */
+export function storyCoverAsset(item: ArchiveItem): MediaAsset | null {
+  const { cover } = splitStoryCoverAndBody(item);
+  if (cover) return cover;
+  // Legacy rows stored the cover only on the item fields.
+  if ((item.mediaAssets?.length ?? 0) > 0) return null;
+  if (!item.mediaUrl && !item.thumbnailUrl) return null;
+  return {
+    publicId: "",
+    resourceType: "image",
+    mediaUrl: item.mediaUrl,
+    thumbnailUrl: item.thumbnailUrl,
+    width: item.width,
+    height: item.height,
+    blurHash: item.blurHash,
+  };
+}
+
+/** Grid/reader still: the chapter's own cover, or the story cover template. */
+export function storyCoverDisplay(item: ArchiveItem): {
+  src: string;
+  hasCover: boolean;
+} {
+  const cover = storyCoverAsset(item);
+  if (!cover) {
+    return { src: STORY_COVER_TEMPLATE.src, hasCover: false };
+  }
+  return { src: gridAssetSrc(cover), hasCover: true };
+}
+
+/**
+ * Pixel size of the dedicated cover. Falls back to the 3:4 template when the
+ * chapter has no cover or the asset has no stored dimensions.
+ */
+export function storyCoverSize(item: ArchiveItem): {
+  width: number;
+  height: number;
+  measured: boolean;
+} {
+  const cover = storyCoverAsset(item);
+  if (
+    cover &&
+    typeof cover.width === "number" &&
+    typeof cover.height === "number" &&
+    cover.width > 0 &&
+    cover.height > 0
+  ) {
+    return { width: cover.width, height: cover.height, measured: true };
+  }
+  return {
+    width: STORY_COVER_TEMPLATE.width,
+    height: STORY_COVER_TEMPLATE.height,
+    measured: false,
+  };
 }
 
 export function findStoryAssetBySrc(

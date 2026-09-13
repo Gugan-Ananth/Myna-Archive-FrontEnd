@@ -35,6 +35,15 @@ export function orderedStoryChapters(chapters: ArchiveItem[]): ArchiveItem[] {
   );
 }
 
+/** Series board/hero cover comes from the first chapter, else the root. */
+export function storySeriesCoverItem(
+  root: ArchiveItem,
+  chapters?: ArchiveItem[],
+): ArchiveItem {
+  if (!chapters || chapters.length === 0) return root;
+  return orderedStoryChapters(chapters)[0] ?? root;
+}
+
 /** Mean of every chapter rating. Empty input is 0. */
 export function averageChapterRating(
   chapters: Array<{ rating: number }>,

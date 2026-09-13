@@ -7,19 +7,17 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent,
   type MouseEvent,
 } from "react";
 import { createPortal } from "react-dom";
-import bunnyImageLoader from "../lib/bunny-image-loader";
-import { resolveCopyImageUrl } from "../lib/copy-image";
+import {
+  archiveItemCopySrc,
+  resolveCopyImageUrl,
+} from "../lib/copy-image";
 import { attachBrokenMediaHandler } from "../lib/image-recovery";
 import { useI18n } from "../lib/i18n";
-import {
-  GRID_THUMB_QUALITY,
-  gridMediaSrc,
-  STORY_COVER_TEMPLATE,
-} from "../lib/media-display";
 import { enhanceStoryHtml, storyReadMinutes } from "../lib/story-reader";
 import {
   orderedStoryChapters,
@@ -34,8 +32,8 @@ import {
 } from "../lib/story-sounds";
 import type { ArchiveItem } from "../lib/types";
 import { CopyImageButton } from "./copy-image-button";
-import { LoadingImage } from "./global-loading";
 import { ImageCopyMenu, useImageCopyMenu } from "./image-copy-menu";
+import { StoryCoverStill, useStoryCoverFrame } from "./story-cover-still";
 import { RatingBadge } from "./rating-badge";
 import { StoryImageLightbox } from "./story-image-lightbox";
 
@@ -86,9 +84,8 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
       }),
     [item.bodyHtml, item.name, item.characters],
   );
-  const cover = item.mediaUrl || item.thumbnailUrl;
-  const hasCover = Boolean(cover);
-  const coverSrc = hasCover ? gridMediaSrc(item) : STORY_COVER_TEMPLATE.src;
+  const coverCopySrc = archiveItemCopySrc(item);
+  const { aspect, landscape, onNaturalSize } = useStoryCoverFrame(item);
 
   useEffect(() => {
     const root = articleRef.current;
@@ -241,43 +238,41 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
         </nav>
       ) : null}
 
-      <section className="app-card overflow-hidden rounded-[1.5rem] ring-1 ring-border">
-        <div className="flex min-w-0 flex-row">
-          <div
-            className="relative min-h-[9.75rem] w-[7.25rem] shrink-0 self-stretch overflow-hidden bg-surface-muted sm:min-h-[13.5rem] sm:w-[10rem]"
-            onContextMenu={(event) => {
-              if (!hasCover) return;
-              const src = resolveCopyImageUrl(
-                item.mediaUrl || item.thumbnailUrl,
-              );
-              if (!src) return;
-              openMenu(event, src, { fileName: item.name });
-            }}
-          >
-            <LoadingImage
-              src={coverSrc}
-              alt={t("storyCoverAlt", { name: item.name })}
-              fill
-              priority
-              loader={hasCover ? bunnyImageLoader : undefined}
-              unoptimized={!hasCover}
-              sizes="(max-width: 640px) 116px, 160px"
-              quality={GRID_THUMB_QUALITY}
-              className="object-cover"
-              fallbackLabel={t("previewUnavailable")}
+      <section
+        className="story-cover-row story-title-card app-card overflow-hidden rounded-[1.5rem] ring-1 ring-border"
+        style={{ "--cover-aspect": aspect } as CSSProperties}
+      >
+        <div
+          className="story-cover-well"
+          onContextMenu={(event) => {
+            if (!coverCopySrc) return;
+            openMenu(event, coverCopySrc, { fileName: item.name });
+          }}
+        >
+          <StoryCoverStill
+            item={item}
+            alt={t("storyCoverAlt", { name: item.name })}
+            priority
+            sizes={
+              landscape
+                ? "(max-width: 640px) 70vw, 50vw"
+                : "(max-width: 640px) 116px, 200px"
+            }
+            fit="contain"
+            onNaturalSize={onNaturalSize}
+          />
+          {coverCopySrc ? (
+            <CopyImageButton
+              src={coverCopySrc}
+              className="absolute left-2 top-2 z-10"
             />
-            {hasCover ? (
-              <CopyImageButton
-                src={resolveCopyImageUrl(item.mediaUrl || item.thumbnailUrl)}
-                className="absolute left-2 top-2 z-10"
-              />
-            ) : null}
-            <RatingBadge
-              rating={item.rating}
-              className="absolute right-2 bottom-2 z-10"
-            />
-          </div>
-          <div className="flex min-w-0 flex-1 flex-col px-4 py-3.5 sm:px-6 sm:py-5">
+          ) : null}
+          <RatingBadge
+            rating={item.rating}
+            className="absolute right-2 bottom-2 z-10"
+          />
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden px-4 py-3.5 sm:px-6 sm:py-5">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
               {hasSeries || chapterNumber > 1 ? (
                 <p className="text-[11px] font-semibold tracking-[0.16em] text-primary uppercase">
@@ -294,7 +289,7 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
                 </p>
               )}
             </div>
-            <h1 className="mt-1.5 text-xl font-semibold leading-snug tracking-tight text-foreground sm:text-3xl">
+            <h1 className="mt-1.5 line-clamp-2 text-xl font-semibold leading-snug tracking-tight text-foreground sm:text-3xl">
               {item.name}
             </h1>
             {author ? (
@@ -313,7 +308,6 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
                 {t("storyReadTime", { minutes })}
               </p>
             ) : null}
-          </div>
         </div>
       </section>
 

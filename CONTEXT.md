@@ -17,7 +17,7 @@ An Archive Item that composites a source image with a written story using a layo
 _Avoid_: meme, overlay (unless naming the overlay template), treating the PNG as the only source of truth, storing the original photo as a second gallery asset
 
 **Story series**:
-A written story with one or more chapters. The series root (chapter 1) is the work shown on the Stories board. Later chapters hang off `seriesId`. The board card uses the root cover and the mean of every chapter rating. Opening a multi-chapter series lists the chapters before the reader.
+A written story with one or more chapters. The series root (chapter 1) is the work shown on the Stories board. Later chapters hang off `seriesId`. The board card uses the first chapter's cover (or the story cover template when that chapter has no image) and the mean of every chapter rating. It names the series and chapter count; it does not list chapter titles. Opening a multi-chapter series lists the chapters before the reader. Each chapter card and the chapter reader use that chapter's own cover, or the story cover template when the chapter has no image.
 _Avoid_: book, volume (unless naming a field)
 
 **Story character**:
