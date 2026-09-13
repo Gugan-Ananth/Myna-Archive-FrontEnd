@@ -111,7 +111,7 @@ export function SearchBar({
           "relative flex h-11 w-full min-w-0 items-center overflow-hidden rounded-full",
           "border bg-background transition-[border-color,box-shadow,background-color] duration-300 ease-out",
           focused
-            ? "border-primary bg-surface shadow-[0_0_0_3px_var(--accent-soft),0_8px_24px_-8px_rgba(124,58,237,0.35)]"
+            ? "border-primary bg-surface shadow-[0_0_0_3px_var(--accent-soft),0_8px_24px_-8px_color-mix(in_srgb,var(--ring)_42%,transparent)]"
             : "border-border shadow-sm hover:border-border-strong hover:bg-surface hover:shadow-md",
         ].join(" ")}
       >

@@ -22,8 +22,8 @@ import {
   archiveItemMediaSource,
   originalCharacterMediaSource,
 } from "../lib/copy-image";
-import { storyCoverDisplay } from "../lib/story-content";
-import { storyWorkHref } from "../lib/story-series";
+import { storyWorkCoverDisplay, storyWorkCoverSize } from "../lib/story-content";
+import { storySeriesName, storyWorkHref } from "../lib/story-series";
 import type { ArchiveItem, OriginalCharacter } from "../lib/types";
 import { warmArchiveItem, warmOriginalCharacter } from "../lib/warm-preview";
 import { ImageCopyMenu, useImageCopyMenu } from "./image-copy-menu";
@@ -65,7 +65,9 @@ export function entryId(entry: TopTenEntry): string {
 }
 
 function entryName(entry: TopTenEntry): string {
-  return entry.kind === "archive" ? entry.item.name : entry.oc.name;
+  if (entry.kind === "oc") return entry.oc.name;
+  if (entry.item.mediaType === "story") return storySeriesName(entry.item);
+  return entry.item.name;
 }
 
 function entryHref(entry: TopTenEntry): string {
@@ -83,13 +85,14 @@ export function entryMediaSize(entry: TopTenEntry): { w: number; h: number } {
     return PLACEHOLDER;
   }
   const { item } = entry;
+  if (item.mediaType === "story") {
+    const size = storyWorkCoverSize(item);
+    return { w: size.width, h: size.height };
+  }
   if (item.width && item.height && item.width > 0 && item.height > 0) {
     return { w: item.width, h: item.height };
   }
   if (item.mediaType === "video") return { w: 16, h: 9 };
-  if (item.mediaType === "story") {
-    return { w: STORY_COVER_TEMPLATE.width, h: STORY_COVER_TEMPLATE.height };
-  }
   return PLACEHOLDER;
 }
 
@@ -297,7 +300,7 @@ function TopTenMedia({
   const isArchive = entry.kind === "archive";
   const isVideo = isArchive && entry.item.mediaType === "video";
   const isStory = isArchive && entry.item.mediaType === "story";
-  const storyDisplay = isStory ? storyCoverDisplay(entry.item) : null;
+  const storyDisplay = isStory ? storyWorkCoverDisplay(entry.item) : null;
   const imageSrc = isArchive
     ? (storyDisplay?.src ?? gridMediaSrc(entry.item))
     : ocGridSrc(entry.oc);

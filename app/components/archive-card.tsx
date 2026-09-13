@@ -26,7 +26,7 @@ import {
   videoThumbnailCandidates,
   withCacheBust,
 } from "../lib/media-display";
-import { storyCoverDisplay } from "../lib/story-content";
+import { storyWorkCoverDisplay } from "../lib/story-content";
 import type { ArchiveItem } from "../lib/types";
 import {
   archiveItemCopySrc,
@@ -106,7 +106,7 @@ export function ArchiveCard({
     }
     return blurHashPlaceholderFallback();
   }, [isClient, item.blurHash]);
-  const storyDisplay = isStory ? storyCoverDisplay(item) : null;
+  const storyDisplay = isStory ? storyWorkCoverDisplay(item) : null;
   const imageSrc = storyDisplay?.src ?? gridMediaSrc(item);
   const storyCover = Boolean(storyDisplay?.hasCover);
 

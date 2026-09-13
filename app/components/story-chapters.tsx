@@ -11,11 +11,13 @@ import {
 import { listStoryChapters, updateArchiveItem } from "../lib/api";
 import { archiveItemCopySrc } from "../lib/copy-image";
 import { useI18n } from "../lib/i18n";
-import { storyCardBlurb } from "../lib/story-content";
+import { storyCardBlurb, storySeriesBlurb } from "../lib/story-content";
 import { storyReadMinutes } from "../lib/story-reader";
 import {
   orderedStoryChapters,
   storySeriesCoverItem,
+  storySeriesEditHref,
+  storySeriesName,
   storyWorkRating,
 } from "../lib/story-series";
 import type { ArchiveItem } from "../lib/types";
@@ -49,7 +51,18 @@ export function StoryChapters({ item, chapters }: StoryChaptersProps) {
     let cancelled = false;
     void listStoryChapters(item.id)
       .then((data) => {
-        if (!cancelled && data.length > 0) setFetchedSeries(data);
+        if (cancelled || data.length === 0) return;
+        setFetchedSeries(data);
+        const root = data.find((chapter) => !chapter.seriesId);
+        if (!root) return;
+        setSaved((current) => ({
+          ...current,
+          seriesName: root.seriesName ?? current.seriesName,
+          seriesDescription:
+            root.seriesDescription ?? current.seriesDescription,
+          seriesCover: root.seriesCover ?? current.seriesCover,
+          chapterCount: data.length,
+        }));
       })
       .catch(() => {
         /* keep the server snapshot */
@@ -63,8 +76,9 @@ export function StoryChapters({ item, chapters }: StoryChaptersProps) {
   const first = ordered[0] ?? saved;
   const workRating = storyWorkRating(saved, ordered);
   const coverItem = storySeriesCoverItem(saved, ordered);
+  const seriesTitle = storySeriesName(saved);
   const author = saved.author?.trim() || first.author?.trim();
-  const blurb = storyCardBlurb(saved) || storyCardBlurb(first);
+  const blurb = storySeriesBlurb(saved);
   const chapterCount = Math.max(ordered.length, saved.chapterCount ?? 1);
   const coverCopySrc = archiveItemCopySrc(coverItem);
 
@@ -90,6 +104,7 @@ export function StoryChapters({ item, chapters }: StoryChaptersProps) {
             <SeriesTitleCard
               item={saved}
               coverItem={coverItem}
+              title={seriesTitle}
               author={author}
               blurb={blurb}
               chapterCount={chapterCount}
@@ -119,6 +134,7 @@ export function StoryChapters({ item, chapters }: StoryChaptersProps) {
 function SeriesTitleCard({
   item,
   coverItem,
+  title,
   author,
   blurb,
   chapterCount,
@@ -129,6 +145,7 @@ function SeriesTitleCard({
 }: {
   item: ArchiveItem;
   coverItem: ArchiveItem;
+  title: string;
   author?: string;
   blurb: string;
   chapterCount: number;
@@ -150,13 +167,13 @@ function SeriesTitleCard({
       style={{ "--cover-aspect": aspect } as CSSProperties}
       onContextMenu={(event) => {
         if (!coverCopySrc) return;
-        onOpenMenu(event, coverCopySrc, { fileName: item.name });
+        onOpenMenu(event, coverCopySrc, { fileName: title });
       }}
     >
       <div className="story-cover-well">
         <StoryCoverStill
           item={coverItem}
-          alt={t("storyCoverAlt", { name: item.name })}
+          alt={t("storyCoverAlt", { name: title })}
           priority
           sizes={
             landscape
@@ -185,7 +202,7 @@ function SeriesTitleCard({
           {t("storySeries")}
         </p>
         <h1 className="mt-1.5 line-clamp-2 text-xl font-semibold leading-snug tracking-tight text-foreground sm:text-3xl">
-          {item.name}
+          {title}
         </h1>
         {author ? (
           <p className="mt-1.5 text-sm text-foreground-muted">
@@ -201,14 +218,22 @@ function SeriesTitleCard({
         <p className="mt-auto pt-3 text-xs font-medium tracking-wide text-foreground-subtle uppercase">
           {t("chaptersAvailable", { count: chapterCount })}
         </p>
-        <Link
-          href={`/item/${first.id}`}
-          prefetch
-          onPointerEnter={() => warmArchiveItem(first)}
-          className="mt-3 inline-flex h-11 w-fit items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {t("storyStartReading")}
-        </Link>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Link
+            href={`/item/${first.id}`}
+            prefetch
+            onPointerEnter={() => warmArchiveItem(first)}
+            className="inline-flex h-11 w-fit items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {t("storyStartReading")}
+          </Link>
+          <Link
+            href={storySeriesEditHref(item)}
+            className="inline-flex h-11 w-fit items-center justify-center rounded-full border border-border bg-surface px-5 text-sm font-medium text-foreground transition-colors hover:bg-accent-soft hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {t("editSeries")}
+          </Link>
+        </div>
       </div>
     </section>
   );

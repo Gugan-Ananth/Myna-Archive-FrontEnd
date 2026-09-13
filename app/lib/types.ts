@@ -54,6 +54,21 @@ export type ArchiveItem = {
    * the API knows the series; later chapters keep their own `rating`.
    */
   seriesRating?: number;
+  /**
+   * Dedicated series title on the Stories board. Empty until set on the
+   * series root; the UI then falls back to the first chapter's name.
+   */
+  seriesName?: string;
+  /**
+   * Series synopsis for the board card and chapter list. Empty means no
+   * series blurb — chapter copy is not reused.
+   */
+  seriesDescription?: string;
+  /**
+   * Dedicated series cover. Null/omitted falls back to the first chapter.
+   * Stored on the series root, not mixed into chapter media assets.
+   */
+  seriesCover?: MediaAsset | null;
   /** Cover thumbnail for the home grid (first media asset). */
   thumbnailUrl: string;
   /**

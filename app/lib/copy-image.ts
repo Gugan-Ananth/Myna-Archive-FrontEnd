@@ -1,5 +1,6 @@
 import { itemMediaAssets, originalMediaUrl, thumbProxySource } from "./media-display";
 import { storyCoverAsset } from "./story-content";
+import { storySeriesName } from "./story-series";
 import type { ArchiveItem, OriginalCharacter } from "./types";
 
 const BUNNY_HOST_RE = /(^|\.)b-cdn\.net$/i;
@@ -23,13 +24,13 @@ export function archiveItemMediaSource(
   }
 
   if (item.mediaType === "story") {
-    const cover = storyCoverAsset(item);
+    const cover = item.seriesCover ?? storyCoverAsset(item);
     const url = cover?.mediaUrl || cover?.thumbnailUrl;
     if (!url) return null;
     return {
       src: resolveCopyImageUrl(url),
       kind: "image",
-      fileName: item.name,
+      fileName: item.seriesCover ? storySeriesName(item) : item.name,
     };
   }
 

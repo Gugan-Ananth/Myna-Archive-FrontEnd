@@ -55,6 +55,13 @@ export function storyCardBlurb(item: ArchiveItem, max = 360): string {
   return storyExcerpt(item.bodyHtml ?? "", max);
 }
 
+/** Series board/hero blurb. Empty when the owner has not set one. */
+export function storySeriesBlurb(item: ArchiveItem, max = 360): string {
+  const text = item.seriesDescription?.trim();
+  if (!text) return "";
+  return clipText(text, max);
+}
+
 /**
  * Optional cover is an extra leading media asset that is not in the body HTML.
  * When asset count matches the body image count, there is no dedicated cover.
@@ -129,6 +136,37 @@ export function storyCoverSize(item: ArchiveItem): {
     height: STORY_COVER_TEMPLATE.height,
     measured: false,
   };
+}
+
+/** Grid still for a work: dedicated series cover, else the chapter cover. */
+export function storyWorkCoverDisplay(item: ArchiveItem): {
+  src: string;
+  hasCover: boolean;
+} {
+  const cover = item.seriesCover;
+  if (cover) {
+    return { src: gridAssetSrc(cover), hasCover: true };
+  }
+  return storyCoverDisplay(item);
+}
+
+/** Pixel size of the work cover (series cover, else chapter cover). */
+export function storyWorkCoverSize(item: ArchiveItem): {
+  width: number;
+  height: number;
+  measured: boolean;
+} {
+  const cover = item.seriesCover;
+  if (
+    cover &&
+    typeof cover.width === "number" &&
+    typeof cover.height === "number" &&
+    cover.width > 0 &&
+    cover.height > 0
+  ) {
+    return { width: cover.width, height: cover.height, measured: true };
+  }
+  return storyCoverSize(item);
 }
 
 export function findStoryAssetBySrc(

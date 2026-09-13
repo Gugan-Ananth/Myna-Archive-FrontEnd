@@ -6,7 +6,7 @@
 /*
   My Collection — purple brand design tokens.
   Light: soft white + lavender.
-  Dark: restful midnight canvas; purple is for actions, not the whole room.
+  Dark: Figma Solve palette — near-black indigo, electric violet, magenta orb.
 */
 
 :root {
@@ -121,65 +121,85 @@
 }
 
 /*
-  Dark: midnight with a violet undertone — easy on the eyes for browsing
-  photos and reading stories. Purple is reserved for buttons, chips, and focus.
+  Dark: Figma Solve palette (community file 1413164391503032132).
+  Canvas #050020, CTA #5f00ff, mid #7422ff, light #8740ff,
+  pale #cdafff, orb glow #f4a0ff, haze #d2b7ff.
+  Near-black indigo with a magenta/electric orb — not a grape wash.
 */
 .dark {
   color-scheme: dark;
 
-  /* Surfaces: charcoal-violet, not a grape wash */
-  --background: #121018;
-  --surface: #1a1722;
-  --surface-muted: #221f2c;
-  --surface-elevated: #2a2636;
-  --nav: #2a2636;
-  --nav-from: #332c44;
-  --nav-via: #241e32;
-  --nav-to: #16111f;
-  --nav-glow: rgb(124 58 237 / 0.32);
-  --card-from: #302848;
-  --card-via: #221c32;
-  --card-to: #17121f;
-  --card-glow: rgb(124 58 237 / 0.28);
+  --background: #050020;
+  --surface: #0c0728;
+  --surface-muted: #140c38;
+  --surface-elevated: #1c1250;
+  --nav: #12083a;
+  --nav-from: #2a1278;
+  --nav-via: #0e0630;
+  --nav-to: #050020;
+  --nav-glow: rgb(244 160 255 / 0.34);
+  --card-from: #1c1250;
+  --card-via: #0e0630;
+  --card-to: #080428;
+  --card-glow: rgb(210 183 255 / 0.3);
 
-  /* Brand purple — luminous on dark, same family as light */
-  --primary: #b8a4ff;
-  --primary-hover: #d0c4ff;
-  --primary-foreground: #14111c;
-  --accent: #9b87e8;
-  --accent-soft: #2a2638;
-  --accent-muted: #7c6db0;
+  /* Luminous on dark so text-primary stays readable */
+  --primary: #cdafff;
+  --primary-hover: #e4d4ff;
+  --primary-foreground: #050020;
+  --accent: #8740ff;
+  --accent-soft: #1a0c48;
+  --accent-muted: #d2b7ff;
 
-  /* Favorite control: deep purple in dark mode. */
-  --star: #4c1d95;
-  --star-hover: #5b21b6;
-  --star-foreground: #ede9fe;
-  --star-muted: #2a2638;
-  --star-muted-hover: #392b5d;
-  --star-muted-foreground: #b8a4ff;
-  --star-ring: #6d28d9;
+  --star: #5f00ff;
+  --star-hover: #7422ff;
+  --star-foreground: #ffffff;
+  --star-muted: #140c38;
+  --star-muted-hover: #2a1278;
+  --star-muted-foreground: #cdafff;
+  --star-ring: #8740ff;
   --loader-dot: #ffffff;
 
-  /* Text: near-white, only a hint of lavender */
-  --foreground: #f4f1fa;
-  --foreground-muted: #b5afc2;
-  --foreground-subtle: #888399;
+  --foreground: #ffffff;
+  --foreground-muted: #c9c2d9;
+  --foreground-subtle: #8f86a8;
 
-  /* Lines: quiet separators, not glowing fences */
-  --border: #2e2a3a;
-  --border-strong: #454056;
-  --ring: #b8a4ff;
+  --border: #2c1f55;
+  --border-strong: #4a3a80;
+  --ring: #cdafff;
 
   --success: #34d399;
   --danger: #f87171;
   --warning: #fbbf24;
 
-  --canvas-from: #221638;
-  --canvas-via: #161022;
-  --canvas-to: #100c1a;
-  --canvas-glow-1: rgb(124 58 237 / 0.42);
-  --canvas-glow-2: rgb(76 29 149 / 0.5);
-  --canvas-glow-3: rgb(46 16 101 / 0.58);
+  --canvas-from: #0c0630;
+  --canvas-via: #050020;
+  --canvas-to: #030014;
+  --canvas-glow-1: rgb(244 160 255 / 0.48);
+  --canvas-glow-2: rgb(95 0 255 / 0.4);
+  --canvas-glow-3: rgb(135 64 255 / 0.28);
+  --app-canvas:
+    radial-gradient(
+      ellipse 48% 40% at 50% 26%,
+      var(--canvas-glow-1) 0%,
+      transparent 58%
+    ),
+    radial-gradient(
+      ellipse 68% 55% at 48% 34%,
+      var(--canvas-glow-2) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 90% 62% at 18% -6%,
+      var(--canvas-glow-3) 0%,
+      transparent 64%
+    ),
+    linear-gradient(
+      165deg,
+      var(--canvas-from) 0%,
+      var(--canvas-via) 48%,
+      var(--canvas-to) 100%
+    );
 }
 
 @theme inline {
@@ -1215,8 +1235,8 @@ html {
 }
 
 .dark .top-ten-title {
-  color: #d8b4fe;
-  text-shadow: 0 2px 8px rgb(221 214 254 / 0.16);
+  color: #cdafff;
+  text-shadow: 0 2px 8px rgb(244 160 255 / 0.22);
 }
 
 @media (min-width: 640px) {
@@ -1924,31 +1944,31 @@ html {
 }
 
 .dark .story-read .story-dialogue-bubble {
-  border-color: color-mix(in srgb, var(--accent-muted) 68%, #09080d);
+  border-color: color-mix(in srgb, var(--accent-muted) 68%, #050020);
   background:
     radial-gradient(
       ellipse 90% 80% at 0% 0%,
       color-mix(in srgb, var(--primary) 25%, transparent) 0%,
       transparent 58%
     ),
-    linear-gradient(145deg, #292532 0%, #09080d 100%);
+    linear-gradient(145deg, #1c1250 0%, #050020 100%);
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--primary) 12%, transparent),
-    0 5px 0 -3px color-mix(in srgb, var(--primary) 84%, #09080d),
+    0 5px 0 -3px color-mix(in srgb, var(--primary) 84%, #050020),
     0 12px 22px -16px rgb(0 0 0 / 0.9);
   color: #ffffff !important;
   -webkit-text-fill-color: #ffffff !important;
 }
 
 .dark .story-read .story-dialogue[data-side="right"] .story-dialogue-bubble {
-  border-color: color-mix(in srgb, var(--accent) 72%, #09080d);
+  border-color: color-mix(in srgb, var(--accent) 72%, #050020);
   background:
     radial-gradient(
       ellipse 90% 80% at 100% 0%,
       color-mix(in srgb, var(--accent) 30%, transparent) 0%,
       transparent 58%
     ),
-    linear-gradient(145deg, #1b1822 0%, #050507 100%);
+    linear-gradient(145deg, #140c38 0%, #030014 100%);
 }
 
 .dark .story-read img:not(.story-dialogue-avatar) {

@@ -22,6 +22,7 @@ import { enhanceStoryHtml, storyReadMinutes } from "../lib/story-reader";
 import {
   orderedStoryChapters,
   storyChaptersHref,
+  storySeriesName,
 } from "../lib/story-series";
 import {
   playStorySound,
@@ -66,6 +67,9 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
   const chapterNumber = item.chapterNumber ?? 1;
   const chapterCount = Math.max(ordered.length, 1);
   const hasSeries = chapterCount > 1;
+  const seriesRoot =
+    ordered.find((chapter) => !chapter.seriesId) ?? ordered[0];
+  const seriesTitle = seriesRoot ? storySeriesName(seriesRoot) : "";
   const index = ordered.findIndex((chapter) => chapter.id === item.id);
   const previous = index > 0 ? ordered[index - 1] : undefined;
   const next =
@@ -292,6 +296,9 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
             <h1 className="mt-1.5 line-clamp-2 text-xl font-semibold leading-snug tracking-tight text-foreground sm:text-3xl">
               {item.name}
             </h1>
+            {hasSeries && seriesTitle && seriesTitle !== item.name ? (
+              <p className="mt-1 text-sm text-foreground-muted">{seriesTitle}</p>
+            ) : null}
             {author ? (
               <p className="mt-1.5 text-sm text-foreground-muted">
                 {t("storyWrittenByLabel")}{" "}
