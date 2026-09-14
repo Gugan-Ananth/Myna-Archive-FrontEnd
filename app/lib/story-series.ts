@@ -29,9 +29,43 @@ export function storyChaptersHref(item: {
   return `/item/${storySeriesRootId(item)}/chapters`;
 }
 
-export function orderedStoryChapters(chapters: ArchiveItem[]): ArchiveItem[] {
+export function orderedStoryChapters<T extends { chapterNumber?: number }>(
+  chapters: T[],
+): T[] {
   return [...chapters].sort(
     (a, b) => (a.chapterNumber ?? 1) - (b.chapterNumber ?? 1),
+  );
+}
+
+/**
+ * Move one chapter to another chapter's slot and renumber 1..n.
+ * Dropping chapter 15 on chapter 6 makes it chapter 6; later chapters shift up.
+ */
+export function moveStoryChapter<T extends { id: string; chapterNumber?: number }>(
+  chapters: T[],
+  fromId: string,
+  toId: string,
+): T[] {
+  const ordered = orderedStoryChapters(chapters);
+  const from = ordered.findIndex((chapter) => chapter.id === fromId);
+  const to = ordered.findIndex((chapter) => chapter.id === toId);
+  if (
+    from < 0 ||
+    to < 0 ||
+    from === to ||
+    from >= ordered.length ||
+    to >= ordered.length
+  ) {
+    return ordered;
+  }
+  const next = [...ordered];
+  const [moved] = next.splice(from, 1);
+  if (!moved) return ordered;
+  next.splice(to, 0, moved);
+  return next.map((chapter, index) =>
+    (chapter.chapterNumber ?? 1) === index + 1
+      ? chapter
+      : { ...chapter, chapterNumber: index + 1 },
   );
 }
 

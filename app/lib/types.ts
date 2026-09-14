@@ -45,7 +45,7 @@ export type ArchiveItem = {
   section?: ArchiveSection;
   /** Root story id when this row is a later chapter; null for the series. */
   seriesId?: string | null;
-  /** 1-based chapter index. Roots are chapter 1. */
+  /** 1-based reading order within the series. */
   chapterNumber?: number;
   /** How many chapters the series has (on story roots). */
   chapterCount?: number;

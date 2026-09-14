@@ -60,6 +60,10 @@ export type ReorderTaxonomyInput = {
   tags?: Array<{ categorySlug: string; tagSlugs: string[] }>;
 };
 
+export type ReorderStoryChaptersInput = {
+  chapterIds: string[];
+};
+
 export type ListArchiveItemsParams = {
   q?: string;
   tag?: string[];
