@@ -14,6 +14,7 @@ import type {
   ListArchiveItemsParams,
   ListTagSummariesParams,
   PaginatedArchiveItems,
+  ReorderStoryChaptersInput,
   TagSummary,
   TagsListResponse,
   UpdateArchiveItemInput,
@@ -177,6 +178,24 @@ export async function listStoryChapters(
   }
 
   return fetchChapters();
+}
+
+/** Persist a new reading order. Numbers become 1..n in `chapterIds` order. */
+export async function reorderStoryChapters(
+  id: string,
+  input: ReorderStoryChaptersInput,
+): Promise<ArchiveItem[]> {
+  const result = await apiFetch<{ data: ArchiveItem[] }>(
+    `/archive-items/${encodeURIComponent(id)}/chapters/reorder`,
+    {
+      method: "PATCH",
+      body: input,
+    },
+  );
+  const data = result.data ?? [];
+  await invalidateArchiveCaches();
+  seedChaptersCache(id, data);
+  return data;
 }
 
 function seedChaptersCache(requestedId: string, data: ArchiveItem[]): void {
