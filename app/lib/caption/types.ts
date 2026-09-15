@@ -38,6 +38,13 @@ export const CAPTION_DEFAULT_FONT_SIZE = 24;
 export const CAPTION_DEFAULT_PADDING = 40;
 export const CAPTION_LINE_HEIGHT = 1.5;
 
+/** Pull the first line up by half-leading so glyphs sit at the padding edge. */
+export const CAPTION_FIRST_LINE_SHIFT_EM = (1 - CAPTION_LINE_HEIGHT) / 2;
+
+export function normalizeCaptionStory(story: string): string {
+  return story.replace(/\r\n/g, "\n").trim();
+}
+
 export type CaptionSpec = {
   version: 1;
   template: CaptionTemplate;

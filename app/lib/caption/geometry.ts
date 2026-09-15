@@ -3,6 +3,7 @@ import {
   CAPTION_MAX_HEIGHT,
   CAPTION_MIN_FONT_SIZE,
   CAPTION_MIN_HEIGHT,
+  type CaptionFont,
   type CaptionSpec,
   type CaptionTemplate,
 } from "./types";
@@ -23,14 +24,90 @@ export type CaptionGeometry = {
   text: CaptionBox;
 };
 
-const AVG_CHAR_WIDTH = 0.55;
+/**
+ * Approximate glyph width in em. Slightly wide of Inter so wrapping stays
+ * conservative (extra space, never clipped text).
+ */
+function glyphEm(ch: string, fontFamily: CaptionFont): number {
+  if (fontFamily === "Courier New") return 0.6;
+  if (ch === " ") return 0.28;
+  if (ch === "\t") return 1;
+  if ("iIlj.,;:'!|".includes(ch)) return 0.24;
+  if ("frtJ-()[]".includes(ch)) return 0.34;
+  if ("mw@#%&".includes(ch)) return 0.8;
+  if ("MW".includes(ch)) return 0.9;
+  if (ch >= "A" && ch <= "Z") return 0.64;
+  if (ch >= "a" && ch <= "z") return 0.5;
+  if (ch >= "0" && ch <= "9") return 0.56;
+  const code = ch.codePointAt(0) ?? 0;
+  if (code > 0x2e80) return 1;
+  return 0.54;
+}
+
+function measureEm(text: string, fontFamily: CaptionFont): number {
+  let width = 0;
+  for (const ch of text) width += glyphEm(ch, fontFamily);
+  return width;
+}
+
+function placeWord(
+  word: string,
+  fontSize: number,
+  maxWidth: number,
+  fontFamily: CaptionFont,
+): { lines: number; lineWidth: number } {
+  const chars = [...word];
+  let lines = 0;
+  let used = 0;
+  for (const ch of chars) {
+    const width = glyphEm(ch, fontFamily) * fontSize;
+    if (used > 0 && used + width > maxWidth) {
+      lines += 1;
+      used = width;
+    } else {
+      used += width;
+    }
+  }
+  return { lines, lineWidth: used };
+}
+
+function wrapParagraph(
+  para: string,
+  fontSize: number,
+  boxWidth: number,
+  fontFamily: CaptionFont,
+): number {
+  const maxWidth = Math.max(1, boxWidth * 0.98);
+  const words = para.split(/\s+/).filter((word) => word.length > 0);
+  if (words.length === 0) return 1;
+  let lines = 0;
+  let lineWidth = 0;
+  const space = glyphEm(" ", fontFamily) * fontSize;
+
+  for (const word of words) {
+    const wordWidth = measureEm(word, fontFamily) * fontSize;
+    const gap = lineWidth === 0 ? 0 : space;
+    if (lineWidth > 0 && lineWidth + gap + wordWidth <= maxWidth) {
+      lineWidth += gap + wordWidth;
+      continue;
+    }
+    if (lineWidth > 0) {
+      lines += 1;
+      lineWidth = 0;
+    }
+    const placed = placeWord(word, fontSize, maxWidth, fontFamily);
+    lines += placed.lines;
+    lineWidth = placed.lineWidth;
+  }
+  return lines + 1;
+}
 
 export function estimateLineCount(
   story: string,
   fontSize: number,
   boxWidth: number,
+  fontFamily: CaptionFont = "Inter",
 ): number {
-  const maxChars = Math.max(8, Math.floor(boxWidth / (fontSize * AVG_CHAR_WIDTH)));
   let lines = 0;
   const paragraphs = story.replace(/\r\n/g, "\n").split("\n");
   for (const para of paragraphs) {
@@ -38,33 +115,21 @@ export function estimateLineCount(
       lines += 1;
       continue;
     }
-    let current = 0;
-    for (const word of para.split(/\s+/)) {
-      if (word.length === 0) continue;
-      let remaining = word.length;
-      while (remaining > 0) {
-        const extra = current > 0 ? 1 : 0;
-        const room = maxChars - current - extra;
-        if (remaining <= room) {
-          current += extra + remaining;
-          remaining = 0;
-        } else if (current > 0) {
-          lines += 1;
-          current = 0;
-        } else {
-          lines += 1;
-          remaining -= maxChars;
-        }
-      }
-    }
-    lines += 1;
+    lines += wrapParagraph(para, fontSize, boxWidth, fontFamily);
   }
   return Math.max(1, lines);
 }
 
-function textHeight(story: string, fontSize: number, boxWidth: number): number {
+function textHeight(
+  story: string,
+  fontSize: number,
+  boxWidth: number,
+  fontFamily: CaptionFont = "Inter",
+): number {
   return Math.ceil(
-    estimateLineCount(story, fontSize, boxWidth) * fontSize * CAPTION_LINE_HEIGHT,
+    estimateLineCount(story, fontSize, boxWidth, fontFamily) *
+      fontSize *
+      CAPTION_LINE_HEIGHT,
   );
 }
 
@@ -72,6 +137,40 @@ function imageFraction(template: CaptionTemplate): number {
   if (template === "text-overlay") return 1;
   if (template === "polaroid") return 0.72;
   return 0.58;
+}
+
+export function canvasHeightForContent(
+  template: CaptionTemplate,
+  padding: number,
+  contentHeight: number,
+): number {
+  const textPad = template === "polaroid" ? 0 : padding * 2;
+  const box = contentHeight + textPad;
+  if (template === "side-by-side") return Math.ceil(box);
+  if (template === "image-top" || template === "image-bottom") {
+    return Math.ceil(box / (1 - imageFraction(template)));
+  }
+  if (template === "polaroid") {
+    const frame = Math.max(padding, 36);
+    return Math.ceil((contentHeight + frame) / (1 - imageFraction(template)));
+  }
+  return CAPTION_MIN_HEIGHT;
+}
+
+export function geometryAtHeight(
+  spec: CaptionSpec,
+  height: number,
+  fontSize: number,
+): CaptionGeometry {
+  const boxes = captionBoxes(spec.template, spec.width, height, spec.padding);
+  return {
+    width: spec.width,
+    height,
+    fontSize,
+    padding: spec.padding,
+    image: boxes.image,
+    text: boxes.text,
+  };
 }
 
 export function captionBoxes(
@@ -157,7 +256,7 @@ export function captionBoxes(
 }
 
 /**
- * Shrink font, then grow canvas height, so the story fits.
+ * Size the canvas so the story sits with equal padding on every side.
  * Overlay keeps the source aspect and only shrinks type.
  */
 export function fitCaptionLayout(
@@ -187,6 +286,25 @@ export function fitCaptionLayout(
     };
   }
 
+  const family = spec.fontFamily;
+  const textPad = template === "polaroid" ? 0 : padding * 2;
+
+  function innerWidth(geo: CaptionGeometry): number {
+    return Math.max(40, geo.text.width - (template === "polaroid" ? 0 : padding * 2));
+  }
+
+  function innerHeight(geo: CaptionGeometry): number {
+    return Math.max(40, geo.text.height - textPad);
+  }
+
+  function contentHeight(size: number, geo: CaptionGeometry): number {
+    return textHeight(story, size, innerWidth(geo), family);
+  }
+
+  function heightForContent(content: number): number {
+    return canvasHeightForContent(template, padding, content);
+  }
+
   if (template === "text-overlay") {
     const height = Math.round(
       Math.min(
@@ -196,10 +314,9 @@ export function fitCaptionLayout(
     );
     let size = fontSize;
     let geo = geometryFor(height, size);
-    const innerWidth = geo.text.width - padding * 2;
     while (
       size > CAPTION_MIN_FONT_SIZE &&
-      textHeight(story, size, innerWidth) > geo.text.height - padding
+      contentHeight(size, geo) > innerHeight(geo)
     ) {
       size -= 1;
       geo = geometryFor(height, size);
@@ -207,33 +324,19 @@ export function fitCaptionLayout(
     return geo;
   }
 
-  let height = spec.height;
   let size = fontSize;
-  let geo = geometryFor(height, size);
+  let geo = geometryFor(spec.height, size);
+  let needed = heightForContent(contentHeight(size, geo));
 
-  const innerWidth = () => Math.max(40, geo.text.width - padding * 2);
-  const innerHeight = () => Math.max(40, geo.text.height - padding * 2);
-
-  while (
-    size > CAPTION_MIN_FONT_SIZE &&
-    textHeight(story, size, innerWidth()) > innerHeight()
-  ) {
+  while (needed > CAPTION_MAX_HEIGHT && size > CAPTION_MIN_FONT_SIZE) {
     size -= 1;
-    geo = geometryFor(height, size);
+    geo = geometryFor(spec.height, size);
+    needed = heightForContent(contentHeight(size, geo));
   }
 
-  while (
-    height < CAPTION_MAX_HEIGHT &&
-    textHeight(story, size, innerWidth()) > innerHeight()
-  ) {
-    height = Math.min(CAPTION_MAX_HEIGHT, height + 80);
-    geo = geometryFor(height, size);
-  }
-
-  if (height < CAPTION_MIN_HEIGHT) {
-    height = CAPTION_MIN_HEIGHT;
-    geo = geometryFor(height, size);
-  }
-
-  return geo;
+  const height = Math.min(
+    CAPTION_MAX_HEIGHT,
+    Math.max(CAPTION_MIN_HEIGHT, needed),
+  );
+  return geometryFor(height, size);
 }

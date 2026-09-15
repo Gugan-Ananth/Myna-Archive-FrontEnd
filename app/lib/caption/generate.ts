@@ -1,7 +1,18 @@
 import { captionSatoriFonts } from "./fonts";
-import { fitCaptionLayout } from "./geometry";
-import { CaptionLayout } from "./templates";
-import { parseCaptionSpec, type CaptionSpec } from "./types";
+import {
+  canvasHeightForContent,
+  fitCaptionLayout,
+  geometryAtHeight,
+  type CaptionGeometry,
+} from "./geometry";
+import { CaptionLayout, CaptionStoryProbe } from "./templates";
+import {
+  CAPTION_MAX_HEIGHT,
+  CAPTION_MIN_HEIGHT,
+  normalizeCaptionStory,
+  parseCaptionSpec,
+  type CaptionSpec,
+} from "./types";
 
 async function loadSharp() {
   return (await import("sharp")).default;
@@ -40,18 +51,69 @@ async function prepareImage(
   return `data:image/png;base64,${resized.toString("base64")}`;
 }
 
+function satoriContentHeight(svg: string, fallback: number): number {
+  const mask = svg.match(
+    /<mask id="satori_om-id"><rect [^>]*height="([\d.]+)"/,
+  );
+  if (!mask) return fallback;
+  const height = Number(mask[1]);
+  return Number.isFinite(height) && height > 0 ? Math.ceil(height) : fallback;
+}
+
+async function refineCaptionHeight(
+  satori: Awaited<ReturnType<typeof loadSatori>>,
+  fonts: Awaited<ReturnType<typeof captionSatoriFonts>>,
+  spec: CaptionSpec,
+  story: string,
+  geometry: CaptionGeometry,
+): Promise<CaptionGeometry> {
+  if (spec.template === "text-overlay") return geometry;
+  const probeWidth =
+    spec.template === "polaroid"
+      ? Math.max(40, geometry.text.width)
+      : Math.max(40, geometry.text.width - geometry.padding * 2);
+  const svg = await satori(
+    CaptionStoryProbe({
+      story,
+      spec,
+      fontSize: geometry.fontSize,
+      width: probeWidth,
+    }),
+    {
+      width: probeWidth,
+      height: CAPTION_MAX_HEIGHT,
+      fonts,
+    },
+  );
+  const contentHeight = satoriContentHeight(
+    svg,
+    geometry.text.height -
+      (spec.template === "polaroid" ? 0 : geometry.padding * 2),
+  );
+  const height = Math.min(
+    CAPTION_MAX_HEIGHT,
+    Math.max(
+      CAPTION_MIN_HEIGHT,
+      canvasHeightForContent(spec.template, spec.padding, contentHeight),
+    ),
+  );
+  return geometryAtHeight(spec, height, geometry.fontSize);
+}
+
 export async function generateCaptionImage(
   input: GenerateCaptionInput,
 ): Promise<GenerateCaptionResult> {
   const spec = parseCaptionSpec(input.spec);
-  const story = input.story.replace(/\r\n/g, "\n").trim();
+  const story = normalizeCaptionStory(input.story);
   const sharp = await loadSharp();
   const satori = await loadSatori();
   const meta = await sharp(input.image).rotate().metadata();
-  const geometry = fitCaptionLayout(spec, story, {
+  let geometry = fitCaptionLayout(spec, story, {
     width: meta.width ?? spec.width,
     height: meta.height ?? spec.height,
   });
+  const fonts = await captionSatoriFonts(spec.fontFamily);
+  geometry = await refineCaptionHeight(satori, fonts, spec, story, geometry);
   const fittedSpec: CaptionSpec = {
     ...spec,
     width: geometry.width,
@@ -64,7 +126,6 @@ export async function generateCaptionImage(
     geometry.image.width,
     geometry.image.height,
   );
-  const fonts = await captionSatoriFonts(fittedSpec.fontFamily);
 
   const svg = await satori(
     CaptionLayout({
