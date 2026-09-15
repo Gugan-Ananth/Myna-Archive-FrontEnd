@@ -1,6 +1,11 @@
 import type { ReactNode } from "react";
 import type { CaptionGeometry } from "./geometry";
-import { CAPTION_SATORI_FONT, type CaptionSpec } from "./types";
+import {
+  CAPTION_FIRST_LINE_SHIFT_EM,
+  CAPTION_LINE_HEIGHT,
+  CAPTION_SATORI_FONT,
+  type CaptionSpec,
+} from "./types";
 
 type CaptionTemplateProps = {
   imageSrc: string;
@@ -24,15 +29,41 @@ function StoryText({
         display: "flex",
         flexDirection: "column",
         width: "100%",
+        marginTop: `${CAPTION_FIRST_LINE_SHIFT_EM}em`,
         color: spec.textColor,
         fontFamily: CAPTION_SATORI_FONT,
         fontSize,
-        lineHeight: 1.5,
+        lineHeight: CAPTION_LINE_HEIGHT,
         whiteSpace: "pre-wrap",
         wordBreak: "break-word",
       }}
     >
       {story}
+    </div>
+  );
+}
+
+/** Text-only probe used to measure the story before the final compose. */
+export function CaptionStoryProbe({
+  story,
+  spec,
+  fontSize,
+  width,
+}: {
+  story: string;
+  spec: CaptionSpec;
+  fontSize: number;
+  width: number;
+}): ReactNode {
+  return (
+    <div
+      style={{
+        display: "flex",
+        width,
+        alignItems: "flex-start",
+      }}
+    >
+      <StoryText story={story} spec={spec} fontSize={fontSize} />
     </div>
   );
 }
@@ -190,55 +221,45 @@ export function CaptionLayout({
     );
   }
 
-  const imageFirst = spec.template !== "image-bottom";
-  const imageBlock = (
-    <div
-      style={{
-        display: "flex",
-        width: image.width,
-        height: image.height,
-        overflow: "hidden",
-      }}
-    >
-      <CoverImage src={imageSrc} width={image.width} height={image.height} />
-    </div>
-  );
-  const textBlock = (
-    <div
-      style={{
-        display: "flex",
-        width: text.width,
-        height: text.height,
-        padding,
-      }}
-    >
-      <StoryText story={story} spec={spec} fontSize={fontSize} />
-    </div>
-  );
-
   return (
     <div
       style={{
         display: "flex",
-        flexDirection: "column",
         width,
         height,
+        position: "relative",
         background: spec.background,
         color: spec.textColor,
         fontFamily,
       }}
     >
-      {imageFirst ? (
-        <>
-          {imageBlock}
-          {textBlock}
-        </>
-      ) : (
-        <>
-          {textBlock}
-          {imageBlock}
-        </>
-      )}
+      <div
+        style={{
+          display: "flex",
+          position: "absolute",
+          left: image.x,
+          top: image.y,
+          width: image.width,
+          height: image.height,
+          overflow: "hidden",
+        }}
+      >
+        <CoverImage src={imageSrc} width={image.width} height={image.height} />
+      </div>
+      <div
+        style={{
+          display: "flex",
+          position: "absolute",
+          left: text.x,
+          top: text.y,
+          width: text.width,
+          height: text.height,
+          padding,
+          alignItems: "flex-start",
+        }}
+      >
+        <StoryText story={story} spec={spec} fontSize={fontSize} />
+      </div>
     </div>
   );
 }
