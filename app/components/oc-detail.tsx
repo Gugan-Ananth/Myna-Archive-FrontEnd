@@ -98,7 +98,7 @@ export function OcDetail({ oc }: OcDetailProps) {
           />
           <ImageCopyMenu menu={menu} onClose={closeMenu} />
         </div>
-        <div className="app-card min-w-0 flex-1 rounded-2xl border border-border p-5 shadow-sm sm:p-6">
+        <div className="app-card min-w-0 flex-1 rounded-2xl border border-border p-5 shadow-sm sm:p-6 select-text">
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
             {t("navOC")}
           </p>

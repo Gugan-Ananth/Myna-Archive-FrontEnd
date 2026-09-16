@@ -163,8 +163,10 @@ export function GlobalLoadingOverlay({
   return (
     <div
       className={[
-        "fixed inset-0 z-[100] flex items-center justify-center bg-background/25 backdrop-blur-[2px] transition-opacity duration-200",
-        hidden ? "pointer-events-none opacity-0" : "opacity-100",
+        "fixed inset-0 z-[100] flex items-center justify-center transition-opacity duration-200",
+        hidden
+          ? "pointer-events-none opacity-0"
+          : "bg-background/25 opacity-100 backdrop-blur-[2px]",
       ].join(" ")}
       aria-hidden={hidden}
       aria-live={visible ? "polite" : undefined}
@@ -258,6 +260,8 @@ export function LoadingImage({
       key={`${srcKey}:${phase}`}
       src={activeSrc}
       alt={alt}
+      draggable={false}
+      onDragStart={(event) => event.preventDefault()}
       loader={
         phase === "recovery" || usesStoredPreview ? undefined : loader
       }

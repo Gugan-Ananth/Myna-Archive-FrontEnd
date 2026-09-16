@@ -406,7 +406,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
 
       <aside
         className={[
-          "app-card z-40 flex min-w-0 max-w-full shrink-0 flex-col overflow-hidden border-border/80 shadow-xl backdrop-blur-xl transition-[width,max-height,opacity] duration-300 ease-out",
+          "app-card z-40 flex min-w-0 max-w-full shrink-0 flex-col overflow-hidden border-border/80 shadow-xl backdrop-blur-xl transition-[width,max-height,opacity] duration-300 ease-out select-text",
           panelOpen
             ? "pointer-events-auto max-h-[50vh] w-full border-t opacity-100 lg:max-h-none lg:h-full lg:w-[min(26rem,40%)] lg:border-l"
             : "pointer-events-none max-h-0 w-full opacity-0 lg:max-h-none lg:w-0",
