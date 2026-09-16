@@ -339,6 +339,7 @@ function TopTenMedia({
         <img
           src={src}
           alt=""
+          draggable={false}
           loading={priority ? "eager" : "lazy"}
           decoding="async"
           fetchPriority={priority ? "high" : "auto"}

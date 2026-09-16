@@ -340,6 +340,7 @@ function VideoThumb({
           key={videoSrc}
           src={videoSrc}
           alt=""
+          draggable={false}
           loading={priority ? "eager" : "lazy"}
           decoding="async"
           fetchPriority={priority ? "high" : "auto"}
@@ -362,6 +363,7 @@ function VideoThumb({
         <img
           src={hoverPreview}
           alt=""
+          draggable={false}
           decoding="async"
           loading="lazy"
           className={[

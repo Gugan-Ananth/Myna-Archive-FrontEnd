@@ -250,10 +250,34 @@
     @apply m-0 p-0;
   }
 
+  html {
+    /* Disable double-tap zoom so empty-space taps don't zoom the board. */
+    touch-action: manipulation;
+  }
+
   body {
     background-color: transparent;
     color: var(--foreground);
     font-family: var(--font-playfair), ui-serif, Georgia, serif;
+    /* Empty-space multi-clicks otherwise select ratings/sr-only labels and
+       the next press on a pin becomes a native drag — the board feels frozen. */
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  input,
+  textarea,
+  select,
+  [contenteditable="true"],
+  .story-doc {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  img,
+  video,
+  a {
+    -webkit-user-drag: none;
   }
 
   /* Unspaced words wrap inside fields instead of overflowing the card. */
