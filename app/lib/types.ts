@@ -37,6 +37,11 @@ export type ArchiveItem = {
   tags: string[];
   /** Decimal score 0.0–10.0; higher ranks first on the home grid. */
   rating: number;
+  /**
+   * Optional decimal 0.0–10.0 shown on cards. Display-only — never used
+   * to sort or order. Missing values read as 0.
+   */
+  secondaryRating?: number;
   /** Whether this item is an image, a video, a written story, a comic, or a caption. */
   mediaType: MediaType;
   /** Whether this item is starred within its dashboard category. */

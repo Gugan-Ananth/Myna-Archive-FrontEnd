@@ -21,7 +21,7 @@ import { warmArchiveItem } from "../lib/warm-preview";
 import { CopyImageButton } from "./copy-image-button";
 import { ImageCopyMenu, useImageCopyMenu } from "./image-copy-menu";
 import { StoryCoverStill, useStoryCoverFrame } from "./story-cover-still";
-import { RatingBadge, formatRating } from "./rating-badge";
+import { RatingBadge, formatRating, secondaryRatingOf } from "./rating-badge";
 import { StarButton } from "./star-button";
 
 type StoryWorkCardProps = {
@@ -147,11 +147,13 @@ function WorkCard({
         />
         <RatingBadge
           rating={rating}
+          secondaryRating={item.secondaryRating}
           className="absolute right-1.5 bottom-1.5 z-10 sm:right-2 sm:bottom-2"
           ariaLabel={
             variant === "series"
-              ? t("storyAverageRatingAria", {
+              ? t("ratingOverlayAria", {
                   value: formatRating(rating),
+                  secondary: formatRating(secondaryRatingOf(item.secondaryRating)),
                 })
               : undefined
           }

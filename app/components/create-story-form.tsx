@@ -69,7 +69,8 @@ import {
 } from "../lib/types";
 import { BackButton } from "./back-button";
 import { CategoryTagPicker } from "./category-tag-picker";
-import { RatingInput } from "./rating-input";
+import { RatingFields } from "./rating-input";
+import { secondaryRatingOf } from "./rating-badge";
 import {
   StoryCharacterRoster,
   type StoryCharacterDraft,
@@ -198,6 +199,10 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
   const [tags, setTags] = useState<string[]>(item?.tags ?? []);
   const [rating, setRating] = useState(item?.rating ?? 5.0);
   const [ratingValid, setRatingValid] = useState(true);
+  const [secondaryRating, setSecondaryRating] = useState(
+    secondaryRatingOf(item?.secondaryRating),
+  );
+  const [secondaryRatingValid, setSecondaryRatingValid] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [bodyEmpty, setBodyEmpty] = useState(!item?.bodyHtml);
   const [bodyChars, setBodyChars] = useState(() =>
@@ -266,7 +271,12 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
     selectedSeries != null &&
     !hasStorySeriesIdentity(selectedSeries);
   const canSubmit =
-    Boolean(title.trim() && tags.length > 0 && ratingValid) &&
+    Boolean(
+      title.trim() &&
+        tags.length > 0 &&
+        ratingValid &&
+        secondaryRatingValid,
+    ) &&
     !saving &&
     !bodyOverLimit &&
     (linkMode === "new" || Boolean(seriesId)) &&
@@ -949,7 +959,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
       if (!automatic) setError(t("storyNeedSeriesTitle"));
       return;
     }
-    if (!ratingValid) return;
+    if (!ratingValid || !secondaryRatingValid) return;
 
     const editor = editorRef.current;
     const html = storyPayloadHtml(editor?.innerHTML ?? "");
@@ -1195,6 +1205,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
             name: title.trim(),
             tags,
             rating,
+            secondaryRating: secondaryRatingOf(secondaryRating),
             bodyHtml,
             author: author.trim(),
             summary: summary.trim(),
@@ -1207,6 +1218,7 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
               name: title.trim(),
               tags,
               rating,
+              secondaryRating: secondaryRatingOf(secondaryRating),
               bodyHtml,
               author: author.trim() || undefined,
               summary: summary.trim() || undefined,
@@ -1860,20 +1872,21 @@ export function CreateStoryForm({ item }: CreateStoryFormProps = {}) {
                 disabled={saving}
               />
             </div>
-            <div>
-              <p className="mb-1 text-sm font-medium uppercase tracking-wide text-foreground-muted">
-                {t("rating")}
-              </p>
-              <RatingInput
-                value={rating}
-                onChange={(nextRating) => {
-                  markDirty();
-                  setRating(nextRating);
-                }}
-                onValidityChange={setRatingValid}
-                readOnly={saving}
-              />
-            </div>
+            <RatingFields
+              rating={rating}
+              onRatingChange={(nextRating) => {
+                markDirty();
+                setRating(nextRating);
+              }}
+              onRatingValidityChange={setRatingValid}
+              secondaryRating={secondaryRating}
+              onSecondaryRatingChange={(nextRating) => {
+                markDirty();
+                setSecondaryRating(nextRating);
+              }}
+              onSecondaryValidityChange={setSecondaryRatingValid}
+              readOnly={saving}
+            />
             {error ? <StatusCallout title={error} compact /> : null}
           </div>
         </aside>

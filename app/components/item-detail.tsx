@@ -23,8 +23,8 @@ import { CategoryTagPicker } from "./category-tag-picker";
 import { ComicReader } from "./comic-reader";
 import { ConfirmDialog } from "./confirm-dialog";
 import { ImageGroupCarousel } from "./image-group-carousel";
-import { RatingBadge } from "./rating-badge";
-import { RatingInput } from "./rating-input";
+import { RatingBadge, secondaryRatingOf } from "./rating-badge";
+import { RatingFields } from "./rating-input";
 import { StatusCallout } from "./status-callout";
 import { BunnyStreamEmbed } from "./bunny-stream-embed";
 import { StarButton } from "./star-button";
@@ -56,6 +56,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
   const [editing, setEditing] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [ratingValid, setRatingValid] = useState(true);
+  const [secondaryRatingValid, setSecondaryRatingValid] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] =
@@ -141,6 +142,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
     setDraft(saved);
     setEditing(true);
     setRatingValid(true);
+    setSecondaryRatingValid(true);
     setError(null);
   }
 
@@ -148,6 +150,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
     setDraft(saved);
     setEditing(false);
     setRatingValid(true);
+    setSecondaryRatingValid(true);
     setError(null);
   }
 
@@ -167,7 +170,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
   }
 
   async function saveEdit() {
-    if (!ratingValid || busy) return;
+    if (!ratingValid || !secondaryRatingValid || busy) return;
 
     if (draft.tags.length === 0) {
       setError(t("atLeastOneTagRequired"));
@@ -188,6 +191,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
         description: draft.description,
         tags: draft.tags,
         rating: draft.rating,
+        secondaryRating: secondaryRatingOf(draft.secondaryRating),
       });
       setSaved(updated);
       setDraft(updated);
@@ -398,7 +402,10 @@ export function ItemDetail({ item }: ItemDetailProps) {
                   : "bottom-3 sm:bottom-4",
               ].join(" ")}
             >
-              <RatingBadge rating={draft.rating} />
+              <RatingBadge
+                rating={draft.rating}
+                secondaryRating={secondaryRatingOf(draft.secondaryRating)}
+              />
             </div>
           </>
         )}
@@ -465,18 +472,26 @@ export function ItemDetail({ item }: ItemDetailProps) {
           </div>
 
           <section className="min-w-0 rounded-2xl border border-border/70 bg-background/35 p-4 sm:p-5">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-foreground-muted">
-              {t("rating")}
-            </p>
             {editing ? (
-              <RatingInput
-                value={draft.rating}
-                onChange={(rating) => setDraft((d) => ({ ...d, rating }))}
-                onValidityChange={setRatingValid}
+              <RatingFields
+                rating={draft.rating}
+                onRatingChange={(rating) => setDraft((d) => ({ ...d, rating }))}
+                onRatingValidityChange={setRatingValid}
+                secondaryRating={secondaryRatingOf(draft.secondaryRating)}
+                onSecondaryRatingChange={(next) =>
+                  setDraft((d) => ({ ...d, secondaryRating: next }))
+                }
+                onSecondaryValidityChange={setSecondaryRatingValid}
                 readOnly={busy}
+                labelClassName="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-foreground-muted"
               />
             ) : (
-              <RatingInput value={draft.rating} readOnly />
+              <RatingFields
+                rating={draft.rating}
+                secondaryRating={secondaryRatingOf(draft.secondaryRating)}
+                readOnly
+                labelClassName="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-foreground-muted"
+              />
             )}
           </section>
 
@@ -566,7 +581,7 @@ export function ItemDetail({ item }: ItemDetailProps) {
               <button
                 type="button"
                 onClick={() => void saveEdit()}
-                disabled={!ratingValid || busy}
+                disabled={!ratingValid || !secondaryRatingValid || busy}
                 className="inline-flex h-11 w-full min-w-0 items-center justify-center overflow-hidden rounded-full bg-primary px-1.5 text-center text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 sm:px-4"
               >
                 {saving ? t("saving") : t("save")}
