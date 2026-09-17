@@ -428,6 +428,7 @@ const en = {
   addTag: "Add a tag",
   addTagButton: "Add",
   rating: "Rating",
+  secondaryRating: "Secondary rating",
   starItem: "Star item",
   unstarItem: "Remove star",
   starActionFailed: "Could not update star.",
@@ -480,6 +481,8 @@ const en = {
   cantBeMoreThan: "Can't be more than {max}",
   cantBeLessThan: "Can't be less than {min}",
   ratingAria: "Rating {value}",
+  secondaryRatingAria: "Secondary rating {value}",
+  ratingOverlayAria: "Rating {value}, secondary rating {secondary}",
 
   // Zoom / media
   zoomIn: "Zoom in",
@@ -959,6 +962,7 @@ const es: Record<MessageKey, string> = {
   addTag: "Añadir una etiqueta",
   addTagButton: "Añadir",
   rating: "Valoración",
+  secondaryRating: "Valoración secundaria",
   starItem: "Marcar como favorita",
   unstarItem: "Quitar de favoritas",
   starActionFailed: "No se pudo actualizar la estrella.",
@@ -1009,6 +1013,8 @@ const es: Record<MessageKey, string> = {
   cantBeMoreThan: "No puede ser mayor que {max}",
   cantBeLessThan: "No puede ser menor que {min}",
   ratingAria: "Valoración {value}",
+  secondaryRatingAria: "Valoración secundaria {value}",
+  ratingOverlayAria: "Valoración {value}, valoración secundaria {secondary}",
 
   zoomIn: "Acercar",
   zoomOut: "Alejar",
@@ -1485,6 +1491,7 @@ const ca: Record<MessageKey, string> = {
   addTag: "Afegeix una etiqueta",
   addTagButton: "Afegeix",
   rating: "Valoració",
+  secondaryRating: "Valoració secundària",
   starItem: "Marca com a preferit",
   unstarItem: "Treu dels preferits",
   starActionFailed: "No s'ha pogut actualitzar l'estrella.",
@@ -1535,6 +1542,8 @@ const ca: Record<MessageKey, string> = {
   cantBeMoreThan: "No pot ser més de {max}",
   cantBeLessThan: "No pot ser menys de {min}",
   ratingAria: "Valoració {value}",
+  secondaryRatingAria: "Valoració secundària {value}",
+  ratingOverlayAria: "Valoració {value}, valoració secundària {secondary}",
 
   zoomIn: "Apropa",
   zoomOut: "Allunya",

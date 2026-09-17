@@ -12,6 +12,14 @@ _Avoid_: treating Optimizer query-string thumbs as a separate file
 A single archived media entry (image, video, story, comic, or caption) with metadata.
 _Avoid_: post, asset (unless talking about a binary file)
 
+**Rating**:
+A decimal score 0.0–10.0 on an Archive Item. Higher ranks first on the home grid.
+_Avoid_: confusing with Secondary rating or a category star
+
+**Secondary rating**:
+An optional decimal score 0.0–10.0 on an Archive Item. Display-only; never used to sort or order. Missing values read as 0.
+_Avoid_: using it as a sort key; confusing with Rating or a category star
+
 **Bondage caption**:
 An Archive Item that composites a source image with a written story using a layout template. Grids and the detail view show the generated still. The story, template, and original photo pointer live in the database so Edit caption can reopen the compositor and replace the still.
 _Avoid_: meme, overlay (unless naming the overlay template), treating the PNG as the only source of truth, storing the original photo as a second gallery asset

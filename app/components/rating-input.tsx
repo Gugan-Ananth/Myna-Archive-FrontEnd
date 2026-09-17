@@ -13,6 +13,7 @@ type RatingInputProps = {
   /** Read-only display (no input). */
   readOnly?: boolean;
   id?: string;
+  ariaLabel?: string;
 };
 
 /**
@@ -27,6 +28,7 @@ export function RatingInput({
   max = 10,
   readOnly = false,
   id,
+  ariaLabel,
 }: RatingInputProps) {
   const { t } = useI18n();
   const autoId = useId();
@@ -40,13 +42,14 @@ export function RatingInput({
   const result = parseRating(text, min, max, t);
   const error = result.ok ? null : result.message;
   const showError = showErrors && Boolean(error);
+  const label = ariaLabel ?? t("rating");
 
   if (readOnly || !onChange) {
     const display = Number.isFinite(value) ? formatDisplay(value) : "—";
     return (
       <p
         className="font-rating text-2xl font-semibold tabular-nums tracking-tight text-foreground"
-        aria-label={t("ratingAria", { value: display })}
+        aria-label={ariaLabel ?? t("ratingAria", { value: display })}
       >
         {display}
       </p>
@@ -89,13 +92,65 @@ export function RatingInput({
             ? "border-danger focus:border-danger focus:ring-2 focus:ring-danger/20"
             : "border-border focus:border-primary focus:ring-2 focus:ring-ring/25",
         ].join(" ")}
-        aria-label={t("rating")}
+        aria-label={label}
       />
       {showError && (
         <p id={errorId} role="alert" className="text-base font-medium text-danger">
           {error}
         </p>
       )}
+    </div>
+  );
+}
+
+type RatingFieldsProps = {
+  rating: number;
+  onRatingChange?: (value: number) => void;
+  onRatingValidityChange?: (valid: boolean) => void;
+  secondaryRating: number;
+  onSecondaryRatingChange?: (value: number) => void;
+  onSecondaryValidityChange?: (valid: boolean) => void;
+  readOnly?: boolean;
+  labelClassName?: string;
+};
+
+/**
+ * Primary rating plus optional secondary rating, side by side.
+ * Secondary rating is display-only data and is not used for sorting.
+ */
+export function RatingFields({
+  rating,
+  onRatingChange,
+  onRatingValidityChange,
+  secondaryRating,
+  onSecondaryRatingChange,
+  onSecondaryValidityChange,
+  readOnly = false,
+  labelClassName = "mb-1 text-sm font-medium uppercase tracking-wide text-foreground-muted",
+}: RatingFieldsProps) {
+  const { t } = useI18n();
+
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <div>
+        <p className={labelClassName}>{t("rating")}</p>
+        <RatingInput
+          value={rating}
+          onChange={onRatingChange}
+          onValidityChange={onRatingValidityChange}
+          readOnly={readOnly}
+        />
+      </div>
+      <div>
+        <p className={labelClassName}>{t("secondaryRating")}</p>
+        <RatingInput
+          value={secondaryRating}
+          onChange={onSecondaryRatingChange}
+          onValidityChange={onSecondaryValidityChange}
+          readOnly={readOnly}
+          ariaLabel={t("secondaryRating")}
+        />
+      </div>
     </div>
   );
 }

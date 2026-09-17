@@ -47,7 +47,8 @@ import { BackButton } from "./back-button";
 import { SafeImg } from "./broken-image-fallback";
 import { CategoryTagPicker } from "./category-tag-picker";
 import { MediaLinkInput } from "./media-link-input";
-import { RatingInput } from "./rating-input";
+import { RatingFields } from "./rating-input";
+import { secondaryRatingOf } from "./rating-badge";
 import { SceneFigure } from "./scene-figure";
 import { StatusCallout } from "./status-callout";
 import { UploadProgressOverlay } from "./upload-progress";
@@ -130,6 +131,10 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
   const [description, setDescription] = useState(item?.description ?? "");
   const [rating, setRating] = useState(item?.rating ?? 5.0);
   const [ratingValid, setRatingValid] = useState(true);
+  const [secondaryRating, setSecondaryRating] = useState(
+    secondaryRatingOf(item?.secondaryRating),
+  );
+  const [secondaryRatingValid, setSecondaryRatingValid] = useState(true);
   const [tags, setTags] = useState<string[]>(item?.tags ?? []);
   const [phase, setPhase] = useState<SubmitPhase>("idle");
   const [uploadPercent, setUploadPercent] = useState(0);
@@ -291,7 +296,7 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (pending.length === 0 || !ratingValid) return;
+    if (pending.length === 0 || !ratingValid || !secondaryRatingValid) return;
 
     if (tags.length === 0) {
       setError(t("addAtLeastOneTag"));
@@ -387,6 +392,7 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
         name: trimmedName,
         tags,
         rating,
+        secondaryRating: secondaryRatingOf(secondaryRating),
         description: description.trim() || undefined,
         assets,
       };
@@ -438,7 +444,13 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
   }
 
   const canSubmit =
-    Boolean(pending.length > 0 && name.trim() && tags.length > 0 && ratingValid) &&
+    Boolean(
+      pending.length > 0 &&
+        name.trim() &&
+        tags.length > 0 &&
+        ratingValid &&
+        secondaryRatingValid,
+    ) &&
     !busy;
 
   const progressTitle =
@@ -716,17 +728,15 @@ export function CreateComicForm({ item }: CreateComicFormProps = {}) {
                 />
               </div>
 
-              <div>
-                <p className="mb-1 text-sm font-medium uppercase tracking-wide text-foreground-muted">
-                  {t("rating")}
-                </p>
-                <RatingInput
-                  value={rating}
-                  onChange={setRating}
-                  onValidityChange={setRatingValid}
-                  readOnly={busy}
-                />
-              </div>
+              <RatingFields
+                rating={rating}
+                onRatingChange={setRating}
+                onRatingValidityChange={setRatingValid}
+                secondaryRating={secondaryRating}
+                onSecondaryRatingChange={setSecondaryRating}
+                onSecondaryValidityChange={setSecondaryRatingValid}
+                readOnly={busy}
+              />
 
               <label className="flex min-w-0 flex-col gap-1">
                 <span className="text-sm font-medium uppercase tracking-wide text-foreground-muted">

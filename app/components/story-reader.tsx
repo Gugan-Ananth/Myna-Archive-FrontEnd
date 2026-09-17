@@ -273,6 +273,7 @@ export function StoryReader({ item, chapters }: StoryReaderProps) {
           ) : null}
           <RatingBadge
             rating={item.rating}
+            secondaryRating={item.secondaryRating}
             className="absolute right-2 bottom-2 z-10"
           />
         </div>

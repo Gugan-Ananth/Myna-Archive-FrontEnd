@@ -145,6 +145,8 @@ export type CreateArchiveItemInput = {
   name: string;
   tags: string[];
   rating: number;
+  /** Optional display-only score. Defaults to 0. Not used for sort order. */
+  secondaryRating?: number;
   description?: string;
   /** Written story HTML. Inline images bind to `assets` in document order. */
   bodyHtml?: string;
@@ -203,6 +205,8 @@ export type UpdateArchiveItemInput = {
   characters?: StoryCharacterInput[];
   tags?: string[];
   rating?: number;
+  /** Optional display-only score. Not used for sort order. */
+  secondaryRating?: number;
 };
 
 export type UploadSignatureInput = {

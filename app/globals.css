@@ -88,6 +88,8 @@
   --success: #059669;
   --danger: #dc2626;
   --warning: #d97706;
+  /* Secondary rating numeral on card overlays. */
+  --info: #2563eb;
 
   /* App canvas: layered violets on every page */
   --canvas-from: #f7f1ff;
@@ -171,6 +173,7 @@
   --success: #34d399;
   --danger: #f87171;
   --warning: #fbbf24;
+  --info: #93c5fd;
 
   --canvas-from: #0c0630;
   --canvas-via: #050020;
@@ -234,6 +237,7 @@
   --color-success: var(--success);
   --color-danger: var(--danger);
   --color-warning: var(--warning);
+  --color-info: var(--info);
 
   --font-sans: var(--font-playfair);
   --font-serif: var(--font-playfair);

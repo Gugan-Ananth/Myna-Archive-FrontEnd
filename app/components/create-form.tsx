@@ -50,7 +50,8 @@ import { BackButton } from "./back-button";
 import { SafeImg } from "./broken-image-fallback";
 import { CategoryTagPicker } from "./category-tag-picker";
 import { MediaLinkInput } from "./media-link-input";
-import { RatingInput } from "./rating-input";
+import { RatingFields } from "./rating-input";
+import { secondaryRatingOf } from "./rating-badge";
 import { SceneFigure } from "./scene-figure";
 import { StatusCallout } from "./status-callout";
 import { UploadProgressOverlay } from "./upload-progress";
@@ -115,6 +116,8 @@ export function CreateForm({ intent }: CreateFormProps = {}) {
   const [description, setDescription] = useState("");
   const [rating, setRating] = useState(5.0);
   const [ratingValid, setRatingValid] = useState(true);
+  const [secondaryRating, setSecondaryRating] = useState(0);
+  const [secondaryRatingValid, setSecondaryRatingValid] = useState(true);
   const [tags, setTags] = useState<string[]>([]);
   const [phase, setPhase] = useState<SubmitPhase>("idle");
   const [uploadPercent, setUploadPercent] = useState(0);
@@ -399,7 +402,7 @@ export function CreateForm({ intent }: CreateFormProps = {}) {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (pending.length === 0 || !mediaType || !ratingValid) return;
+    if (pending.length === 0 || !mediaType || !ratingValid || !secondaryRatingValid) return;
 
     if (intent === "collection" && pending.length < MIN_IMAGE_GROUP_ASSETS) {
       setError(t("collectionNeedsMoreImages"));
@@ -495,6 +498,7 @@ export function CreateForm({ intent }: CreateFormProps = {}) {
           name: trimmedName,
           tags,
           rating,
+          secondaryRating: secondaryRatingOf(secondaryRating),
           description: description.trim() || undefined,
           assets,
         },
@@ -555,6 +559,7 @@ export function CreateForm({ intent }: CreateFormProps = {}) {
         name.trim() &&
         tags.length > 0 &&
         ratingValid &&
+        secondaryRatingValid &&
         (intent !== "collection" || pending.length >= MIN_IMAGE_GROUP_ASSETS),
     ) && !busy;
 
@@ -1013,17 +1018,15 @@ export function CreateForm({ intent }: CreateFormProps = {}) {
                 />
               </div>
 
-              <div>
-                <p className="mb-1 text-sm font-medium uppercase tracking-wide text-foreground-muted">
-                  {t("rating")}
-                </p>
-                <RatingInput
-                  value={rating}
-                  onChange={setRating}
-                  onValidityChange={setRatingValid}
-                  readOnly={busy}
-                />
-              </div>
+              <RatingFields
+                rating={rating}
+                onRatingChange={setRating}
+                onRatingValidityChange={setRatingValid}
+                secondaryRating={secondaryRating}
+                onSecondaryRatingChange={setSecondaryRating}
+                onSecondaryValidityChange={setSecondaryRatingValid}
+                readOnly={busy}
+              />
 
               <label className="flex min-w-0 flex-col gap-1">
                 <span className="text-sm font-medium uppercase tracking-wide text-foreground-muted">

@@ -107,6 +107,7 @@ export function CollectionMasthead({
               />
               <RatingBadge
                 rating={featured.rating}
+                secondaryRating={featured.secondaryRating}
                 className="absolute right-3 bottom-3 z-10"
               />
               <div className="absolute inset-x-0 bottom-0 p-4 pr-16 text-white">

@@ -35,7 +35,7 @@ import { BackButton } from "./back-button";
 import { CopyImageButton } from "./copy-image-button";
 import { ImageCopyMenu, useImageCopyMenu } from "./image-copy-menu";
 import { StoryCoverStill, useStoryCoverFrame } from "./story-cover-still";
-import { RatingBadge, formatRating } from "./rating-badge";
+import { RatingBadge, formatRating, secondaryRatingOf } from "./rating-badge";
 import { StarButton } from "./star-button";
 import { StatusCallout } from "./status-callout";
 import { StoryBackdrop } from "./story-backdrop";
@@ -430,9 +430,11 @@ function SeriesTitleCard({
         ) : null}
         <RatingBadge
           rating={workRating}
+          secondaryRating={item.secondaryRating}
           className="absolute right-2 bottom-2 z-10"
-          ariaLabel={t("storyAverageRatingAria", {
+          ariaLabel={t("ratingOverlayAria", {
             value: formatRating(workRating),
+            secondary: formatRating(secondaryRatingOf(item.secondaryRating)),
           })}
         />
       </div>
@@ -507,6 +509,7 @@ function ChapterCard({ chapter }: { chapter: ArchiveItem }) {
         />
         <RatingBadge
           rating={chapter.rating}
+          secondaryRating={chapter.secondaryRating}
           className="absolute right-1.5 bottom-1.5 z-10"
         />
       </div>
