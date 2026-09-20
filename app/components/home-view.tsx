@@ -30,6 +30,11 @@ import type {
 import { emptyTopTenData, type TopTenData } from "../lib/top-ten";
 import { ActiveTagsSummary } from "./active-tags-summary";
 import { ArchiveGrid } from "./archive-grid";
+import {
+  isArchiveDiceSample,
+  useDiceSample,
+} from "./dice-sample-context";
+import { DiceSampleBanner } from "./dice-sample-banner";
 import { HomeBackdrop } from "./home-backdrop";
 import { HomeFiltersNotice } from "./home-filters-notice";
 import { InfiniteScrollSentinel } from "./infinite-scroll-sentinel";
@@ -161,6 +166,7 @@ export function HomeView({
   const { t } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { sample: diceSample, clear: clearDice } = useDiceSample();
 
   const searchKey = searchParams.toString();
   const liveQuery = searchParams.get("q") ?? "";
@@ -274,7 +280,11 @@ export function HomeView({
   const { items, total, page, loadError, usedFallback, hasInstantItems } =
     resolved;
 
-  const hasMore = items.length < total && total > 0;
+  const archiveDice = isArchiveDiceSample(diceSample, liveView)
+    ? diceSample
+    : null;
+  const shownItems = archiveDice ? archiveDice.items : items;
+  const hasMore = !archiveDice && items.length < total && total > 0;
 
   // Let paste start the same create flow as the Add control. The create page
   // then validates and previews the files before the user saves the item.
@@ -540,7 +550,7 @@ export function HomeView({
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
       <Suspense fallback={null}>
         <HomeFiltersNotice
-          query={liveQuery}
+          query={archiveDice ? "" : liveQuery}
           tags={liveTags}
           created={created}
           createdVideo={createdVideo}
@@ -555,68 +565,95 @@ export function HomeView({
         />
       ) : null}
 
-      {!loadError && liveTags.length > 0 ? (
+      {!archiveDice && !loadError && liveTags.length > 0 ? (
         <Suspense fallback={null}>
           <ActiveTagsSummary tags={liveTags} taxonomy={taxonomy} />
         </Suspense>
       ) : null}
 
+      {archiveDice ? (
+        <DiceSampleBanner
+          count={archiveDice.items.length}
+          view={liveView}
+          onClose={clearDice}
+        />
+      ) : null}
+
       <div
         className={[
           "relative flex min-h-[8rem] flex-1 flex-col transition-opacity duration-150",
-          isFiltering && !hasInstantItems ? "opacity-70" : "opacity-100",
+          isFiltering && !hasInstantItems && !archiveDice
+            ? "opacity-70"
+            : "opacity-100",
         ].join(" ")}
         aria-busy={isFiltering || isLoadingMore}
       >
         {liveView === "stories" ? (
           <StoryWorksList
-            items={items}
-            emptyHref={!hasFilters ? createHrefForView("stories") : undefined}
+            items={shownItems}
+            preserveOrder={Boolean(archiveDice)}
+            emptyHref={
+              archiveDice || hasFilters
+                ? undefined
+                : createHrefForView("stories")
+            }
             emptyMessage={
               loadError
                 ? " "
-                : !hasFilters
-                  ? t(emptyTitleKey(liveView))
-                  : undefined
+                : archiveDice
+                  ? t("randomPickEmpty")
+                  : !hasFilters
+                    ? t(emptyTitleKey(liveView))
+                    : undefined
             }
             emptyHint={
               loadError
                 ? null
-                : !hasFilters
-                  ? t(emptyHintKey(liveView))
-                  : undefined
+                : archiveDice
+                  ? null
+                  : !hasFilters
+                    ? t(emptyHintKey(liveView))
+                    : undefined
             }
           />
         ) : (
           <ArchiveGrid
-            items={items}
+            items={shownItems}
             emptyKind={liveView}
             emptyHref={
-              !hasFilters ? createHrefForView(liveView) : undefined
+              archiveDice || hasFilters
+                ? undefined
+                : createHrefForView(liveView)
             }
             emptyMessage={
               loadError
                 ? " "
-                : !hasFilters
-                  ? t(emptyTitleKey(liveView))
-                  : undefined
+                : archiveDice
+                  ? t("randomPickEmpty")
+                  : !hasFilters
+                    ? t(emptyTitleKey(liveView))
+                    : undefined
             }
             emptyHint={
               loadError
                 ? null
-                : !hasFilters
-                  ? t(emptyHintKey(liveView))
-                  : undefined
+                : archiveDice
+                  ? null
+                  : !hasFilters
+                    ? t(emptyHintKey(liveView))
+                    : undefined
             }
           />
         )}
 
-        <InfiniteScrollSentinel
-          onLoadMore={loadMore}
-          hasMore={hasMore && !loadError}
-          isLoading={isLoadingMore}
-          disabled={isFiltering}
-        />
+        {archiveDice ? null : (
+          <InfiniteScrollSentinel
+            onLoadMore={loadMore}
+            hasMore={hasMore && !loadError}
+            isLoading={isLoadingMore}
+            disabled={isFiltering}
+          />
+        )}
       </div>
       </div>
     </main>

@@ -7,12 +7,13 @@ import { replaceUrlWithoutRefresh } from "../lib/client-navigation";
 import { useI18n } from "../lib/i18n";
 import { AddMediaTrigger } from "./add-media-trigger";
 import { CopyFromLinkTrigger } from "./copy-from-link-trigger";
+import { DiceTrigger } from "./dice-trigger";
 import { SearchBar } from "./search-bar";
 import { TagChipBar } from "./tag-chip-bar";
 import { TopTenCount } from "./top-ten-count";
 
 /**
- * Top bar: favorites count (left) · search + tags (center) · copy + Add (right).
+ * Top bar: favorites count (left) · search + tags (center) · copy + dice + Add (right).
  */
 export function AppHeader() {
   const { t } = useI18n();
@@ -118,6 +119,7 @@ export function AppHeader() {
 
         <div className="flex shrink-0 items-center gap-2 justify-self-end">
           <CopyFromLinkTrigger view={view} />
+          <DiceTrigger key={view} view={view} />
           <AddMediaTrigger
             view={view}
             aria-label={t("add")}
