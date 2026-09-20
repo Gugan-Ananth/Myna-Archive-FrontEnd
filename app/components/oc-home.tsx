@@ -10,6 +10,8 @@ import {
 } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import type { OriginalCharacter } from "../lib/types";
+import { isOcDiceSample, useDiceSample } from "./dice-sample-context";
+import { DiceSampleBanner } from "./dice-sample-banner";
 import { HomeBackdrop } from "./home-backdrop";
 import { HomeFiltersNotice } from "./home-filters-notice";
 import { InfiniteScrollSentinel } from "./infinite-scroll-sentinel";
@@ -40,6 +42,7 @@ export function OcHome({
 }: OcHomeProps) {
   const { t } = useI18n();
   const searchParams = useSearchParams();
+  const { sample: diceSample, clear: clearDice } = useDiceSample();
   const liveQuery = searchParams.get("q") ?? "";
   const filterKey = liveQuery;
   const initialFilterKey = initialQuery;
@@ -101,7 +104,9 @@ export function OcHome({
       ? usedFallbackError
       : (clientSnap?.usedFallback ?? false);
 
-  const hasMore = items.length < total && total > 0;
+  const ocDice = isOcDiceSample(diceSample, "oc") ? diceSample : null;
+  const shownItems = ocDice ? ocDice.items : items;
+  const hasMore = !ocDice && items.length < total && total > 0;
   const hasFilters = Boolean(liveQuery);
 
   useEffect(() => {
@@ -267,21 +272,27 @@ export function OcHome({
 
   const emptyMessage = useMemo(() => {
     if (loadError) return " ";
+    if (ocDice) return t("randomPickEmpty");
     if (!hasFilters) return t("archiveEmptyOcs");
     return undefined;
-  }, [hasFilters, loadError, t]);
+  }, [hasFilters, loadError, ocDice, t]);
 
   const emptyHint = useMemo(() => {
     if (loadError) return null;
+    if (ocDice) return null;
     if (!hasFilters) return t("archiveEmptyOcsHint");
     return undefined;
-  }, [hasFilters, loadError, t]);
+  }, [hasFilters, loadError, ocDice, t]);
 
   return (
     <main className="relative flex w-full flex-1 flex-col px-2 pt-3 pb-24 sm:px-3 md:pb-6 lg:px-4">
       <HomeBackdrop view="oc" />
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-      <HomeFiltersNotice query={liveQuery} tags={[]} created={created} />
+      <HomeFiltersNotice
+        query={ocDice ? "" : liveQuery}
+        tags={[]}
+        created={created}
+      />
       {errorBody ? (
         <StatusCallout
           title={t("unableToLoadArchive")}
@@ -289,25 +300,36 @@ export function OcHome({
           footer={t("loadErrorHint")}
         />
       ) : null}
+      {ocDice ? (
+        <DiceSampleBanner
+          count={ocDice.items.length}
+          view="oc"
+          onClose={clearDice}
+        />
+      ) : null}
       <div
         className={[
           "relative flex min-h-[8rem] flex-1 flex-col transition-opacity duration-150",
-          isFiltering && !hasInstantItems ? "opacity-70" : "opacity-100",
+          isFiltering && !hasInstantItems && !ocDice
+            ? "opacity-70"
+            : "opacity-100",
         ].join(" ")}
         aria-busy={isFiltering || isLoadingMore}
       >
         <OcGrid
-          items={items}
-          emptyHref={!hasFilters ? "/create/oc" : undefined}
+          items={shownItems}
+          emptyHref={ocDice || hasFilters ? undefined : "/create/oc"}
           emptyMessage={emptyMessage}
           emptyHint={emptyHint}
         />
-        <InfiniteScrollSentinel
-          onLoadMore={loadMore}
-          hasMore={hasMore && !loadError}
-          isLoading={isLoadingMore}
-          disabled={isFiltering}
-        />
+        {ocDice ? null : (
+          <InfiniteScrollSentinel
+            onLoadMore={loadMore}
+            hasMore={hasMore && !loadError}
+            isLoading={isLoadingMore}
+            disabled={isFiltering}
+          />
+        )}
       </div>
       </div>
     </main>

@@ -21,6 +21,8 @@ type StoryWorksListProps = {
   emptyHref?: string;
   showRank?: boolean;
   onStarChange?: (item: ArchiveItem) => void;
+  /** Keep the incoming order (random pick). Default sorts by series rating. */
+  preserveOrder?: boolean;
 };
 
 /**
@@ -35,6 +37,7 @@ export function StoryWorksList({
   emptyHref,
   showRank = false,
   onStarChange,
+  preserveOrder = false,
 }: StoryWorksListProps) {
   const { t } = useI18n();
   const works = useMemo(() => items.filter(isStorySeriesRoot), [items]);
@@ -42,8 +45,13 @@ export function StoryWorksList({
     {},
   );
   const orderedWorks = useMemo(
-    () => [...works].sort((a, b) => compareStoryWorksByRating(a, b, seriesById)),
-    [works, seriesById],
+    () =>
+      preserveOrder
+        ? works
+        : [...works].sort((a, b) =>
+            compareStoryWorksByRating(a, b, seriesById),
+          ),
+    [preserveOrder, works, seriesById],
   );
 
   useEffect(() => {
